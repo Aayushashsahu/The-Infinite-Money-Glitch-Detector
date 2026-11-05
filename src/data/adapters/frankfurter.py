@@ -31,6 +31,7 @@ from data.schemas import (
     FetchResult,
     Frequency,
     ObservationKind,
+    PriceType,
     RawRecordInfo,
 )
 
@@ -85,6 +86,7 @@ class FrankfurterAdapter(SourceAdapter):
                     retrieved_at=now,
                     classification=DataClassification.REAL_VERIFIED,
                     availability_evidence=AvailabilityEvidence.ESTIMATED_SCHEDULE,
+                    price_type=PriceType.REFERENCE_RATE,
                     metadata={"base_amount": payload.get("amount", 1.0)},
                 )
             )

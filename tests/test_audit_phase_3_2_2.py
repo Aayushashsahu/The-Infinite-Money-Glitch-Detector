@@ -123,6 +123,21 @@ def test_engine_same_day_publication_before_signal_executes():
             availability_evidence=AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
             rate_role=RateRole.RISK_FREE_RATE,
         ),
+        DataObservation(
+            kind=ObservationKind.EXCHANGE_RATE,
+            source_id="frankfurter",
+            entity_code="EUR/USD",
+            value=1.0850,
+            unit="USD_per_EUR",
+            frequency=Frequency.DAILY,
+            observation_date=date(2024, 6, 4),
+            publication_date=date(2024, 6, 4),
+            observation_timestamp=datetime(2024, 6, 4, 14, 15, tzinfo=timezone.utc),
+            publication_timestamp=datetime(2024, 6, 4, 14, 30, tzinfo=timezone.utc),
+            retrieved_at=datetime(2024, 6, 4, 14, 35, tzinfo=timezone.utc),
+            classification=DataClassification.REAL_VERIFIED,
+            availability_evidence=AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
+        ),
     ]
 
     cfg = BacktestConfig(

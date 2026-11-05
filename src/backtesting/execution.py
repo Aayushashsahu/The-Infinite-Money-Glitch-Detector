@@ -19,7 +19,7 @@ from typing import Any
 from core.currency import convert_to_a, convert_to_b
 from core.conversions import annualized_return
 from core.interest import growth_factor
-from schemas.backtest import ExecutionConfig, TradeRecord, TradeSide, TradeStatus
+from schemas.backtest import ExecutionConfig, PriceType, TradeRecord, TradeSide, TradeStatus
 from schemas.strategy import CurrencyPair, InterestConvention
 from backtesting.financing import calculate_fixed_financing, days_to_years
 
@@ -122,6 +122,9 @@ class ExecutionEngine:
         order_submission_timestamp: datetime | None = None,
         execution_timestamp: datetime | None = None,
         settlement_timestamp: datetime | None = None,
+        entry_price_type: PriceType | None = None,
+        entry_price_source: str | None = None,
+        entry_quote_timestamp: datetime | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> TradeRecord:
         """Execute trade opening (borrow A, convert A -> B, hold for investment).
@@ -264,6 +267,9 @@ class ExecutionEngine:
             slippage_costs_a=max(0.0, slippage_loss_a),
             status=TradeStatus.OPEN,
             is_availability_verified=is_verified_availability,
+            entry_price_type=entry_price_type,
+            entry_price_source=entry_price_source,
+            entry_quote_timestamp=entry_quote_timestamp,
             signal_timestamp=signal_timestamp,
             order_submission_timestamp=order_submission_timestamp,
             execution_timestamp=execution_timestamp,
@@ -276,6 +282,12 @@ class ExecutionEngine:
         trade: TradeRecord,
         exit_date: date,
         spot_mid_exit: float,
+        exit_signal_timestamp: datetime | None = None,
+        exit_order_submission_timestamp: datetime | None = None,
+        exit_execution_timestamp: datetime | None = None,
+        exit_price_source: str | None = None,
+        exit_quote_timestamp: datetime | None = None,
+        exit_price_type: PriceType | None = None,
     ) -> TradeRecord:
         """Close an open trade at maturity or rebalance.
 
@@ -389,5 +401,11 @@ class ExecutionEngine:
                 "return_on_capital": roi,
                 "annualized_return": ann_return,
                 "status": TradeStatus.CLOSED,
+                "exit_signal_timestamp": exit_signal_timestamp,
+                "exit_order_submission_timestamp": exit_order_submission_timestamp,
+                "exit_execution_timestamp": exit_execution_timestamp,
+                "exit_price_source": exit_price_source,
+                "exit_quote_timestamp": exit_quote_timestamp,
+                "exit_price_type": exit_price_type,
             }
         )

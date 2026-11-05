@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core.currency import validate_currency_code
 from schemas.strategy import CurrencyPair, InterestConvention
-from data.schemas import Frequency, RateRole, StrategyExecutabilityStatus
+from data.schemas import Frequency, PriceType, RateRole, StrategyExecutabilityStatus
 
 
 class AvailabilityPolicy(str, Enum):
@@ -107,6 +107,43 @@ class BenchmarkSpecification(BaseModel):
     series_id: str | None = None
     rate_role: RateRole | None = None
     name: str = "Zero Cash Benchmark (0.0% annual)"
+    currency: str | None = None
+    reporting_currency: str | None = None
+    frequency: Frequency | None = None
+    instrument_name: str | None = None
+    description: str | None = None
+
+
+class ValuationResult(BaseModel):
+    """Historical reference valuation result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rate: float
+    observation_timestamp: datetime | None = None
+    availability_timestamp: datetime | None = None
+    age_at_valuation_days: int
+    data_source: str
+    price_type: PriceType
+    pair_code: str
+
+
+class ExecutableQuoteResult(BaseModel):
+    """Executable market quote with bid, ask, and freshness metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pair_code: str
+    bid: float
+    ask: float
+    mid: float
+    observation_timestamp: datetime
+    availability_timestamp: datetime
+    age_minutes: float
+    data_source: str
+    price_type: PriceType
+    is_executable: bool
+    quote_convention: str = "quote_per_base"
 
 
 class DataAvailabilityConfig(BaseModel):
@@ -172,6 +209,15 @@ class ExecutionConfig(BaseModel):
     interest_convention: InterestConvention = InterestConvention.COMPOUND
     min_trade_size_a: float = Field(default=1_000.0, gt=0.0, description="Minimum trade size in currency A.")
     max_trade_size_a: float = Field(default=10_000_000.0, gt=0.0, description="Maximum trade size in currency A.")
+    max_quote_age_minutes: float = Field(
+        default=1440.0,
+        gt=0.0,
+        description="Maximum permissible age of an executable market quote before execution rejection.",
+    )
+    allow_reference_rate_proxy: bool = Field(
+        default=True,
+        description="Allow using daily reference rates as execution proxies for historical research simulations.",
+    )
 
 
 class PositionSizingConfig(BaseModel):
@@ -256,14 +302,23 @@ class TradeRecord(BaseModel):
     return_on_capital: float | None = None
     annualized_return: float | None = None
 
-    # Status
+    # Status and Execution Provenance
     status: TradeStatus = TradeStatus.OPEN
     rejection_reason: str | None = None
     is_availability_verified: bool = True
+    entry_price_type: PriceType | None = None
+    entry_price_source: str | None = None
+    entry_quote_timestamp: datetime | None = None
     signal_timestamp: datetime | None = None
     order_submission_timestamp: datetime | None = None
     execution_timestamp: datetime | None = None
     settlement_timestamp: datetime | None = None
+    exit_signal_timestamp: datetime | None = None
+    exit_order_submission_timestamp: datetime | None = None
+    exit_execution_timestamp: datetime | None = None
+    exit_price_source: str | None = None
+    exit_quote_timestamp: datetime | None = None
+    exit_price_type: PriceType | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -516,6 +571,7 @@ class BacktestResult(BaseModel):
 
     config: BacktestConfig
     trades: list[TradeRecord]
+    open_trades: list[TradeRecord] = Field(default_factory=list)
     snapshots: list[PortfolioSnapshot]
     metrics: PerformanceMetrics
     provenance: DataProvenanceReport | None = None

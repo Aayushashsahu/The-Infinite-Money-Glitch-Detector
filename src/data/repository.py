@@ -321,6 +321,15 @@ class Repository:
                     except ValueError:
                         rr_enum = None
 
+                from data.schemas import PriceType
+                pt_val = getattr(r, "price_type", None) or (r.extra_metadata or {}).get("price_type")
+                pt_enum = None
+                if pt_val:
+                    try:
+                        pt_enum = PriceType(pt_val)
+                    except ValueError:
+                        pt_enum = None
+
                 obs_list.append(
                     ObsSchema(
                         kind=ObservationKind(r.kind),
@@ -341,6 +350,7 @@ class Repository:
                         classification=cls_enum,
                         availability_evidence=ev_enum,
                         rate_role=rr_enum,
+                        price_type=pt_enum,
                         quality_flags=[QualityFlag(f) for f in (r.quality_flags or []) if f in QualityFlag._value2member_map_],
                         metadata=r.extra_metadata,
                     )
@@ -489,6 +499,10 @@ def _obs_label(obs: ObsSchema) -> str:
 
 def _to_row(obs: ObsSchema) -> ObsRow:
     """Pydantic observation -> ORM row (explicit, no magic)."""
+    meta = dict(obs.metadata) if obs.metadata else {}
+    if obs.price_type:
+        meta["price_type"] = obs.price_type.value
+
     return ObsRow(
         kind=obs.kind.value,
         source_id=obs.source_id,
@@ -508,6 +522,6 @@ def _to_row(obs: ObsSchema) -> ObsRow:
         classification=obs.classification.value if obs.classification else ("synthetic" if obs.is_synthetic else "real_verified"),
         availability_evidence=obs.availability_evidence.value if obs.availability_evidence else None,
         rate_role=obs.rate_role.value if obs.rate_role else None,
-        extra_metadata=obs.metadata,
+        extra_metadata=meta or None,
         quality_flags=[f.value for f in obs.quality_flags],
     )

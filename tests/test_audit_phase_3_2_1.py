@@ -128,6 +128,7 @@ def test_pit_firewall_multi_timezone_normalization():
         publication_timestamp=pub_dt,
         retrieved_at=datetime.now(timezone.utc),
         classification=DataClassification.REAL_VERIFIED,
+        availability_evidence=AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
         rate_role=RateRole.RISK_FREE_RATE,
     )
 

@@ -40,7 +40,8 @@ from backtesting.signals import (
     TradingSignal,
     UnhedgedCarrySignalGenerator,
 )
-from data.schemas import DataObservation, Frequency, ObservationKind, RateRole, StrategyExecutabilityStatus
+from backtesting.calendar import DEFAULT_FX_CALENDAR, get_settlement_calendar
+from data.schemas import DataObservation, Frequency, ObservationKind, PriceType, RateRole, StrategyExecutabilityStatus
 
 
 class BacktestEngine:
@@ -152,6 +153,9 @@ class BacktestEngine:
                 unsupported_reason = f"Unsupported currency pair {pair_code}: no spot exchange rate observations available in dataset."
                 self._audit_trail.append(f"EXECUTION REJECTED: {unsupported_reason}")
 
+        # Joint currency settlement calendar
+        settlement_calendar = get_settlement_calendar(pair.borrowing_currency, pair.investment_currency)
+
         # Chronological daily simulation loop
         current_date = self.config.start_date
         next_rebalance_date = current_date
@@ -164,9 +168,8 @@ class BacktestEngine:
         bm_spot_rates: list[float] = []
 
         while can_simulate and current_date <= self.config.end_date:
-            # Check FX calendar for active trading day
-            from backtesting.calendar import DEFAULT_FX_CALENDAR
-            is_active_trading_day = DEFAULT_FX_CALENDAR.is_trading_day(current_date)
+            # Check settlement calendar for active business day
+            is_active_trading_day = settlement_calendar.is_settlement_day(current_date)
             if not is_active_trading_day:
                 # Markets closed: no trade entry, no trade exit. Defer maturities to next active trading day.
                 self.portfolio.accrue_cash_interest(1, self.config.execution_config.interest_convention)
@@ -242,24 +245,38 @@ class BacktestEngine:
                 bm_investment_rates.append(r_invest)
 
             # 2. Check and close maturing positions
-            for trade in self.portfolio.open_trades:
+            for trade in list(self.portfolio.open_trades):
                 trade_age_days = (current_date - trade.entry_date).days
                 if trade_age_days >= trade.target_tenor_days:
-                    # Time to close
-                    if spot_mid is None:
-                        # Stale / missing price on close: record rejection and defer until next quote
+                    exit_sig_ts = signal_timestamp
+                    exit_order_sub_ts = exit_sig_ts + timedelta(seconds=1)
+                    exit_exec_ts = exit_sig_ts + timedelta(minutes=self.config.execution_delay_minutes)
+
+                    exit_quote = self.data_store.get_executable_quote(
+                        pair_code,
+                        as_of=exit_exec_ts,
+                        max_quote_age_minutes=self.config.execution_config.max_quote_age_minutes,
+                        allow_reference_rate_proxy=self.config.execution_config.allow_reference_rate_proxy,
+                    )
+                    if exit_quote is None:
                         self._rejections.append({
                             "date": current_date.isoformat(),
                             "trade_id": trade.trade_id,
                             "action": "close",
-                            "reason": f"Missing exit spot rate quote for {pair_code} at maturity date {current_date}",
+                            "reason": f"Missing or stale executable exit quote for {pair_code} at {exit_exec_ts.isoformat()}",
                         })
                         continue
 
                     closed_trade = self.execution_engine.close_trade(
                         trade=trade,
                         exit_date=current_date,
-                        spot_mid_exit=spot_mid,
+                        spot_mid_exit=exit_quote.mid,
+                        exit_signal_timestamp=exit_sig_ts,
+                        exit_order_submission_timestamp=exit_order_sub_ts,
+                        exit_execution_timestamp=exit_exec_ts,
+                        exit_price_source=f"{exit_quote.data_source}_{exit_quote.price_type.value}",
+                        exit_quote_timestamp=exit_quote.observation_timestamp,
+                        exit_price_type=exit_quote.price_type,
                     )
                     self.portfolio.register_closed_trade(closed_trade)
                     self._audit_trail.append(
@@ -267,8 +284,9 @@ class BacktestEngine:
                         f"(RoC: {closed_trade.return_on_capital:.2%})"
                     )
 
-            # 3. Mark to market snapshot
-            current_rates = {pair_code: spot_mid} if spot_mid else {}
+            # 3. Mark to market snapshot using reference rate
+            ref_val = self.data_store.get_reference_rate(pair_code, as_of=signal_timestamp, allow_stale=True)
+            current_rates = {pair_code: ref_val.rate} if ref_val else ({pair_code: spot_mid} if spot_mid else {})
             self.portfolio.snapshot(as_of=current_date, current_spot_rates=current_rates)
 
             # 4. Signal generation & entry on rebalance schedule
@@ -300,66 +318,82 @@ class BacktestEngine:
                     if sizing.is_allowed:
                         trade_counter += 1
                         trade_id = f"TRD_{pair.borrowing_currency}_{pair.investment_currency}_{trade_counter:04d}"
-                        
+
                         order_sub_ts = signal_timestamp + timedelta(seconds=1)
                         if self.config.execution_session == "next_session_open":
-                            next_td = DEFAULT_FX_CALENDAR.next_trading_day(current_date)
+                            next_td = settlement_calendar.next_settlement_day(current_date)
                             exec_ts = datetime(next_td.year, next_td.month, next_td.day, 9, 0, tzinfo=timezone.utc)
                             trade_entry_date = next_td
                         else:
                             exec_ts = signal_timestamp + timedelta(minutes=self.config.execution_delay_minutes)
                             trade_entry_date = current_date
 
-                        # Obtain eligible price associated with execution time or next session open
-                        exec_spot = self.data_store.get_rate(pair_code, as_of=exec_ts)
-                        if exec_spot is not None:
-                            spot_entry = exec_spot
-                            price_source = "execution_timestamp_market"
-                        else:
-                            spot_entry = signal.spot_rate
-                            price_source = "signal_time_research_proxy"
-
-                        # T+2 FX settlement strictly on business/trading days
-                        settle_date = DEFAULT_FX_CALENDAR.add_trading_days(trade_entry_date, 2)
-                        settle_ts = datetime(settle_date.year, settle_date.month, settle_date.day, exec_ts.hour, exec_ts.minute, tzinfo=timezone.utc)
-
-                        trade_rec = self.execution_engine.open_trade(
-                            trade_id=trade_id,
-                            strategy_name=self.config.strategy_name,
-                            currency_pair=pair,
-                            entry_date=trade_entry_date,
-                            tenor_days=self.config.tenor_days,
-                            principal_borrowed_a=sizing.allocated_amount_a,
-                            borrowing_rate=signal.borrowing_rate,
-                            investment_rate=signal.investment_rate,
-                            spot_mid_entry=spot_entry,
-                            forward_mid=signal.forward_rate,
-                            is_covered=is_covered_strategy,
-                            is_verified_availability=(
-                                self.config.availability_config.policy == AvailabilityPolicy.STRICT
-                            ),
-                            signal_timestamp=signal_timestamp,
-                            order_submission_timestamp=order_sub_ts,
-                            execution_timestamp=exec_ts,
-                            settlement_timestamp=settle_ts,
+                        # Retrieve executable quote at execution timestamp
+                        exec_quote = self.data_store.get_executable_quote(
+                            pair_code,
+                            as_of=exec_ts,
+                            max_quote_age_minutes=self.config.execution_config.max_quote_age_minutes,
+                            allow_reference_rate_proxy=self.config.execution_config.allow_reference_rate_proxy,
                         )
-                        if trade_rec.metadata is None:
-                            trade_rec.metadata = {}
-                        trade_rec.metadata["price_source"] = price_source
-                        trade_rec.metadata["settlement_convention"] = "T+2_business_days"
-                        if self.portfolio.register_open_trade(trade_rec):
-                            self._audit_trail.append(
-                                f"Trade {trade_id} OPENED on {trade_entry_date} (exec {exec_ts.isoformat()}): "
-                                f"Borrowed {sizing.allocated_amount_a:,.2f} {pair.borrowing_currency} "
-                                f"at {signal.borrowing_rate:.2%}, Invested in {pair.investment_currency} at {signal.investment_rate:.2%}, "
-                                f"Spot = {trade_rec.spot_exec_entry:.4f}"
-                            )
-                        else:
+                        if exec_quote is None:
                             self._rejections.append({
                                 "date": current_date.isoformat(),
                                 "action": "open",
-                                "reason": trade_rec.rejection_reason or "Portfolio registration rejected",
+                                "reason": f"No valid executable quote for {pair_code} at {exec_ts.isoformat()} (max_age={self.config.execution_config.max_quote_age_minutes}m, proxy={self.config.execution_config.allow_reference_rate_proxy})",
                             })
+                        else:
+                            spot_entry = exec_quote.mid
+                            meta_price_source = "execution_timestamp_market"
+                            quote_source_desc = f"{exec_quote.data_source}_{exec_quote.price_type.value}"
+                            if exec_quote.price_type == PriceType.REFERENCE_RATE:
+                                if not self.config.availability_config.allow_synthetic and strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED:
+                                    strategy_status = StrategyExecutabilityStatus.RESEARCH_PROXY
+
+                            settle_date = settlement_calendar.add_settlement_days(trade_entry_date, 2)
+                            settle_ts = datetime(settle_date.year, settle_date.month, settle_date.day, exec_ts.hour, exec_ts.minute, tzinfo=timezone.utc)
+
+                            trade_rec = self.execution_engine.open_trade(
+                                trade_id=trade_id,
+                                strategy_name=self.config.strategy_name,
+                                currency_pair=pair,
+                                entry_date=trade_entry_date,
+                                tenor_days=self.config.tenor_days,
+                                principal_borrowed_a=sizing.allocated_amount_a,
+                                borrowing_rate=signal.borrowing_rate,
+                                investment_rate=signal.investment_rate,
+                                spot_mid_entry=spot_entry,
+                                forward_mid=signal.forward_rate,
+                                is_covered=is_covered_strategy,
+                                is_verified_availability=(
+                                    self.config.availability_config.policy == AvailabilityPolicy.STRICT
+                                ),
+                                signal_timestamp=signal_timestamp,
+                                order_submission_timestamp=order_sub_ts,
+                                execution_timestamp=exec_ts,
+                                settlement_timestamp=settle_ts,
+                                entry_price_type=exec_quote.price_type,
+                                entry_price_source=quote_source_desc,
+                                entry_quote_timestamp=exec_quote.observation_timestamp,
+                            )
+                            if trade_rec.metadata is None:
+                                trade_rec.metadata = {}
+                            trade_rec.metadata["price_source"] = meta_price_source
+                            trade_rec.metadata["quote_source"] = quote_source_desc
+                            trade_rec.metadata["settlement_convention"] = "T+2_business_days"
+                            trade_rec.metadata["settlement_calendar"] = settlement_calendar.calendar_name
+                            if self.portfolio.register_open_trade(trade_rec):
+                                self._audit_trail.append(
+                                    f"Trade {trade_id} OPENED on {trade_entry_date} (exec {exec_ts.isoformat()}): "
+                                    f"Borrowed {sizing.allocated_amount_a:,.2f} {pair.borrowing_currency} "
+                                    f"at {signal.borrowing_rate:.2%}, Invested in {pair.investment_currency} at {signal.investment_rate:.2%}, "
+                                    f"Spot = {trade_rec.spot_exec_entry:.4f}"
+                                )
+                            else:
+                                self._rejections.append({
+                                    "date": current_date.isoformat(),
+                                    "action": "open",
+                                    "reason": trade_rec.rejection_reason or "Portfolio registration rejected",
+                                })
                     else:
                         self._rejections.append({
                             "date": current_date.isoformat(),
@@ -377,22 +411,41 @@ class BacktestEngine:
 
             current_date += timedelta(days=1)
 
-        # 5. At simulation end: close any remaining open positions at latest spot rate
+        # 5. At simulation end: close open positions ONLY IF a fresh executable exit quote exists
         final_sig_ts = datetime(
             self.config.end_date.year, self.config.end_date.month, self.config.end_date.day,
             self.config.signal_time_utc[0], self.config.signal_time_utc[1], tzinfo=timezone.utc,
         )
-        final_spot = self.data_store.get_rate(pair_code, as_of=final_sig_ts, allow_stale=True)
+        final_exec_ts = final_sig_ts + timedelta(minutes=self.config.execution_delay_minutes)
         for trade in list(self.portfolio.open_trades):
-            if final_spot:
+            final_quote = self.data_store.get_executable_quote(
+                pair_code,
+                as_of=final_exec_ts,
+                max_quote_age_minutes=self.config.execution_config.max_quote_age_minutes,
+                allow_reference_rate_proxy=self.config.execution_config.allow_reference_rate_proxy,
+            )
+            if final_quote is not None:
                 closed = self.execution_engine.close_trade(
                     trade=trade,
                     exit_date=self.config.end_date,
-                    spot_mid_exit=final_spot,
+                    spot_mid_exit=final_quote.mid,
+                    exit_signal_timestamp=final_sig_ts,
+                    exit_order_submission_timestamp=final_sig_ts + timedelta(seconds=1),
+                    exit_execution_timestamp=final_exec_ts,
+                    exit_price_source=f"{final_quote.data_source}_{final_quote.price_type.value}",
+                    exit_quote_timestamp=final_quote.observation_timestamp,
+                    exit_price_type=final_quote.price_type,
                 )
                 self.portfolio.register_closed_trade(closed)
                 self._audit_trail.append(
-                    f"Simulation End: Trade {trade.trade_id} liquidated on {self.config.end_date} at {final_spot:.4f}"
+                    f"Simulation End: Trade {trade.trade_id} liquidated on {self.config.end_date} at {final_quote.mid:.4f}"
+                )
+            else:
+                ref_val = self.data_store.get_reference_rate(pair_code, as_of=final_sig_ts, allow_stale=True)
+                val_str = f"at reference rate {ref_val.rate:.4f}" if ref_val else "unvalued"
+                self._audit_trail.append(
+                    f"Simulation End: Trade {trade.trade_id} left OPEN at simulation end due to missing executable exit quote "
+                    f"({val_str}; unrealized PnL disclosed in portfolio snapshot)."
                 )
 
         # 6. Generate comparative benchmark
@@ -400,7 +453,14 @@ class BacktestEngine:
         bm_spec = self.config.benchmark_spec
         if len(bm_dates) >= 2 and bm_spec is not None:
             try:
-                if bm_spec.benchmark_type == BenchmarkType.ZERO_CASH:
+                # Benchmark currency validation: must match borrowing currency A
+                if bm_spec.currency is not None and bm_spec.currency.upper() != pair.borrowing_currency.upper():
+                    benchmark_series = None
+                    self._audit_trail.append(
+                        f"BENCHMARK UNAVAILABLE: Mismatched benchmark currency '{bm_spec.currency}' "
+                        f"against strategy borrowing currency '{pair.borrowing_currency}'."
+                    )
+                elif bm_spec.benchmark_type == BenchmarkType.ZERO_CASH:
                     cash_bm_rates = [0.0] * len(bm_dates)
                     benchmark_series = compute_borrowing_currency_benchmark(
                         dates=bm_dates,
@@ -417,6 +477,7 @@ class BacktestEngine:
                     )
                 elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_RISK_FREE:
                     rf_rates: list[float] = []
+                    is_missing = False
                     for d in bm_dates:
                         ts = datetime(d.year, d.month, d.day, self.config.signal_time_utc[0], self.config.signal_time_utc[1], tzinfo=timezone.utc)
                         r = self.data_store.get_interest_rate(
@@ -430,12 +491,20 @@ class BacktestEngine:
                         elif rf_rates:
                             rf_rates.append(rf_rates[-1])
                         else:
-                            rf_rates.append(0.0)
-                    benchmark_series = compute_borrowing_currency_benchmark(
-                        dates=bm_dates,
-                        borrowing_rates=rf_rates,
-                        interest_convention=self.config.execution_config.interest_convention,
-                    )
+                            is_missing = True
+                            break
+                    if is_missing or not rf_rates:
+                        benchmark_series = None
+                        self._audit_trail.append(
+                            f"BENCHMARK UNAVAILABLE: Historical risk-free rate series '{bm_spec.series_id or ''}' "
+                            f"missing for borrowing currency {pair.borrowing_currency}."
+                        )
+                    else:
+                        benchmark_series = compute_borrowing_currency_benchmark(
+                            dates=bm_dates,
+                            borrowing_rates=rf_rates,
+                            interest_convention=self.config.execution_config.interest_convention,
+                        )
                 elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_DEPOSIT:
                     dep_rates: list[float] = []
                     is_missing = False
@@ -455,7 +524,9 @@ class BacktestEngine:
                             break
                     if is_missing or not dep_rates:
                         benchmark_series = None
-                        self._audit_trail.append("BENCHMARK UNAVAILABLE: Historical deposit rate series missing from dataset.")
+                        self._audit_trail.append(
+                            f"BENCHMARK UNAVAILABLE: Historical deposit rate series missing for borrowing currency {pair.borrowing_currency}."
+                        )
                     else:
                         benchmark_series = compute_borrowing_currency_benchmark(
                             dates=bm_dates,
@@ -498,6 +569,9 @@ class BacktestEngine:
                 strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
             elif not can_simulate:
                 strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+            elif not self.config.execution_config.allow_reference_rate_proxy:
+                strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+                unsupported_reason = "Daily reference rates cannot be used as executable quotes without allow_reference_rate_proxy=True."
             elif strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED:
                 strategy_status = StrategyExecutabilityStatus.NO_TRADES
         elif is_covered_strategy and forward_sample is None:
@@ -544,6 +618,7 @@ class BacktestEngine:
         return BacktestResult(
             config=self.config,
             trades=all_trades,
+            open_trades=list(self.portfolio.open_trades),
             snapshots=self.portfolio.snapshots,
             metrics=metrics,
             provenance=provenance,

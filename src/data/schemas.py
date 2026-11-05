@@ -90,6 +90,16 @@ class RateRole(str, Enum):
     INVESTMENT_RETURN = "investment_return"
 
 
+class PriceType(str, Enum):
+    """Classification of exchange rate or market price quotation type."""
+
+    REFERENCE_RATE = "reference_rate"
+    MID_MARKET = "mid_market"
+    BID_QUOTE = "bid_quote"
+    ASK_QUOTE = "ask_quote"
+    EXECUTABLE_TWO_WAY_QUOTE = "executable_two_way_quote"
+
+
 class StrategyExecutabilityStatus(str, Enum):
     """Executability and research validity status of a backtested strategy."""
 
@@ -239,6 +249,7 @@ class DataObservation(BaseModel):
     classification: DataClassification | None = None
     availability_evidence: AvailabilityEvidence | None = None
     rate_role: RateRole | None = None
+    price_type: PriceType | None = None
     metadata: dict[str, Any] | None = None
     quality_flags: list[QualityFlag] = Field(default_factory=list)
 
@@ -348,12 +359,22 @@ class DataObservation(BaseModel):
         elif self.availability_evidence is None:
             if self.classification == DataClassification.REAL_RETROSPECTIVE:
                 self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
-            elif self.publication_timestamp is not None:
-                self.availability_evidence = AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED
-            elif self.publication_date is not None:
+            elif self.publication_timestamp is not None or self.publication_date is not None:
                 self.availability_evidence = AvailabilityEvidence.ESTIMATED_SCHEDULE
             else:
                 self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
+
+        # Default price_type for exchange rates
+        if self.kind == ObservationKind.EXCHANGE_RATE and self.price_type is None:
+            if self.metadata and "price_type" in self.metadata:
+                try:
+                    self.price_type = PriceType(self.metadata["price_type"])
+                except ValueError:
+                    self.price_type = PriceType.REFERENCE_RATE
+            elif self.is_synthetic:
+                self.price_type = PriceType.EXECUTABLE_TWO_WAY_QUOTE
+            else:
+                self.price_type = PriceType.REFERENCE_RATE
         return self
 
 

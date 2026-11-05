@@ -198,20 +198,20 @@ def test_covered_carry_executes_when_actual_forward_data_exists():
     # Spot = 1.10, r_USD = 3%, r_EUR = 6%.
     # Genuine market forward quote FWD_30D exists: 1.105 (trading at premium)
     observations = [
-        make_obs(date(2024, 1, 1), ObservationKind.EXCHANGE_RATE, pair_code, 1.10),
-        make_obs(date(2024, 1, 1), ObservationKind.EXCHANGE_RATE, pair_code, 1.105, indicator="FWD_30D"),
-        make_obs(date(2024, 1, 1), ObservationKind.INTEREST_RATE, "USD", 3.0),
-        make_obs(date(2024, 1, 1), ObservationKind.INTEREST_RATE, "EUR", 6.0),
-        make_obs(date(2024, 1, 31), ObservationKind.EXCHANGE_RATE, pair_code, 1.08),  # Spot fell to 1.08!
-        make_obs(date(2024, 1, 31), ObservationKind.INTEREST_RATE, "USD", 3.0),
-        make_obs(date(2024, 1, 31), ObservationKind.INTEREST_RATE, "EUR", 6.0),
+        make_obs(date(2024, 1, 2), ObservationKind.EXCHANGE_RATE, pair_code, 1.10),
+        make_obs(date(2024, 1, 2), ObservationKind.EXCHANGE_RATE, pair_code, 1.105, indicator="FWD_30D"),
+        make_obs(date(2024, 1, 2), ObservationKind.INTEREST_RATE, "USD", 3.0),
+        make_obs(date(2024, 1, 2), ObservationKind.INTEREST_RATE, "EUR", 6.0),
+        make_obs(date(2024, 2, 1), ObservationKind.EXCHANGE_RATE, pair_code, 1.08),  # Spot fell to 1.08!
+        make_obs(date(2024, 2, 1), ObservationKind.INTEREST_RATE, "USD", 3.0),
+        make_obs(date(2024, 2, 1), ObservationKind.INTEREST_RATE, "EUR", 6.0),
     ]
 
     cfg = BacktestConfig(
         strategy_name="Covered Carry Trade",
         currency_pair=pair,
-        start_date=date(2024, 1, 1),
-        end_date=date(2024, 1, 31),
+        start_date=date(2024, 1, 2),
+        end_date=date(2024, 2, 1),
         tenor_days=30,
         rebalance_frequency_days=30,
         hurdle_rate_annual=0.001,

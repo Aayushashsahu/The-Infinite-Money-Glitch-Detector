@@ -85,10 +85,18 @@ def export_backtest_result_json(result: BacktestResult, output_path: str | Path 
     }
 
     if output_path is not None:
-        p = Path(output_path)
+        p = Path(output_path).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        import time
+        for attempt in range(5):
+            try:
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                break
+            except OSError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.2)
 
     return data
 

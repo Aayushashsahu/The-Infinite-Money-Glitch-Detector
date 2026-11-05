@@ -27,8 +27,13 @@ from typing import Any, Sequence
 
 import pandas as pd
 
-from data.schemas import DataObservation, Frequency, ObservationKind, RateRole
-from schemas.backtest import AvailabilityPolicy, DataAvailabilityConfig
+from data.schemas import AvailabilityEvidence, DataObservation, Frequency, ObservationKind, PriceType, RateRole
+from schemas.backtest import (
+    AvailabilityPolicy,
+    DataAvailabilityConfig,
+    ExecutableQuoteResult,
+    ValuationResult,
+)
 
 
 CURRENCY_ENTITY_MAP: dict[str, list[str]] = {
@@ -513,3 +518,226 @@ class PointInTimeDataStore:
             rate_role=rate_role,
             allow_stale=allow_stale,
         )
+
+    def get_reference_rate(
+        self,
+        pair_code: str,
+        as_of: date | datetime,
+        allow_stale: bool = False,
+    ) -> ValuationResult | None:
+        """Retrieve reference rate for mark-to-market valuation with age and price_type metadata."""
+        candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, pair_code)
+        record = self.firewall.get_latest_observation(
+            candidates,
+            as_of=as_of,
+            kind=ObservationKind.EXCHANGE_RATE,
+            entity_code=pair_code,
+            allow_stale=allow_stale,
+        )
+        as_of_d, as_of_dt = _parse_as_of(as_of)
+        if record is None:
+            if "/" in pair_code:
+                b, q = pair_code.split("/", 1)
+                inv_pair = f"{q}/{b}"
+                inv_candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, inv_pair)
+                if inv_candidates:
+                    inv_rec = self.firewall.get_latest_observation(
+                        inv_candidates,
+                        as_of=as_of,
+                        kind=ObservationKind.EXCHANGE_RATE,
+                        entity_code=inv_pair,
+                        allow_stale=allow_stale,
+                    )
+                    if inv_rec is not None and inv_rec.observation.value > 0:
+                        obs = inv_rec.observation
+                        pt = obs.price_type or PriceType.REFERENCE_RATE
+                        val = 1.0 / obs.value
+                        return ValuationResult(
+                            rate=val,
+                            observation_timestamp=obs.observation_timestamp,
+                            availability_timestamp=inv_rec.availability_timestamp,
+                            age_at_valuation_days=inv_rec.stale_days,
+                            data_source=obs.source_id,
+                            price_type=pt,
+                            pair_code=pair_code,
+                        )
+            return None
+
+        obs = record.observation
+        pt = obs.price_type or PriceType.REFERENCE_RATE
+        return ValuationResult(
+            rate=obs.value,
+            observation_timestamp=obs.observation_timestamp,
+            availability_timestamp=record.availability_timestamp,
+            age_at_valuation_days=record.stale_days,
+            data_source=obs.source_id,
+            price_type=pt,
+            pair_code=pair_code,
+        )
+
+    def get_executable_quote(
+        self,
+        pair_code: str,
+        as_of: datetime,
+        max_quote_age_minutes: float = 1440.0,
+        allow_reference_rate_proxy: bool = False,
+    ) -> ExecutableQuoteResult | None:
+        """Retrieve executable market quote with bid/ask prices and freshness validation.
+
+        If allow_reference_rate_proxy is False:
+            Only genuine quotes (price_type in (BID_QUOTE, ASK_QUOTE, EXECUTABLE_TWO_WAY_QUOTE)) are eligible.
+            If none exist, returns None.
+        If allow_reference_rate_proxy is True:
+            Reference rates / mid-market observations are accepted as research proxies.
+        """
+        as_of_d, as_of_dt = _parse_as_of(as_of)
+        if as_of_dt is None:
+            as_of_dt = datetime.combine(as_of_d, datetime.min.time(), tzinfo=timezone.utc)
+
+        candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, pair_code)
+        available_records = self.firewall.filter_available(candidates, as_of=as_of_dt)
+
+        executable_records = [
+            r for r in available_records
+            if r.observation.price_type in (
+                PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                PriceType.BID_QUOTE,
+                PriceType.ASK_QUOTE,
+            )
+        ]
+
+        target_record = None
+        is_proxy = False
+
+        epoch_utc = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        if executable_records:
+            executable_records.sort(
+                key=lambda r: (
+                    r.observation.observation_date,
+                    r.observation.observation_timestamp or epoch_utc,
+                    r.observation.revision,
+                )
+            )
+            target_record = executable_records[-1]
+        elif allow_reference_rate_proxy:
+            if available_records:
+                available_records.sort(
+                    key=lambda r: (
+                        r.observation.observation_date,
+                        r.observation.observation_timestamp or epoch_utc,
+                        r.observation.revision,
+                    )
+                )
+                target_record = available_records[-1]
+                is_proxy = True
+
+        if target_record is None:
+            if "/" in pair_code:
+                b, q = pair_code.split("/", 1)
+                inv_pair = f"{q}/{b}"
+                inv_candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, inv_pair)
+                inv_available = self.firewall.filter_available(inv_candidates, as_of=as_of_dt)
+                inv_exec = [
+                    r for r in inv_available
+                    if r.observation.price_type in (
+                        PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                        PriceType.BID_QUOTE,
+                        PriceType.ASK_QUOTE,
+                    )
+                ]
+                if inv_exec:
+                    inv_exec.sort(
+                        key=lambda r: (
+                            r.observation.observation_date,
+                            r.observation.observation_timestamp or epoch_utc,
+                            r.observation.revision,
+                        )
+                    )
+                    inv_target = inv_exec[-1]
+                    inv_obs = inv_target.observation
+                    if inv_obs.value > 0:
+                        quote_dt = inv_obs.observation_timestamp or inv_obs.publication_timestamp
+                        if quote_dt is None:
+                            quote_dt = datetime.combine(inv_obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
+                        age_sec = max(0.0, (as_of_dt - quote_dt).total_seconds())
+                        age_min = age_sec / 60.0
+                        if not inv_obs.is_synthetic and age_min > max_quote_age_minutes:
+                            return None
+                        rate = 1.0 / inv_obs.value
+                        return ExecutableQuoteResult(
+                            pair_code=pair_code,
+                            bid=rate,
+                            ask=rate,
+                            mid=rate,
+                            observation_timestamp=quote_dt,
+                            availability_timestamp=inv_target.availability_timestamp or quote_dt,
+                            age_minutes=age_min,
+                            data_source=inv_obs.source_id,
+                            price_type=inv_obs.price_type or PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                            is_executable=True,
+                            quote_convention="quote_per_base",
+                        )
+                elif allow_reference_rate_proxy and inv_available:
+                    inv_available.sort(
+                        key=lambda r: (
+                            r.observation.observation_date,
+                            r.observation.observation_timestamp or epoch_utc,
+                            r.observation.revision,
+                        )
+                    )
+                    inv_target = inv_available[-1]
+                    inv_obs = inv_target.observation
+                    if inv_obs.value > 0:
+                        quote_dt = inv_obs.observation_timestamp or inv_obs.publication_timestamp
+                        if quote_dt is None:
+                            quote_dt = datetime.combine(inv_obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
+                        age_sec = max(0.0, (as_of_dt - quote_dt).total_seconds())
+                        age_min = age_sec / 60.0
+                        if quote_dt.date() < as_of_dt.date() or inv_target.is_stale:
+                            return None
+                        rate = 1.0 / inv_obs.value
+                        return ExecutableQuoteResult(
+                            pair_code=pair_code,
+                            bid=rate,
+                            ask=rate,
+                            mid=rate,
+                            observation_timestamp=quote_dt,
+                            availability_timestamp=inv_target.availability_timestamp or quote_dt,
+                            age_minutes=age_min,
+                            data_source=inv_obs.source_id,
+                            price_type=inv_obs.price_type or PriceType.REFERENCE_RATE,
+                            is_executable=False,
+                            quote_convention="quote_per_base",
+                        )
+            return None
+
+        obs = target_record.observation
+        quote_dt = obs.observation_timestamp or obs.publication_timestamp
+        if quote_dt is None:
+            quote_dt = datetime.combine(obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
+        age_sec = max(0.0, (as_of_dt - quote_dt).total_seconds())
+        age_min = age_sec / 60.0
+
+        if age_min > max_quote_age_minutes:
+            return None
+
+        pt = obs.price_type or (PriceType.REFERENCE_RATE if is_proxy else PriceType.MID_MARKET)
+        rate = obs.value
+        bid = obs.metadata.get("bid", rate) if obs.metadata else rate
+        ask = obs.metadata.get("ask", rate) if obs.metadata else rate
+        mid = (bid + ask) / 2.0 if (bid is not None and ask is not None) else rate
+
+        return ExecutableQuoteResult(
+            pair_code=pair_code,
+            bid=bid,
+            ask=ask,
+            mid=mid,
+            observation_timestamp=quote_dt,
+            availability_timestamp=target_record.availability_timestamp or quote_dt,
+            age_minutes=age_min,
+            data_source=obs.source_id,
+            price_type=pt,
+            is_executable=not is_proxy and (pt == PriceType.EXECUTABLE_TWO_WAY_QUOTE),
+            quote_convention="quote_per_base",
+        )
+
