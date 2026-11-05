@@ -34,6 +34,7 @@ from schemas.backtest import (
     ExecutionConfig,
     PositionSizingConfig,
     PositionSizingMethod,
+    StrategyExecutabilityStatus,
 )
 from schemas.strategy import CurrencyPair
 
@@ -243,7 +244,9 @@ def test_real_market_backtest_execution_and_reconciliation():
     bt_engine = BacktestEngine(config, obs)
     res = bt_engine.run()
 
-    assert res.is_executable_strategy is True
+    assert res.can_simulate is True
+    assert res.strategy_status == StrategyExecutabilityStatus.RESEARCH_PROXY
+    assert res.is_executable_strategy is False
     assert len(res.trades) > 0
     m = res.metrics
     assert m.total_trades == len(res.trades)

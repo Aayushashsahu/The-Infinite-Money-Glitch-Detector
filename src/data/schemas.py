@@ -308,21 +308,28 @@ class DataObservation(BaseModel):
         if self.publication_date is None and self.publication_timestamp is not None:
             self.publication_date = self.publication_timestamp.date()
 
+        # Invariant: explicit classifications cannot contradict availability evidence silently
+        if self.classification == DataClassification.REAL_RETROSPECTIVE and self.availability_evidence in (
+            AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
+            AvailabilityEvidence.ESTIMATED_SCHEDULE,
+        ):
+            raise ValueError(
+                f"Contradictory metadata: classification cannot be REAL_RETROSPECTIVE when availability_evidence is {self.availability_evidence}."
+            )
+        if self.classification == DataClassification.REAL_VERIFIED and self.availability_evidence == AvailabilityEvidence.RETROSPECTIVE:
+            raise ValueError(
+                "Contradictory metadata: classification cannot be REAL_VERIFIED when availability_evidence is RETROSPECTIVE."
+            )
+        if self.is_synthetic and self.classification == DataClassification.REAL_VERIFIED:
+            raise ValueError("Contradictory metadata: synthetic observations cannot be classified as REAL_VERIFIED.")
+
         # Automatic classification resolution preserving explicit tags
         if self.classification is None:
             if self.is_synthetic:
                 self.classification = DataClassification.SYNTHETIC
-            elif self.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED:
-                self.classification = DataClassification.REAL_VERIFIED
-            elif self.availability_evidence == AvailabilityEvidence.ESTIMATED_SCHEDULE:
-                self.classification = DataClassification.REAL_ESTIMATED_AVAILABILITY
-            elif self.availability_evidence == AvailabilityEvidence.UNVERIFIED_SAME_DAY:
-                self.classification = DataClassification.REAL_ESTIMATED_AVAILABILITY
             elif self.availability_evidence == AvailabilityEvidence.RETROSPECTIVE:
                 self.classification = DataClassification.REAL_RETROSPECTIVE
-            elif self.publication_timestamp is not None:
-                self.classification = DataClassification.REAL_VERIFIED
-            elif self.publication_date is not None:
+            elif self.publication_timestamp is not None or self.publication_date is not None:
                 self.classification = DataClassification.REAL_VERIFIED
             else:
                 self.classification = DataClassification.REAL_RETROSPECTIVE
@@ -332,10 +339,10 @@ class DataObservation(BaseModel):
         if self.availability_evidence is None:
             if self.is_synthetic:
                 self.availability_evidence = None
-            elif self.classification == DataClassification.REAL_VERIFIED and self.publication_timestamp is not None:
+            elif self.classification == DataClassification.REAL_RETROSPECTIVE:
+                self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
+            elif self.publication_timestamp is not None or self.publication_date is not None:
                 self.availability_evidence = AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED
-            elif self.publication_date is not None:
-                self.availability_evidence = AvailabilityEvidence.ESTIMATED_SCHEDULE
             else:
                 self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
         return self

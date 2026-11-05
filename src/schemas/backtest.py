@@ -11,7 +11,7 @@ Defines Pydantic models for:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core.currency import validate_currency_code
 from schemas.strategy import CurrencyPair, InterestConvention
-from data.schemas import Frequency, StrategyExecutabilityStatus
+from data.schemas import Frequency, RateRole, StrategyExecutabilityStatus
 
 
 class AvailabilityPolicy(str, Enum):
@@ -85,6 +85,28 @@ class InterestRateHierarchy(BaseModel):
     deposit_rate: float | None = Field(default=None, description="Annual rate earned on unencumbered cash in A.")
     policy_rate: float | None = Field(default=None, description="Central bank policy rate in A.")
     risk_free_rate: float | None = Field(default=None, description="Risk-free cash benchmark rate in A.")
+
+
+class BenchmarkType(str, Enum):
+    """Supported historical and hypothetical benchmark definitions."""
+
+    HISTORICAL_DEPOSIT = "historical_deposit"
+    HISTORICAL_RISK_FREE = "historical_risk_free"
+    FIXED_HYPOTHETICAL_PROXY = "fixed_hypothetical_proxy"
+    ZERO_CASH = "zero_cash"
+    UNAVAILABLE = "unavailable"
+
+
+class BenchmarkSpecification(BaseModel):
+    """Explicit benchmark configuration distinguishing cash deposits from sovereign debt yields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmark_type: BenchmarkType = BenchmarkType.ZERO_CASH
+    fixed_rate_annual: float = 0.0
+    series_id: str | None = None
+    rate_role: RateRole | None = None
+    name: str = "Zero Cash Benchmark (0.0% annual)"
 
 
 class DataAvailabilityConfig(BaseModel):
@@ -238,6 +260,10 @@ class TradeRecord(BaseModel):
     status: TradeStatus = TradeStatus.OPEN
     rejection_reason: str | None = None
     is_availability_verified: bool = True
+    signal_timestamp: datetime | None = None
+    order_submission_timestamp: datetime | None = None
+    execution_timestamp: datetime | None = None
+    settlement_timestamp: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -438,12 +464,48 @@ class BacktestConfig(BaseModel):
         description="Optional explicit indicator_id for foreign investment rate (e.g. 'KR.DFR.LEV').",
     )
 
+    # Simulation clock & session execution parameters
+    signal_time_utc: tuple[int, int] = Field(
+        default=(16, 0),
+        description="Daily signal evaluation time in UTC (hour, minute).",
+    )
+    execution_delay_minutes: int = Field(
+        default=60,
+        ge=0,
+        description="Execution delay after signal generation in minutes.",
+    )
+    execution_session: str = Field(
+        default="same_day_close",
+        description="Execution session: 'same_day_close' or 'next_session_open'.",
+    )
+    require_commercial_rates: bool = Field(
+        default=False,
+        description="Require commercial bank borrowing/deposit rates. Rejects sovereign or central bank proxies.",
+    )
+    benchmark_spec: BenchmarkSpecification | None = Field(
+        default=None,
+        description="Benchmark specification. If omitted, defaults to FIXED_HYPOTHETICAL_PROXY if cash_deposit_rate_annual > 0 else ZERO_CASH.",
+    )
+
     @model_validator(mode="after")
-    def _validate_dates(self) -> "BacktestConfig":
+    def _validate_config(self) -> "BacktestConfig":
         if self.start_date >= self.end_date:
             raise ValueError(
                 f"start_date ({self.start_date}) must be strictly before end_date ({self.end_date})."
             )
+        if self.benchmark_spec is None:
+            if self.cash_deposit_rate_annual > 0.0:
+                self.benchmark_spec = BenchmarkSpecification(
+                    benchmark_type=BenchmarkType.FIXED_HYPOTHETICAL_PROXY,
+                    fixed_rate_annual=self.cash_deposit_rate_annual,
+                    name=f"Fixed Cash Deposit Benchmark ({self.cash_deposit_rate_annual * 100:.2f}% annual)",
+                )
+            else:
+                self.benchmark_spec = BenchmarkSpecification(
+                    benchmark_type=BenchmarkType.ZERO_CASH,
+                    fixed_rate_annual=0.0,
+                    name="Zero Cash Benchmark (0.0% annual)",
+                )
         return self
 
 
@@ -462,5 +524,22 @@ class BacktestResult(BaseModel):
     audit_trail: list[str] = Field(default_factory=list)
     strategy_status: StrategyExecutabilityStatus = StrategyExecutabilityStatus.EXECUTABLE_VALIDATED
     manifest_digest: str | None = None
-    is_executable_strategy: bool = True
+    can_simulate: bool = True
+    is_point_in_time_credible: bool = True
+    is_economically_representative: bool = False
+    is_executable_strategy: bool = False
     unsupported_reason: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_executability_invariants(self) -> "BacktestResult":
+        if self.strategy_status in (
+            StrategyExecutabilityStatus.RESEARCH_PROXY,
+            StrategyExecutabilityStatus.RESEARCH_ONLY,
+            StrategyExecutabilityStatus.UNEXECUTABLE,
+            StrategyExecutabilityStatus.NO_TRADES,
+        ):
+            if self.is_executable_strategy:
+                raise ValueError(
+                    f"is_executable_strategy cannot be True when strategy_status is {self.strategy_status}!"
+                )
+        return self

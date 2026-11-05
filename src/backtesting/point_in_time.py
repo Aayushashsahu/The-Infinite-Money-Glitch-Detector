@@ -81,16 +81,28 @@ class PointInTimeFirewall:
         Returns:
             (availability_date, is_verified, reason_note)
         """
-        # Strict mode: requires verified publication_date
+        # Strict mode: requires verified publication_date AND excludes unverified evidence
         if self.config.policy == AvailabilityPolicy.STRICT:
+            from data.schemas import AvailabilityEvidence
+            if obs.availability_evidence in (
+                AvailabilityEvidence.ESTIMATED_SCHEDULE,
+                AvailabilityEvidence.UNVERIFIED_SAME_DAY,
+                AvailabilityEvidence.RETROSPECTIVE,
+            ):
+                return None, False, f"unverified_{obs.availability_evidence.value}_rejected_in_strict_mode"
             if obs.publication_date is not None:
                 return obs.publication_date, True, "verified_publication_date"
             return None, False, "missing_publication_date_rejected_in_strict_mode"
 
         # Estimated-lag mode
         if self.config.policy == AvailabilityPolicy.ESTIMATED_LAG:
+            from data.schemas import AvailabilityEvidence
+            if obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE:
+                return None, False, "retrospective_evidence_rejected_in_estimated_lag_mode"
+
+            is_verified = (obs.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED)
             if obs.publication_date is not None:
-                return obs.publication_date, True, "verified_publication_date"
+                return obs.publication_date, is_verified, "publication_date"
             
             # Check for custom indicator lag first
             lag_days: int | None = None
@@ -122,6 +134,7 @@ class PointInTimeFirewall:
         Returns:
             (is_eligible, avail_date, avail_timestamp, is_verified, reason_note)
         """
+        from data.schemas import AvailabilityEvidence
         as_of_d, as_of_dt = _parse_as_of(as_of)
 
         # 1. Observation timestamp/date lookahead check: observation itself cannot be in the future
@@ -131,8 +144,21 @@ class PointInTimeFirewall:
         if obs.observation_date > as_of_d:
             return False, obs.observation_date, obs.observation_timestamp, False, "future_observation_date_leakage_blocked"
 
-        # 2. Strict mode: requires verified publication date / timestamp
+        # Check effective timestamp: if policy rate is not yet effective as of as_of, reject
+        if obs.effective_timestamp is not None and as_of_dt is not None:
+            if obs.effective_timestamp > as_of_dt:
+                return False, obs.observation_date, obs.effective_timestamp, False, "effective_timestamp_after_as_of_not_yet_effective"
+
+        # 2. Strict mode: requires verified publication date / timestamp AND excludes unverified evidence
         if self.config.policy == AvailabilityPolicy.STRICT:
+            if obs.availability_evidence in (
+                AvailabilityEvidence.ESTIMATED_SCHEDULE,
+                AvailabilityEvidence.UNVERIFIED_SAME_DAY,
+                AvailabilityEvidence.RETROSPECTIVE,
+            ):
+                ev_str = obs.availability_evidence.value
+                return False, obs.publication_date, obs.publication_timestamp, False, f"unverified_evidence_{ev_str}_rejected_in_strict_mode"
+
             if as_of_dt is not None:
                 if obs.publication_timestamp is not None:
                     avail_dt = obs.publication_timestamp
@@ -141,16 +167,14 @@ class PointInTimeFirewall:
                         return False, avail_d, avail_dt, True, "publication_timestamp_after_signal_blocked"
                     return True, avail_d, avail_dt, True, "verified_publication_timestamp"
                 elif obs.publication_date is not None:
-                    # When only publication_date is known, availability is conservative end of publication day (23:59:59 UTC)
                     avail_d = obs.publication_date
-                    avail_dt = datetime(avail_d.year, avail_d.month, avail_d.day, 23, 59, 59, tzinfo=timezone.utc)
-                    if avail_dt > as_of_dt:
-                        return False, avail_d, avail_dt, True, "publication_date_eod_after_signal_blocked"
+                    if avail_d > as_of_d:
+                        return False, avail_d, None, True, "publication_date_after_as_of_blocked"
+                    avail_dt = datetime(avail_d.year, avail_d.month, avail_d.day, 0, 0, tzinfo=timezone.utc)
                     return True, avail_d, avail_dt, True, "verified_publication_date"
                 else:
                     return False, None, None, False, "missing_publication_date_rejected_in_strict_mode"
             else:
-                # Date-level as_of
                 if obs.publication_date is not None:
                     if obs.publication_date > as_of_d:
                         return False, obs.publication_date, obs.publication_timestamp, True, "publication_date_after_as_of_blocked"
@@ -159,23 +183,35 @@ class PointInTimeFirewall:
 
         # 3. Estimated-lag mode
         if self.config.policy == AvailabilityPolicy.ESTIMATED_LAG:
-            if as_of_dt is not None and obs.publication_timestamp is not None:
-                if obs.publication_timestamp > as_of_dt:
-                    return False, obs.publication_timestamp.date(), obs.publication_timestamp, True, "publication_timestamp_after_as_of"
-                return True, obs.publication_timestamp.date(), obs.publication_timestamp, True, "verified_publication_timestamp"
-            
+            if obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE:
+                return False, obs.observation_date, obs.observation_timestamp, False, "retrospective_evidence_rejected_in_estimated_lag_mode"
+
+            is_verified = (obs.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED)
+
+            if obs.publication_timestamp is not None:
+                avail_dt = obs.publication_timestamp
+                avail_d = avail_dt.date()
+                if as_of_dt is not None and avail_dt > as_of_dt:
+                    return False, avail_d, avail_dt, is_verified, "publication_timestamp_after_as_of"
+                if avail_d > as_of_d:
+                    return False, avail_d, avail_dt, is_verified, "publication_date_after_as_of"
+                note_str = "verified_publication_timestamp" if is_verified else "estimated_schedule_publication_timestamp"
+                return True, avail_d, avail_dt, is_verified, note_str
+
             if obs.publication_date is not None:
                 avail_d = obs.publication_date
                 if as_of_dt is not None:
                     avail_dt = datetime(avail_d.year, avail_d.month, avail_d.day, 23, 59, 59, tzinfo=timezone.utc)
                     if avail_dt > as_of_dt:
-                        return False, avail_d, avail_dt, True, "publication_date_after_as_of"
-                    return True, avail_d, avail_dt, True, "verified_publication_date"
+                        return False, avail_d, avail_dt, is_verified, "publication_date_after_as_of"
+                    note_str = "verified_publication_date" if is_verified else "estimated_schedule_publication_date"
+                    return True, avail_d, avail_dt, is_verified, note_str
                 if avail_d > as_of_d:
-                    return False, avail_d, obs.publication_timestamp, True, "publication_date_after_as_of"
-                return True, avail_d, obs.publication_timestamp, True, "verified_publication_date"
+                    return False, avail_d, None, is_verified, "publication_date_after_as_of"
+                note_str = "verified_publication_date" if is_verified else "estimated_schedule_publication_date"
+                return True, avail_d, None, is_verified, note_str
 
-            # Check for custom indicator lag first
+            # Custom or default lag
             lag_days = (
                 self.config.custom_indicator_lags.get(obs.indicator_id, self.config.default_lags_days.get(obs.frequency, 30))
                 if obs.indicator_id

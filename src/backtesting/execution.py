@@ -13,7 +13,7 @@ Models:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from core.currency import convert_to_a, convert_to_b
@@ -118,6 +118,10 @@ class ExecutionEngine:
         forward_mid: float | None = None,
         is_covered: bool = False,
         is_verified_availability: bool = True,
+        signal_timestamp: datetime | None = None,
+        order_submission_timestamp: datetime | None = None,
+        execution_timestamp: datetime | None = None,
+        settlement_timestamp: datetime | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> TradeRecord:
         """Execute trade opening (borrow A, convert A -> B, hold for investment).
@@ -260,6 +264,10 @@ class ExecutionEngine:
             slippage_costs_a=max(0.0, slippage_loss_a),
             status=TradeStatus.OPEN,
             is_availability_verified=is_verified_availability,
+            signal_timestamp=signal_timestamp,
+            order_submission_timestamp=order_submission_timestamp,
+            execution_timestamp=execution_timestamp,
+            settlement_timestamp=settlement_timestamp,
             metadata=metadata or {},
         )
 

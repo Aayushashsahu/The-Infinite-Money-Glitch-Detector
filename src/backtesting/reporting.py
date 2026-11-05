@@ -10,8 +10,87 @@ Generates:
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
+
 from schemas.backtest import BacktestResult
 from backtesting.walk_forward import WalkForwardSummary
+
+
+def export_backtest_result_json(result: BacktestResult, output_path: str | Path | None = None) -> dict[str, Any]:
+    """Export machine-generated JSON result for reproducibility and audit trail."""
+    cfg = result.config
+    m = result.metrics
+    pair = cfg.currency_pair
+
+    data: dict[str, Any] = {
+        "strategy_name": cfg.strategy_name,
+        "currency_pair": f"{pair.borrowing_currency}/{pair.investment_currency}",
+        "start_date": str(cfg.start_date),
+        "end_date": str(cfg.end_date),
+        "initial_capital_a": cfg.initial_capital_a,
+        "strategy_status": result.strategy_status.value,
+        "can_simulate": result.can_simulate,
+        "is_point_in_time_credible": result.is_point_in_time_credible,
+        "is_economically_representative": result.is_economically_representative,
+        "is_executable_strategy": result.is_executable_strategy,
+        "unsupported_reason": result.unsupported_reason,
+        "manifest_digest": result.manifest_digest,
+        "performance": {
+            "cumulative_net_profit": m.cumulative_net_profit,
+            "total_return": m.total_return,
+            "annualized_return": m.annualized_return,
+            "annualized_volatility": m.annualized_volatility,
+            "sharpe_ratio": m.sharpe_ratio,
+            "sortino_ratio": m.sortino_ratio,
+            "max_drawdown": m.max_drawdown,
+            "calmar_ratio": m.calmar_ratio,
+            "var_95": m.var_95,
+            "cvar_95": m.cvar_95,
+            "avg_capital_utilization": m.avg_capital_utilization,
+            "max_exposure_a": m.max_exposure_a,
+        },
+        "attribution": {
+            "pure_gross_profit_a": m.pure_gross_profit_a,
+            "gross_trade_return": m.gross_trade_return,
+            "total_financing_costs_a": m.total_financing_costs_a,
+            "financing_cost_drag": m.financing_cost_drag,
+            "total_frictions_a": m.total_frictions_a,
+            "transaction_cost_drag": m.transaction_cost_drag,
+            "total_cash_interest_a": m.total_cash_interest_a,
+            "cash_yield_return": m.cash_yield_return,
+            "reconciliation_residual_a": m.reconciliation_residual_a,
+            "reconciliation_exact": m.reconciliation_exact,
+        },
+        "benchmark": {
+            "benchmark_name": m.benchmark_name,
+            "benchmark_total_return": m.benchmark_total_return,
+            "benchmark_annualized_return": m.benchmark_annualized_return,
+            "benchmark_sharpe_ratio": m.benchmark_sharpe_ratio,
+            "alpha": m.alpha,
+            "cumulative_excess_return": m.cumulative_excess_return,
+            "annualized_excess_return": m.annualized_excess_return,
+        },
+        "trades": {
+            "total_trades": m.total_trades,
+            "winning_trades": m.winning_trades,
+            "losing_trades": m.losing_trades,
+            "win_rate": m.win_rate,
+            "avg_winning_trade": m.avg_winning_trade,
+            "avg_losing_trade": m.avg_losing_trade,
+            "profit_factor": m.profit_factor,
+            "rejected_trades_count": len(result.rejections),
+        },
+    }
+
+    if output_path is not None:
+        p = Path(output_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    return data
 
 
 def format_backtest_report(result: BacktestResult) -> str:
@@ -52,19 +131,20 @@ def format_backtest_report(result: BacktestResult) -> str:
     lines.append(f"| **Average Capital Utilization** | `{m.avg_capital_utilization:.1%}` | Mean borrowed exposure / equity |")
     lines.append(f"| **Peak Exposure** | `{m.max_exposure_a:,.2f} {pair.borrowing_currency}` | Maximum simultaneous borrowed principal |")
 
-    # Return attribution breakdown
-    lines.append("\n## 2. Return Attribution Decomposition (Capital Denominator: Initial Equity)\n")
-    lines.append("| Attribution Component | Value | Description |")
-    lines.append("| :--- | :--- | :--- |")
-    gross_str = f"{m.gross_trade_return:+.2%}" if m.gross_trade_return is not None else "N/A"
-    lines.append(f"| **Gross Foreign Investment Gain** | `{gross_str}` | Foreign asset appreciation & interest before financing & fees |")
-    fin_str = f"{-m.financing_cost_drag:+.2%}" if m.financing_cost_drag is not None else "N/A"
-    lines.append(f"| **Debt Financing Drag** | `{fin_str}` | Interest paid on borrowed currency A liabilities |")
-    tx_str = f"{-m.transaction_cost_drag:+.2%}" if m.transaction_cost_drag is not None else "N/A"
-    lines.append(f"| **Execution Frictions Drag** | `{tx_str}` | Total bid/ask spread, slippage, and ticket fees |")
-    cash_str = f"{m.cash_yield_return:+.2%}" if m.cash_yield_return is not None else "N/A"
-    lines.append(f"| **Cash Yield on Unallocated Balances** | `{cash_str}` | Interest earned on cash at deposit/risk-free rate |")
-    lines.append(f"| **Net Strategy Return** | `{m.total_return:+.2%}` | Gross Gain - Financing - Fees + Cash Yield |")
+    # Return attribution breakdown with exact double-entry ledger
+    lines.append("\n## 2. Return Attribution Decomposition & Double-Entry Cash Ledger\n")
+    lines.append("| Attribution Component | Currency Amount | Return on Capital | Description |")
+    lines.append("| :--- | :--- | :--- | :--- |")
+    gross_str = f"{m.gross_trade_return:+.4%}" if m.gross_trade_return is not None else "N/A"
+    lines.append(f"| **Pure Gross Gain** | `{m.pure_gross_profit_a:+,.2f} {pair.borrowing_currency}` | `{gross_str}` | Asset appreciation & interest before financing & fees |")
+    fin_str = f"{-m.financing_cost_drag:+.4%}" if m.financing_cost_drag is not None else "N/A"
+    lines.append(f"| **Debt Financing Costs** | `{-m.total_financing_costs_a:,.2f} {pair.borrowing_currency}` | `{fin_str}` | Interest paid on borrowed liabilities |")
+    tx_str = f"{-m.transaction_cost_drag:+.4%}" if m.transaction_cost_drag is not None else "N/A"
+    lines.append(f"| **Execution Frictions Drag** | `{-m.total_frictions_a:,.2f} {pair.borrowing_currency}` | `{tx_str}` | Total bid/ask spread, slippage, and ticket fees |")
+    cash_str = f"{m.cash_yield_return:+.4%}" if m.cash_yield_return is not None else "N/A"
+    lines.append(f"| **Cash Yield on Unallocated Balances** | `{m.total_cash_interest_a:+,.2f} {pair.borrowing_currency}` | `{cash_str}` | Interest earned on cash balances |")
+    lines.append(f"| **Reconciled Net Profit** | `**{m.cumulative_net_profit:+,.2f} {pair.borrowing_currency}**` | `**{m.total_return:+.4%}**` | Gross Gain - Financing - Fees + Cash Yield |")
+    lines.append(f"| **Reconciliation Residual** | `**{m.reconciliation_residual_a:+.10f}**` | `Exact: {m.reconciliation_exact}` | Absolute residual ($|\\text{{residual}}| \\le 10^{{-10}}$) |")
     pos_vol_str = f"{m.position_annualized_volatility:.2%}" if m.position_annualized_volatility is not None else "N/A"
     lines.append(f"| **Position-Level Volatility** | `{pos_vol_str}` | Volatility evaluated on active deployed capital (undiluted) |")
     lines.append(f"| **Portfolio-Level Volatility** | `{m.annualized_volatility:.2%}` | Volatility evaluated on total portfolio equity |")
@@ -82,15 +162,21 @@ def format_backtest_report(result: BacktestResult) -> str:
     lines.append(f"| **Profit Factor** | `{pf_str}` |")
     lines.append(f"| **Rejected Trade Attempts** | `{len(result.rejections)}` |")
 
-    lines.append("\n## 4. Benchmark Comparison & Risk-Free Accounting\n")
+    lines.append("\n## 4. Benchmark Comparison & Excess Returns\n")
     if m.benchmark_name:
         lines.append(f"**Comparative Benchmark**: `{m.benchmark_name}`  ")
-        lines.append(f"- Benchmark Total Return: `{m.benchmark_total_return:+.2%}`  ")
-        lines.append(f"- Benchmark Annualized Return: `{m.benchmark_annualized_return:+.2%}`  ")
-        alpha_str = f"{m.alpha:+.2%}" if m.alpha is not None else "N/A"
-        lines.append(f"- Strategy Alpha (Excess Return over Cash Benchmark): `{alpha_str}`  ")
+        lines.append(f"- Benchmark Total Return: `{m.benchmark_total_return:+.4%}`  ")
+        lines.append(f"- Benchmark Annualized Return: `{m.benchmark_annualized_return:+.4%}`  ")
+        lines.append(f"- Strategy Total Return: `{m.total_return:+.4%}`  ")
+        lines.append(f"- Strategy Annualized Return: `{m.annualized_return:+.4%}`  ")
+        cum_excess = f"{m.cumulative_excess_return:+.4%}" if m.cumulative_excess_return is not None else "N/A"
+        lines.append(f"- Cumulative Excess Return: `{cum_excess}`  ")
+        ann_excess = f"{m.annualized_excess_return:+.4%}" if m.annualized_excess_return is not None else "N/A"
+        lines.append(f"- Annualized Excess Return: `{ann_excess}`  ")
+        alpha_str = f"{m.alpha:+.4%}" if m.alpha is not None else "N/A"
+        lines.append(f"- Strategy Alpha (Excess Return): `{alpha_str}`  ")
     else:
-        lines.append("*No benchmark series computed (insufficient observations).*")
+        lines.append("*No benchmark series computed (insufficient observations or explicitly UNAVAILABLE).*")
 
     lines.append("\n## 5. Historical Information Firewall Audit\n")
     lines.append(f"- **Availability Policy**: `{cfg.availability_config.policy.value.upper()}`")

@@ -1,0 +1,59 @@
+{
+  "strategy_name": "Config 5: Covered Carry Rejection",
+  "currency_pair": "EUR/USD",
+  "start_date": "2020-01-01",
+  "end_date": "2024-12-31",
+  "initial_capital_a": 100000.0,
+  "strategy_status": "UNEXECUTABLE",
+  "can_simulate": true,
+  "is_point_in_time_credible": true,
+  "is_economically_representative": false,
+  "is_executable_strategy": false,
+  "unsupported_reason": "Covered carry trade strategy cannot be executed: actual historical forward exchange rate quotes are unavailable. Theoretical CIP calculations cannot be substituted as executable market quotes.",
+  "manifest_digest": "d444a80b2168c89f0217b2ea9eb3496173a5d30851984bd3cd56083254bec00a",
+  "performance": {
+    "cumulative_net_profit": 0.0,
+    "total_return": 0.0,
+    "annualized_return": 0.0,
+    "annualized_volatility": 0.0,
+    "sharpe_ratio": null,
+    "sortino_ratio": null,
+    "max_drawdown": 0.0,
+    "calmar_ratio": null,
+    "var_95": 0.0,
+    "cvar_95": 0.0,
+    "avg_capital_utilization": 0.0,
+    "max_exposure_a": 0.0
+  },
+  "attribution": {
+    "pure_gross_profit_a": 0.0,
+    "gross_trade_return": 0.0,
+    "total_financing_costs_a": 0.0,
+    "financing_cost_drag": 0.0,
+    "total_frictions_a": 0.0,
+    "transaction_cost_drag": 0.0,
+    "total_cash_interest_a": 0.0,
+    "cash_yield_return": 0.0,
+    "reconciliation_residual_a": 0.0,
+    "reconciliation_exact": true
+  },
+  "benchmark": {
+    "benchmark_name": "Zero Cash Benchmark (0.0% annual)",
+    "benchmark_total_return": 0.0,
+    "benchmark_annualized_return": 0.0,
+    "benchmark_sharpe_ratio": null,
+    "alpha": 0.0,
+    "cumulative_excess_return": 0.0,
+    "annualized_excess_return": 0.0
+  },
+  "trades": {
+    "total_trades": 0,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "win_rate": 0.0,
+    "avg_winning_trade": 0.0,
+    "avg_losing_trade": 0.0,
+    "profit_factor": null,
+    "rejected_trades_count": 0
+  }
+}

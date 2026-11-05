@@ -1,51 +1,158 @@
 {
-  "generated_at": "2026-11-05T12:12:12.624794+00:00",
-  "files_count": 9,
+  "generated_at": "2026-11-05T15:40:51.900239+00:00",
+  "files_count": 14,
   "files": [
     {
       "file_name": "ecb_dfr_2020-01-01_2024-12-31.csv",
-      "sha256": "b7cf01828f2ecb6001c76c7634bfb18b7b2e7fa55e28dcff33988701770fa12a",
-      "file_size_bytes": 745488
+      "sha256": "98b10a53f0fc0ef2739a341efd5690e31741fd3ce6ad4243aa6bc6fd0f86947a",
+      "file_size_bytes": 742986,
+      "provider": "ecb",
+      "series_identifier": "KR.DFR.LEV",
+      "date_coverage": "2020-01-01 to 2024-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "ECB Deposit Facility Rate"
+    },
+    {
+      "file_name": "ecb_mro_2020-01-01_2024-12-31.csv",
+      "sha256": "506c9b060748fd25c019d497f21e95822d75ca27501402fd78c6366467ced0db",
+      "file_size_bytes": 924461,
+      "provider": "ecb",
+      "series_identifier": "KR.MRR_FR.LEV",
+      "date_coverage": "2020-01-01 to 2024-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "ECB Main Refinancing Operations Rate"
     },
     {
       "file_name": "frankfurter_EUR_base_USD_quote_2020-01-01_2024-12-31.json",
       "sha256": "ce39d08f87317c846337e9e5d28fab82c7f00f6ceb8f1b30ff5a43f57504140b",
-      "file_size_bytes": 39757
+      "file_size_bytes": 39757,
+      "provider": "frankfurter",
+      "series_identifier": "EUR/USD",
+      "date_coverage": "2020-01-01 to 2024-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z"
     },
     {
       "file_name": "frankfurter_USD_base_EUR_quote_2020-01-01_2024-12-31.json",
       "sha256": "bc7234408b74ffaf02b77df38265d1168f05ae7bac7da6e903240ef9d2a7e918",
-      "file_size_bytes": 40979
+      "file_size_bytes": 40979,
+      "provider": "frankfurter",
+      "series_identifier": "USD/EUR",
+      "date_coverage": "2020-01-01 to 2024-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z"
     },
     {
-      "file_name": "frankfurter_USD_EUR_2020-01-01_2024-12-31.json",
-      "sha256": "bc7234408b74ffaf02b77df38265d1168f05ae7bac7da6e903240ef9d2a7e918",
-      "file_size_bytes": 40979
+      "file_name": "us_treasury_1m_2020.csv",
+      "sha256": "edcf1c8be9622f3cd92eb7de1847aefc3977e2118e2ff9af67f46614a5c306a7",
+      "file_size_bytes": 17912,
+      "provider": "us_treasury",
+      "series_identifier": "DGS1MO",
+      "date_coverage": "2020-01-01 to 2020-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2020 (1M tenor; home.treasury.gov table contains all par tenors)"
     },
     {
-      "file_name": "us_treasury_2020.csv",
-      "sha256": "c028621ad8755f62cc0bfc8b7c09f62be9e49d4e1a17bc57582ed53249b0466f",
-      "file_size_bytes": 18163
+      "file_name": "us_treasury_1m_2021.csv",
+      "sha256": "1be57e49c63a99f6002431a1030c8fbe539b71066c3eaf14f9f58ddc34492cea",
+      "file_size_bytes": 17912,
+      "provider": "us_treasury",
+      "series_identifier": "DGS1MO",
+      "date_coverage": "2021-01-01 to 2021-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2021 (1M tenor; home.treasury.gov table contains all par tenors)"
     },
     {
-      "file_name": "us_treasury_2021.csv",
-      "sha256": "bd50bb1530b07850e3f696114724f950da8be1171c42f5b8f0624af167dd534c",
-      "file_size_bytes": 18163
+      "file_name": "us_treasury_1m_2022.csv",
+      "sha256": "c33cb2758e5e34c2c23b7ab759d18681091860f3f9e5960112859f64f31cd814",
+      "file_size_bytes": 18226,
+      "provider": "us_treasury",
+      "series_identifier": "DGS1MO",
+      "date_coverage": "2022-01-01 to 2022-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2022 (1M tenor; home.treasury.gov table contains all par tenors)"
     },
     {
-      "file_name": "us_treasury_2022.csv",
-      "sha256": "b3aeb9ab6998878be2c82722fd42933b1e461f1953f999b3dd2fb6f200707bc9",
-      "file_size_bytes": 18475
+      "file_name": "us_treasury_1m_2023.csv",
+      "sha256": "edb7f3904e11dcaa502cdcc03ad9b1b16c893802d166ce9bc5fa1118251249d4",
+      "file_size_bytes": 19098,
+      "provider": "us_treasury",
+      "series_identifier": "DGS1MO",
+      "date_coverage": "2023-01-01 to 2023-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2023 (1M tenor; home.treasury.gov table contains all par tenors)"
     },
     {
-      "file_name": "us_treasury_2023.csv",
-      "sha256": "1d5072667b66fda85631219d9b8baab95d631a92765c0bf2885558019f2d0816",
-      "file_size_bytes": 19348
+      "file_name": "us_treasury_1m_2024.csv",
+      "sha256": "6775840b76cd7fd41121f61d6f6c60184eca6b2ba49954ec7372c463cbeef34d",
+      "file_size_bytes": 19098,
+      "provider": "us_treasury",
+      "series_identifier": "DGS1MO",
+      "date_coverage": "2024-01-01 to 2024-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2024 (1M tenor; home.treasury.gov table contains all par tenors)"
     },
     {
-      "file_name": "us_treasury_2024.csv",
-      "sha256": "27898e5d4409074f9f387a736f6864574b5f5721b38b0199286eaf9d1ef575d8",
-      "file_size_bytes": 19348
+      "file_name": "us_treasury_3m_2020.csv",
+      "sha256": "edcf1c8be9622f3cd92eb7de1847aefc3977e2118e2ff9af67f46614a5c306a7",
+      "file_size_bytes": 17912,
+      "provider": "us_treasury",
+      "series_identifier": "DGS3MO",
+      "date_coverage": "2020-01-01 to 2020-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2020 (3M tenor)"
+    },
+    {
+      "file_name": "us_treasury_3m_2021.csv",
+      "sha256": "1be57e49c63a99f6002431a1030c8fbe539b71066c3eaf14f9f58ddc34492cea",
+      "file_size_bytes": 17912,
+      "provider": "us_treasury",
+      "series_identifier": "DGS3MO",
+      "date_coverage": "2021-01-01 to 2021-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2021 (3M tenor)"
+    },
+    {
+      "file_name": "us_treasury_3m_2022.csv",
+      "sha256": "c33cb2758e5e34c2c23b7ab759d18681091860f3f9e5960112859f64f31cd814",
+      "file_size_bytes": 18226,
+      "provider": "us_treasury",
+      "series_identifier": "DGS3MO",
+      "date_coverage": "2022-01-01 to 2022-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2022 (3M tenor)"
+    },
+    {
+      "file_name": "us_treasury_3m_2023.csv",
+      "sha256": "edb7f3904e11dcaa502cdcc03ad9b1b16c893802d166ce9bc5fa1118251249d4",
+      "file_size_bytes": 19098,
+      "provider": "us_treasury",
+      "series_identifier": "DGS3MO",
+      "date_coverage": "2023-01-01 to 2023-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2023 (3M tenor)"
+    },
+    {
+      "file_name": "us_treasury_3m_2024.csv",
+      "sha256": "6775840b76cd7fd41121f61d6f6c60184eca6b2ba49954ec7372c463cbeef34d",
+      "file_size_bytes": 19098,
+      "provider": "us_treasury",
+      "series_identifier": "DGS3MO",
+      "date_coverage": "2024-01-01 to 2024-12-31",
+      "frequency": "daily",
+      "retrieval_timestamp": "2026-11-05T00:00:00Z",
+      "note": "U.S. Treasury daily par yield curve response for 2024 (3M tenor)"
     }
   ]
 }

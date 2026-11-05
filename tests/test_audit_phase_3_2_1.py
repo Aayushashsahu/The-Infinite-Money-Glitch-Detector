@@ -80,7 +80,7 @@ def test_pit_firewall_intraday_same_day_filtering():
         publication_timestamp=datetime(2024, 5, 10, 16, 0, tzinfo=timezone.utc),
         retrieved_at=datetime(2024, 5, 10, 16, 5, tzinfo=timezone.utc),
         classification=DataClassification.REAL_VERIFIED,
-        availability_evidence=AvailabilityEvidence.ESTIMATED_SCHEDULE,
+        availability_evidence=AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
     )
 
     # 1. At 14:00 UTC (before publication): must be BLOCKED

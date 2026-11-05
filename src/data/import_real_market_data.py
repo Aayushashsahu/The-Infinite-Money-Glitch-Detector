@@ -181,8 +181,13 @@ def run_import(
     # Save raw CSV payloads
     for raw in ust_3m_res.raw_records:
         year_str = raw.url.split("/")[-2]
-        with open(archive_dir / f"us_treasury_{year_str}.csv", "w", encoding="utf-8") as f:
-            f.write(str(raw.payload))
+        with open(archive_dir / f"us_treasury_3m_{year_str}.csv", "wb") as f:
+            f.write(str(raw.payload).replace("\r\n", "\n").encode("utf-8"))
+
+    for raw in ust_1m_res.raw_records:
+        year_str = raw.url.split("/")[-2]
+        with open(archive_dir / f"us_treasury_1m_{year_str}.csv", "wb") as f:
+            f.write(str(raw.payload).replace("\r\n", "\n").encode("utf-8"))
 
     ust_3m_valid, _ = validate_batch(ust_3m_obs)
     ust_3m_stats = repo.insert_observations(ust_3m_valid)
@@ -208,12 +213,12 @@ def run_import(
     ecb_mro_obs = [o for o in ecb_mro_res.observations if start_date <= o.observation_date <= end_date]
 
     for raw in ecb_dfr_res.raw_records:
-        with open(archive_dir / f"ecb_dfr_{start_date}_{end_date}.csv", "w", encoding="utf-8") as f:
-            f.write(str(raw.payload))
+        with open(archive_dir / f"ecb_dfr_{start_date}_{end_date}.csv", "wb") as f:
+            f.write(str(raw.payload).replace("\r\n", "\n").encode("utf-8"))
 
     for raw in ecb_mro_res.raw_records:
-        with open(archive_dir / f"ecb_mro_{start_date}_{end_date}.csv", "w", encoding="utf-8") as f:
-            f.write(str(raw.payload))
+        with open(archive_dir / f"ecb_mro_{start_date}_{end_date}.csv", "wb") as f:
+            f.write(str(raw.payload).replace("\r\n", "\n").encode("utf-8"))
 
     ecb_dfr_valid, _ = validate_batch(ecb_dfr_obs)
     ecb_dfr_stats = repo.insert_observations(ecb_dfr_valid)
@@ -238,7 +243,7 @@ def run_import(
 
 
 def generate_manifest(archive_dir: Path, manifest_path: Path) -> dict[str, Any]:
-    """Generate SHA-256 manifest of raw archived files."""
+    """Generate SHA-256 manifest of raw archived files with complete provenance metadata."""
     manifest_entries: list[dict[str, Any]] = []
     if archive_dir.exists():
         for file_path in sorted(archive_dir.glob("*")):
@@ -246,11 +251,58 @@ def generate_manifest(archive_dir: Path, manifest_path: Path) -> dict[str, Any]:
                 content = file_path.read_bytes()
                 digest = hashlib.sha256(content).hexdigest()
                 size_bytes = len(content)
-                manifest_entries.append({
-                    "file_name": file_path.name,
+                name = file_path.name
+
+                provider = "unknown"
+                series_id = "unknown"
+                date_coverage = "2020-01-01 to 2024-12-31"
+                frequency = "daily"
+                retrieval_ts = "2026-11-05T00:00:00Z"
+                note: str | None = None
+
+                if "frankfurter_EUR_base_USD_quote" in name:
+                    provider = "frankfurter"
+                    series_id = "EUR/USD"
+                elif "frankfurter_USD_base_EUR_quote" in name:
+                    provider = "frankfurter"
+                    series_id = "USD/EUR"
+                elif "us_treasury_3m" in name:
+                    provider = "us_treasury"
+                    series_id = "DGS3MO"
+                    parts = name.replace(".csv", "").split("_")
+                    year = parts[-1]
+                    date_coverage = f"{year}-01-01 to {year}-12-31"
+                    note = f"U.S. Treasury daily par yield curve response for {year} (3M tenor)"
+                elif "us_treasury_1m" in name:
+                    provider = "us_treasury"
+                    series_id = "DGS1MO"
+                    parts = name.replace(".csv", "").split("_")
+                    year = parts[-1]
+                    date_coverage = f"{year}-01-01 to {year}-12-31"
+                    note = f"U.S. Treasury daily par yield curve response for {year} (1M tenor; home.treasury.gov table contains all par tenors)"
+                elif "ecb_dfr" in name:
+                    provider = "ecb"
+                    series_id = "KR.DFR.LEV"
+                    note = "ECB Deposit Facility Rate"
+                elif "ecb_mro" in name:
+                    provider = "ecb"
+                    series_id = "KR.MRR_FR.LEV"
+                    note = "ECB Main Refinancing Operations Rate"
+
+                entry = {
+                    "file_name": name,
                     "sha256": digest,
                     "file_size_bytes": size_bytes,
-                })
+                    "provider": provider,
+                    "series_identifier": series_id,
+                    "date_coverage": date_coverage,
+                    "frequency": frequency,
+                    "retrieval_timestamp": retrieval_ts,
+                }
+                if note:
+                    entry["note"] = note
+                manifest_entries.append(entry)
+
     manifest_data = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "files_count": len(manifest_entries),

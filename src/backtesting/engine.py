@@ -13,7 +13,7 @@ Coordinates:
 from __future__ import annotations
 
 import hashlib
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -21,6 +21,8 @@ from schemas.backtest import (
     AvailabilityPolicy,
     BacktestConfig,
     BacktestResult,
+    BenchmarkSpecification,
+    BenchmarkType,
     TradeRecord,
     TradeStatus,
 )
@@ -38,7 +40,7 @@ from backtesting.signals import (
     TradingSignal,
     UnhedgedCarrySignalGenerator,
 )
-from data.schemas import DataObservation, Frequency, ObservationKind, StrategyExecutabilityStatus
+from data.schemas import DataObservation, Frequency, ObservationKind, RateRole, StrategyExecutabilityStatus
 
 
 class BacktestEngine:
@@ -84,6 +86,7 @@ class BacktestEngine:
         pair_code = f"{pair.borrowing_currency}/{pair.investment_currency}"
         is_covered_strategy = "covered" in self.config.strategy_name.lower()
         is_executable = True
+        can_simulate = True
         unsupported_reason: str | None = None
 
         # Determine initial executability classification
@@ -116,6 +119,7 @@ class BacktestEngine:
                 allow_stale=True,
             )
             if forward_sample is None:
+                can_simulate = False
                 is_executable = False
                 strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
                 unsupported_reason = (
@@ -151,23 +155,61 @@ class BacktestEngine:
             # Accrue interest on unencumbered portfolio cash balance
             self.portfolio.accrue_cash_interest(1, self.config.execution_config.interest_convention)
 
-            # 1. Point-in-time market quote retrieval
-            spot_mid = self.data_store.get_rate(pair_code, current_date)
+            # 1. Timestamp-aware simulation clock for signal evaluation
+            sig_hour, sig_minute = self.config.signal_time_utc
+            signal_timestamp = datetime(
+                current_date.year, current_date.month, current_date.day,
+                sig_hour, sig_minute, tzinfo=timezone.utc,
+            )
+
+            # Point-in-time market quote retrieval using timestamp
+            spot_mid = self.data_store.get_rate(pair_code, as_of=signal_timestamp)
+            record_borrow = self.data_store.get_record(
+                ObservationKind.INTEREST_RATE,
+                pair.borrowing_currency,
+                as_of=signal_timestamp,
+                indicator_id=self.config.borrowing_rate_series_id,
+            )
             r_borrow = self.data_store.get_interest_rate(
                 pair.borrowing_currency,
-                current_date,
+                as_of=signal_timestamp,
                 indicator_id=self.config.borrowing_rate_series_id,
+            )
+            record_invest = self.data_store.get_record(
+                ObservationKind.INTEREST_RATE,
+                pair.investment_currency,
+                as_of=signal_timestamp,
+                indicator_id=self.config.investment_rate_series_id,
             )
             r_invest = self.data_store.get_interest_rate(
                 pair.investment_currency,
-                current_date,
+                as_of=signal_timestamp,
                 indicator_id=self.config.investment_rate_series_id,
             )
             fwd_mid = (
-                self.data_store.get_forward_rate(pair_code, self.config.tenor_days, current_date)
+                self.data_store.get_forward_rate(pair_code, self.config.tenor_days, as_of=signal_timestamp)
                 if is_covered_strategy
                 else None
             )
+
+            # Dynamic rate-role enforcement
+            if record_borrow is not None and record_borrow.observation.rate_role is not None:
+                if record_borrow.observation.rate_role in (RateRole.POLICY_RATE, RateRole.RISK_FREE_RATE):
+                    if self.config.require_commercial_rates:
+                        can_simulate = False
+                        is_executable = False
+                        strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+                        unsupported_reason = (
+                            f"Commercial borrowing rate required, but {record_borrow.observation.indicator_id} "
+                            f"has economic role {record_borrow.observation.rate_role.value}."
+                        )
+                    elif strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED:
+                        strategy_status = StrategyExecutabilityStatus.RESEARCH_PROXY
+
+            if record_invest is not None and record_invest.observation.rate_role is not None:
+                if record_invest.observation.rate_role in (RateRole.POLICY_RATE, RateRole.RISK_FREE_RATE):
+                    if strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED:
+                        strategy_status = StrategyExecutabilityStatus.RESEARCH_PROXY
 
             # Record benchmark tracking points when quotes are available
             if spot_mid is not None and r_borrow is not None and r_invest is not None:
@@ -207,7 +249,7 @@ class BacktestEngine:
             self.portfolio.snapshot(as_of=current_date, current_spot_rates=current_rates)
 
             # 4. Signal generation & entry on rebalance schedule
-            if current_date >= next_rebalance_date and is_executable:
+            if current_date >= next_rebalance_date and can_simulate:
                 # Evaluate signal
                 if is_covered_strategy:
                     tenor_years = self.config.tenor_days / 365.0
@@ -236,11 +278,21 @@ class BacktestEngine:
                         trade_counter += 1
                         trade_id = f"TRD_{pair.borrowing_currency}_{pair.investment_currency}_{trade_counter:04d}"
                         
+                        order_sub_ts = signal_timestamp + timedelta(seconds=1)
+                        if self.config.execution_session == "next_session_open":
+                            next_td = DEFAULT_FX_CALENDAR.next_trading_day(current_date)
+                            exec_ts = datetime(next_td.year, next_td.month, next_td.day, 9, 0, tzinfo=timezone.utc)
+                            trade_entry_date = next_td
+                        else:
+                            exec_ts = signal_timestamp + timedelta(minutes=self.config.execution_delay_minutes)
+                            trade_entry_date = current_date
+                        settle_ts = exec_ts + timedelta(days=2)
+
                         trade_rec = self.execution_engine.open_trade(
                             trade_id=trade_id,
                             strategy_name=self.config.strategy_name,
                             currency_pair=pair,
-                            entry_date=current_date,
+                            entry_date=trade_entry_date,
                             tenor_days=self.config.tenor_days,
                             principal_borrowed_a=sizing.allocated_amount_a,
                             borrowing_rate=signal.borrowing_rate,
@@ -251,10 +303,15 @@ class BacktestEngine:
                             is_verified_availability=(
                                 self.config.availability_config.policy == AvailabilityPolicy.STRICT
                             ),
+                            signal_timestamp=signal_timestamp,
+                            order_submission_timestamp=order_sub_ts,
+                            execution_timestamp=exec_ts,
+                            settlement_timestamp=settle_ts,
                         )
                         if self.portfolio.register_open_trade(trade_rec):
                             self._audit_trail.append(
-                                f"Trade {trade_id} OPENED on {current_date}: Borrowed {sizing.allocated_amount_a:,.2f} {pair.borrowing_currency} "
+                                f"Trade {trade_id} OPENED on {trade_entry_date} (exec {exec_ts.isoformat()}): "
+                                f"Borrowed {sizing.allocated_amount_a:,.2f} {pair.borrowing_currency} "
                                 f"at {signal.borrowing_rate:.2%}, Invested in {pair.investment_currency} at {signal.investment_rate:.2%}, "
                                 f"Spot = {trade_rec.spot_exec_entry:.4f}"
                             )
@@ -282,7 +339,11 @@ class BacktestEngine:
             current_date += timedelta(days=1)
 
         # 5. At simulation end: close any remaining open positions at latest spot rate
-        final_spot = self.data_store.get_rate(pair_code, self.config.end_date, allow_stale=True)
+        final_sig_ts = datetime(
+            self.config.end_date.year, self.config.end_date.month, self.config.end_date.day,
+            self.config.signal_time_utc[0], self.config.signal_time_utc[1], tzinfo=timezone.utc,
+        )
+        final_spot = self.data_store.get_rate(pair_code, as_of=final_sig_ts, allow_stale=True)
         for trade in list(self.portfolio.open_trades):
             if final_spot:
                 closed = self.execution_engine.close_trade(
@@ -295,33 +356,88 @@ class BacktestEngine:
                     f"Simulation End: Trade {trade.trade_id} liquidated on {self.config.end_date} at {final_spot:.4f}"
                 )
 
-        # 6. Generate comparative benchmark (distinguishing cash deposit/risk-free rate from borrowing rate)
+        # 6. Generate comparative benchmark
         benchmark_series = None
-        if len(bm_dates) >= 2:
+        bm_spec = self.config.benchmark_spec
+        if len(bm_dates) >= 2 and bm_spec is not None:
             try:
-                if self.config.cash_deposit_rate_annual > 0:
-                    cash_bm_rates = [self.config.cash_deposit_rate_annual] * len(bm_dates)
+                if bm_spec.benchmark_type == BenchmarkType.ZERO_CASH:
+                    cash_bm_rates = [0.0] * len(bm_dates)
                     benchmark_series = compute_borrowing_currency_benchmark(
                         dates=bm_dates,
                         borrowing_rates=cash_bm_rates,
                         interest_convention=self.config.execution_config.interest_convention,
                     )
-                else:
+                elif bm_spec.benchmark_type == BenchmarkType.FIXED_HYPOTHETICAL_PROXY:
+                    rate = bm_spec.fixed_rate_annual or self.config.cash_deposit_rate_annual
+                    cash_bm_rates = [rate] * len(bm_dates)
                     benchmark_series = compute_borrowing_currency_benchmark(
                         dates=bm_dates,
-                        borrowing_rates=bm_borrowing_rates,
+                        borrowing_rates=cash_bm_rates,
                         interest_convention=self.config.execution_config.interest_convention,
                     )
+                elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_RISK_FREE:
+                    rf_rates: list[float] = []
+                    for d in bm_dates:
+                        ts = datetime(d.year, d.month, d.day, self.config.signal_time_utc[0], self.config.signal_time_utc[1], tzinfo=timezone.utc)
+                        r = self.data_store.get_interest_rate(
+                            pair.borrowing_currency,
+                            as_of=ts,
+                            indicator_id=bm_spec.series_id,
+                            rate_role=RateRole.RISK_FREE_RATE,
+                        )
+                        if r is not None:
+                            rf_rates.append(r)
+                        elif rf_rates:
+                            rf_rates.append(rf_rates[-1])
+                        else:
+                            rf_rates.append(0.0)
+                    benchmark_series = compute_borrowing_currency_benchmark(
+                        dates=bm_dates,
+                        borrowing_rates=rf_rates,
+                        interest_convention=self.config.execution_config.interest_convention,
+                    )
+                elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_DEPOSIT:
+                    dep_rates: list[float] = []
+                    is_missing = False
+                    for d in bm_dates:
+                        ts = datetime(d.year, d.month, d.day, self.config.signal_time_utc[0], self.config.signal_time_utc[1], tzinfo=timezone.utc)
+                        r = self.data_store.get_interest_rate(
+                            pair.borrowing_currency,
+                            as_of=ts,
+                            rate_role=RateRole.DEPOSIT_RATE,
+                        )
+                        if r is not None:
+                            dep_rates.append(r)
+                        elif dep_rates:
+                            dep_rates.append(dep_rates[-1])
+                        else:
+                            is_missing = True
+                            break
+                    if is_missing or not dep_rates:
+                        benchmark_series = None
+                        self._audit_trail.append("BENCHMARK UNAVAILABLE: Historical deposit rate series missing from dataset.")
+                    else:
+                        benchmark_series = compute_borrowing_currency_benchmark(
+                            dates=bm_dates,
+                            borrowing_rates=dep_rates,
+                            interest_convention=self.config.execution_config.interest_convention,
+                        )
+                elif bm_spec.benchmark_type == BenchmarkType.UNAVAILABLE:
+                    benchmark_series = None
             except Exception as e:
                 self._audit_trail.append(f"Benchmark calculation error: {e}")
 
         # 7. Compute final performance metrics with return attribution
         all_trades = self.portfolio.closed_trades + self.portfolio.rejected_trades
-        risk_free_ref = (
-            self.config.cash_deposit_rate_annual
-            if self.config.cash_deposit_rate_annual > 0
-            else (bm_borrowing_rates[-1] if bm_borrowing_rates else 0.0)
-        )
+        risk_free_ref = 0.0
+        if bm_spec and bm_spec.benchmark_type == BenchmarkType.FIXED_HYPOTHETICAL_PROXY:
+            risk_free_ref = bm_spec.fixed_rate_annual or self.config.cash_deposit_rate_annual
+        elif bm_spec and bm_spec.benchmark_type == BenchmarkType.ZERO_CASH:
+            risk_free_ref = 0.0
+        elif bm_borrowing_rates:
+            risk_free_ref = bm_borrowing_rates[-1]
+
         periods_factor = 252.0 if self.config.simulate_trading_days_only else 365.0
 
         metrics = calculate_performance_metrics(
@@ -334,17 +450,33 @@ class BacktestEngine:
             periods_per_year=periods_factor,
             cash_interest_earned=self.portfolio.total_cash_interest_earned,
         )
+        if bm_spec:
+            metrics.benchmark_name = bm_spec.name
 
         # Check if 0 trades executed or unexecutable
         if len(self.portfolio.closed_trades) == 0:
             if is_covered_strategy and forward_sample is None:
                 strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
-            elif not is_executable:
+            elif not can_simulate:
                 strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
-            else:
+            elif strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED:
                 strategy_status = StrategyExecutabilityStatus.NO_TRADES
         elif is_covered_strategy and forward_sample is None:
             strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+
+        # Enforce executability boolean:
+        # If strategy_status is not EXECUTABLE_VALIDATED, is_executable MUST be False!
+        if strategy_status in (
+            StrategyExecutabilityStatus.RESEARCH_PROXY,
+            StrategyExecutabilityStatus.RESEARCH_ONLY,
+            StrategyExecutabilityStatus.UNEXECUTABLE,
+            StrategyExecutabilityStatus.NO_TRADES,
+        ):
+            is_executable = False
+
+        can_sim = True
+        is_pit = (self.config.availability_config.policy != AvailabilityPolicy.RESEARCH_ONLY)
+        is_econ = (strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED)
 
         # Manifest digest
         manifest_digest: str | None = None
@@ -373,6 +505,9 @@ class BacktestEngine:
             audit_trail=self._audit_trail,
             strategy_status=strategy_status,
             manifest_digest=manifest_digest,
+            can_simulate=can_sim,
+            is_point_in_time_credible=is_pit,
+            is_economically_representative=is_econ,
             is_executable_strategy=is_executable,
             unsupported_reason=unsupported_reason,
         )

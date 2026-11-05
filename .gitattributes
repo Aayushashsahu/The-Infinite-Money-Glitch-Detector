@@ -1,0 +1,8 @@
+# Auto-detect text files and normalize line endings to LF on commit
+* text=auto eol=lf
+
+# Explicitly treat raw data files, archives, and databases as immutable binary blobs
+data/raw/** -text
+data/processed/** -text
+*.db -text
+*.csv.gz -text
