@@ -22,12 +22,12 @@ Supports three policies:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Sequence
 
 import pandas as pd
 
-from data.schemas import DataObservation, Frequency, ObservationKind
+from data.schemas import DataObservation, Frequency, ObservationKind, RateRole
 from schemas.backtest import AvailabilityPolicy, DataAvailabilityConfig
 
 
@@ -39,6 +39,17 @@ CURRENCY_ENTITY_MAP: dict[str, list[str]] = {
     "BRL": ["BRL", "BRA", "BCB"],
     "TRY": ["TRY", "TUR", "TCMB"],
 }
+
+
+def _parse_as_of(as_of: date | datetime) -> tuple[date, datetime | None]:
+    """Normalize as_of argument to (date, Optional[datetime_in_utc])."""
+    if isinstance(as_of, datetime):
+        if as_of.tzinfo is None:
+            as_of_dt = as_of.replace(tzinfo=timezone.utc)
+        else:
+            as_of_dt = as_of.astimezone(timezone.utc)
+        return as_of_dt.date(), as_of_dt
+    return as_of, None
 
 
 @dataclass(frozen=True)
@@ -53,6 +64,7 @@ class PointInTimeRecord:
     stale_days: int
     policy_applied: AvailabilityPolicy
     status_note: str
+    availability_timestamp: datetime | None = None
 
 
 class PointInTimeFirewall:
@@ -100,31 +112,123 @@ class PointInTimeFirewall:
 
         raise ValueError(f"Unknown availability policy: {self.config.policy}")
 
+    def resolve_availability(
+        self,
+        obs: DataObservation,
+        as_of: date | datetime,
+    ) -> tuple[bool, date | None, datetime | None, bool, str]:
+        """Compute point-in-time eligibility and effective availability timestamps against as_of.
+
+        Returns:
+            (is_eligible, avail_date, avail_timestamp, is_verified, reason_note)
+        """
+        as_of_d, as_of_dt = _parse_as_of(as_of)
+
+        # 1. Observation timestamp/date lookahead check: observation itself cannot be in the future
+        if as_of_dt is not None:
+            if obs.observation_timestamp is not None and obs.observation_timestamp > as_of_dt:
+                return False, obs.observation_date, obs.observation_timestamp, False, "future_observation_timestamp_leakage_blocked"
+        if obs.observation_date > as_of_d:
+            return False, obs.observation_date, obs.observation_timestamp, False, "future_observation_date_leakage_blocked"
+
+        # 2. Strict mode: requires verified publication date / timestamp
+        if self.config.policy == AvailabilityPolicy.STRICT:
+            if as_of_dt is not None:
+                if obs.publication_timestamp is not None:
+                    avail_dt = obs.publication_timestamp
+                    avail_d = avail_dt.date()
+                    if avail_dt > as_of_dt:
+                        return False, avail_d, avail_dt, True, "publication_timestamp_after_signal_blocked"
+                    return True, avail_d, avail_dt, True, "verified_publication_timestamp"
+                elif obs.publication_date is not None:
+                    # When only publication_date is known, availability is conservative end of publication day (23:59:59 UTC)
+                    avail_d = obs.publication_date
+                    avail_dt = datetime(avail_d.year, avail_d.month, avail_d.day, 23, 59, 59, tzinfo=timezone.utc)
+                    if avail_dt > as_of_dt:
+                        return False, avail_d, avail_dt, True, "publication_date_eod_after_signal_blocked"
+                    return True, avail_d, avail_dt, True, "verified_publication_date"
+                else:
+                    return False, None, None, False, "missing_publication_date_rejected_in_strict_mode"
+            else:
+                # Date-level as_of
+                if obs.publication_date is not None:
+                    if obs.publication_date > as_of_d:
+                        return False, obs.publication_date, obs.publication_timestamp, True, "publication_date_after_as_of_blocked"
+                    return True, obs.publication_date, obs.publication_timestamp, True, "verified_publication_date"
+                return False, None, None, False, "missing_publication_date_rejected_in_strict_mode"
+
+        # 3. Estimated-lag mode
+        if self.config.policy == AvailabilityPolicy.ESTIMATED_LAG:
+            if as_of_dt is not None and obs.publication_timestamp is not None:
+                if obs.publication_timestamp > as_of_dt:
+                    return False, obs.publication_timestamp.date(), obs.publication_timestamp, True, "publication_timestamp_after_as_of"
+                return True, obs.publication_timestamp.date(), obs.publication_timestamp, True, "verified_publication_timestamp"
+            
+            if obs.publication_date is not None:
+                avail_d = obs.publication_date
+                if as_of_dt is not None:
+                    avail_dt = datetime(avail_d.year, avail_d.month, avail_d.day, 23, 59, 59, tzinfo=timezone.utc)
+                    if avail_dt > as_of_dt:
+                        return False, avail_d, avail_dt, True, "publication_date_after_as_of"
+                    return True, avail_d, avail_dt, True, "verified_publication_date"
+                if avail_d > as_of_d:
+                    return False, avail_d, obs.publication_timestamp, True, "publication_date_after_as_of"
+                return True, avail_d, obs.publication_timestamp, True, "verified_publication_date"
+
+            # Check for custom indicator lag first
+            lag_days = (
+                self.config.custom_indicator_lags.get(obs.indicator_id, self.config.default_lags_days.get(obs.frequency, 30))
+                if obs.indicator_id
+                else self.config.default_lags_days.get(obs.frequency, 30)
+            )
+            est_date = obs.observation_date + timedelta(days=lag_days)
+            if as_of_dt is not None:
+                est_dt = datetime(est_date.year, est_date.month, est_date.day, 0, 0, tzinfo=timezone.utc)
+                if est_dt > as_of_dt:
+                    return False, est_date, est_dt, False, f"estimated_lag_{lag_days}d_after_as_of"
+                return True, est_date, est_dt, False, f"estimated_lag_{lag_days}d_unverified"
+            if est_date > as_of_d:
+                return False, est_date, None, False, f"estimated_lag_{lag_days}d_after_as_of"
+            return True, est_date, None, False, f"estimated_lag_{lag_days}d_unverified"
+
+        # 4. Research-only mode
+        if self.config.policy == AvailabilityPolicy.RESEARCH_ONLY:
+            if as_of_dt is not None:
+                obs_dt = obs.observation_timestamp or datetime(obs.observation_date.year, obs.observation_date.month, obs.observation_date.day, 0, 0, tzinfo=timezone.utc)
+                if obs_dt > as_of_dt:
+                    return False, obs.observation_date, obs_dt, False, "observation_after_as_of"
+                return True, obs.observation_date, obs_dt, False, "research_only"
+            if obs.observation_date > as_of_d:
+                return False, obs.observation_date, None, False, "observation_date_after_as_of"
+            return True, obs.observation_date, None, False, "research_only_retrospective_observation_date"
+
+        raise ValueError(f"Unknown availability policy: {self.config.policy}")
+
     def filter_available(
         self,
         observations: Sequence[DataObservation],
-        as_of: date,
+        as_of: date | datetime,
     ) -> list[PointInTimeRecord]:
         """Filter a collection of observations to those strictly available as of timestamp T.
 
-        Observations published or estimated to become available after T are
-        strictly blocked.
+        Observations published or estimated to become available after T are strictly blocked.
         """
+        as_of_d, as_of_dt = _parse_as_of(as_of)
         records: list[PointInTimeRecord] = []
         for obs in observations:
             if not self.config.allow_synthetic and obs.is_synthetic:
                 continue
 
-            avail_date, is_verified, note = self.resolve_availability_date(obs)
-            if avail_date is None or avail_date > as_of:
-                continue  # Future information blocked by firewall
+            is_eligible, avail_date, avail_dt, is_verified, note = self.resolve_availability(obs, as_of)
+            if not is_eligible or avail_date is None:
+                continue
 
             # Check staleness (respecting market calendar when stale_by_trading_days is True)
-            if getattr(self.config, "stale_by_trading_days", True) and as_of >= obs.observation_date:
+            if getattr(self.config, "stale_by_trading_days", True) and as_of_d >= obs.observation_date:
                 from backtesting.calendar import DEFAULT_FX_CALENDAR
-                days_old = DEFAULT_FX_CALENDAR.trading_days_lag(obs.observation_date, as_of)
+                days_old = DEFAULT_FX_CALENDAR.trading_days_lag(obs.observation_date, as_of_d)
             else:
-                days_old = (as_of - obs.observation_date).days
+                days_old = (as_of_d - obs.observation_date).days
 
             # For daily exchange rates or market interest rates, apply max_stale_days
             is_stale = False
@@ -141,6 +245,7 @@ class PointInTimeFirewall:
                     stale_days=days_old,
                     policy_applied=self.config.policy,
                     status_note=note,
+                    availability_timestamp=avail_dt,
                 )
             )
 
@@ -149,10 +254,11 @@ class PointInTimeFirewall:
     def get_latest_observation(
         self,
         observations: Sequence[DataObservation],
-        as_of: date,
+        as_of: date | datetime,
         kind: ObservationKind | None = None,
         entity_code: str | None = None,
         indicator_id: str | None = None,
+        rate_role: RateRole | None = None,
         allow_stale: bool = False,
     ) -> PointInTimeRecord | None:
         """Find the most recent available observation as of timestamp T for a given series.
@@ -160,11 +266,12 @@ class PointInTimeFirewall:
         Selects the highest observation_date (and latest revision) available by T.
         If allow_stale is False and the quote is stale, returns None.
         """
+        as_of_d, as_of_dt = _parse_as_of(as_of)
         allowed_entities = [entity_code] if entity_code else None
         if entity_code and entity_code.upper() in CURRENCY_ENTITY_MAP:
             allowed_entities = list(set(CURRENCY_ENTITY_MAP[entity_code.upper()] + [entity_code]))
 
-        candidates: list[tuple[DataObservation, date, bool, str]] = []
+        candidates: list[tuple[DataObservation, date, datetime | None, bool, str]] = []
         for obs in observations:
             if not self.config.allow_synthetic and obs.is_synthetic:
                 continue
@@ -174,25 +281,32 @@ class PointInTimeFirewall:
                 continue
             if indicator_id is not None and obs.indicator_id != indicator_id:
                 continue
-
-            avail_date, is_verified, note = self.resolve_availability_date(obs)
-            if avail_date is None or avail_date > as_of:
+            if rate_role is not None and obs.rate_role != rate_role:
                 continue
-            candidates.append((obs, avail_date, is_verified, note))
+
+            is_eligible, avail_date, avail_dt, is_verified, note = self.resolve_availability(obs, as_of)
+            if not is_eligible or avail_date is None:
+                continue
+            candidates.append((obs, avail_date, avail_dt, is_verified, note))
 
         if not candidates:
             return None
 
-        # Sort by observation_date ascending, revision ascending and pick latest
-        candidates.sort(key=lambda x: (x[0].observation_date, x[0].revision))
-        latest_obs, avail_date, is_verified, note = candidates[-1]
+        # Sort by observation_date ascending, observation_timestamp ascending, revision ascending
+        epoch_utc = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        candidates.sort(key=lambda x: (
+            x[0].observation_date,
+            x[0].observation_timestamp or epoch_utc,
+            x[0].revision,
+        ))
+        latest_obs, avail_date, avail_dt, is_verified, note = candidates[-1]
 
         # Check staleness strictly for the latest observation
-        if getattr(self.config, "stale_by_trading_days", True) and as_of >= latest_obs.observation_date:
+        if getattr(self.config, "stale_by_trading_days", True) and as_of_d >= latest_obs.observation_date:
             from backtesting.calendar import DEFAULT_FX_CALENDAR
-            days_old = DEFAULT_FX_CALENDAR.trading_days_lag(latest_obs.observation_date, as_of)
+            days_old = DEFAULT_FX_CALENDAR.trading_days_lag(latest_obs.observation_date, as_of_d)
         else:
-            days_old = (as_of - latest_obs.observation_date).days
+            days_old = (as_of_d - latest_obs.observation_date).days
 
         is_stale = False
         if latest_obs.frequency == Frequency.DAILY and days_old > self.config.max_stale_days:
@@ -210,6 +324,7 @@ class PointInTimeFirewall:
             stale_days=days_old,
             policy_applied=self.config.policy,
             status_note=note,
+            availability_timestamp=avail_dt,
         )
 
 
@@ -230,10 +345,10 @@ class PointInTimeDataStore:
     def get_rate(
         self,
         pair_code: str,
-        as_of: date,
+        as_of: date | datetime,
         allow_stale: bool = False,
     ) -> float | None:
-        """Retrieve executable spot exchange rate for pair_code as of date."""
+        """Retrieve executable spot exchange rate for pair_code as of date/datetime."""
         record = self.firewall.get_latest_observation(
             self._observations,
             as_of=as_of,
@@ -249,7 +364,7 @@ class PointInTimeDataStore:
         self,
         pair_code: str,
         tenor_days: int,
-        as_of: date,
+        as_of: date | datetime,
         allow_stale: bool = False,
     ) -> float | None:
         """Retrieve executable market forward exchange rate for pair_code and tenor.
@@ -272,8 +387,9 @@ class PointInTimeDataStore:
     def get_interest_rate(
         self,
         currency_or_entity: str,
-        as_of: date,
+        as_of: date | datetime,
         indicator_id: str | None = None,
+        rate_role: RateRole | None = None,
         allow_stale: bool = False,
     ) -> float | None:
         """Retrieve annualized interest or policy rate (as a fraction, e.g. 0.05 for 5%)."""
@@ -283,6 +399,7 @@ class PointInTimeDataStore:
             kind=ObservationKind.INTEREST_RATE,
             entity_code=currency_or_entity,
             indicator_id=indicator_id,
+            rate_role=rate_role,
             allow_stale=allow_stale,
         )
         if record is None:
@@ -297,8 +414,9 @@ class PointInTimeDataStore:
         self,
         kind: ObservationKind,
         entity_code: str,
-        as_of: date,
+        as_of: date | datetime,
         indicator_id: str | None = None,
+        rate_role: RateRole | None = None,
         allow_stale: bool = False,
     ) -> PointInTimeRecord | None:
         return self.firewall.get_latest_observation(
@@ -307,5 +425,6 @@ class PointInTimeDataStore:
             kind=kind,
             entity_code=entity_code,
             indicator_id=indicator_id,
+            rate_role=rate_role,
             allow_stale=allow_stale,
         )

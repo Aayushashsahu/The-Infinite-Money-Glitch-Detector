@@ -17,16 +17,19 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 import io
 from typing import Any
+from zoneinfo import ZoneInfo
 import pandas as pd
 
 from data.adapters.base import SourceAdapter
 from data.http import get_text
 from data.schemas import (
+    AvailabilityEvidence,
     DataClassification,
     DataObservation,
     FetchResult,
     Frequency,
     ObservationKind,
+    RateRole,
     RawRecordInfo,
 )
 
@@ -108,6 +111,10 @@ class UsTreasuryAdapter(SourceAdapter):
             except (ValueError, TypeError):
                 continue
 
+            et_tz = ZoneInfo("America/New_York")
+            obs_dt = datetime(dt.year, dt.month, dt.day, 15, 30, tzinfo=et_tz).astimezone(timezone.utc)
+            pub_dt = datetime(dt.year, dt.month, dt.day, 16, 0, tzinfo=et_tz).astimezone(timezone.utc)
+
             observations.append(
                 DataObservation(
                     kind=ObservationKind.INTEREST_RATE,
@@ -119,6 +126,10 @@ class UsTreasuryAdapter(SourceAdapter):
                     frequency=Frequency.DAILY,
                     observation_date=dt,
                     publication_date=dt,  # Treasury publishes end-of-day market close same-day
+                    observation_timestamp=obs_dt,
+                    publication_timestamp=pub_dt,
+                    rate_role=RateRole.RISK_FREE_RATE,
+                    availability_evidence=AvailabilityEvidence.ESTIMATED_SCHEDULE,
                     retrieved_at=now,
                     revision=0,
                     is_synthetic=False,

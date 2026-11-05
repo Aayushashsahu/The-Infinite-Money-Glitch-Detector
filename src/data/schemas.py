@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -68,6 +68,36 @@ class DataClassification(str, Enum):
     REAL_RETROSPECTIVE = "real_retrospective"
     SYNTHETIC = "synthetic"
     MOCK = "mock"
+
+
+
+class AvailabilityEvidence(str, Enum):
+    """Evidence category for observation point-in-time availability."""
+
+    EXACT_TIMESTAMP_VERIFIED = "exact_timestamp_verified"
+    ESTIMATED_SCHEDULE = "estimated_schedule"
+    UNVERIFIED_SAME_DAY = "unverified_same_day"
+    RETROSPECTIVE = "retrospective"
+
+
+class RateRole(str, Enum):
+    """Economic role and instrument classification of an interest rate."""
+
+    POLICY_RATE = "policy_rate"
+    BORROWING_RATE = "borrowing_rate"
+    DEPOSIT_RATE = "deposit_rate"
+    RISK_FREE_RATE = "risk_free_rate"
+    INVESTMENT_RETURN = "investment_return"
+
+
+class StrategyExecutabilityStatus(str, Enum):
+    """Executability and research validity status of a backtested strategy."""
+
+    EXECUTABLE_VALIDATED = "EXECUTABLE_VALIDATED"
+    RESEARCH_PROXY = "RESEARCH_PROXY"
+    RESEARCH_ONLY = "RESEARCH_ONLY"
+    UNEXECUTABLE = "UNEXECUTABLE"
+    NO_TRADES = "NO_TRADES"
 
 
 class SourceInfo(BaseModel):
@@ -200,12 +230,36 @@ class DataObservation(BaseModel):
     frequency: Frequency
     observation_date: date
     publication_date: date | None = None
+    observation_timestamp: datetime | None = None
+    publication_timestamp: datetime | None = None
+    effective_timestamp: datetime | None = None
     retrieved_at: datetime
     revision: int = Field(default=0, ge=0)
     is_synthetic: bool = False
     classification: DataClassification | None = None
+    availability_evidence: AvailabilityEvidence | None = None
+    rate_role: RateRole | None = None
     metadata: dict[str, Any] | None = None
     quality_flags: list[QualityFlag] = Field(default_factory=list)
+
+    @field_validator(
+        "observation_timestamp",
+        "publication_timestamp",
+        "effective_timestamp",
+        "retrieved_at",
+        mode="before",
+    )
+    @classmethod
+    def _ensure_utc_datetime(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v)
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                return v.replace(tzinfo=timezone.utc)
+            return v.astimezone(timezone.utc)
+        return v
 
     @field_validator("source_id")
     @classmethod
@@ -244,16 +298,46 @@ class DataObservation(BaseModel):
                 f"publication_date {self.publication_date} is before observation_date "
                 f"{self.observation_date}; impossible for the same source revision."
             )
+        if self.publication_timestamp is not None and self.observation_timestamp is not None:
+            if self.publication_timestamp < self.observation_timestamp:
+                raise ValueError(
+                    f"publication_timestamp {self.publication_timestamp} is before "
+                    f"observation_timestamp {self.observation_timestamp}."
+                )
+
+        if self.publication_date is None and self.publication_timestamp is not None:
+            self.publication_date = self.publication_timestamp.date()
+
         # Automatic classification resolution preserving explicit tags
         if self.classification is None:
             if self.is_synthetic:
                 self.classification = DataClassification.SYNTHETIC
+            elif self.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED:
+                self.classification = DataClassification.REAL_VERIFIED
+            elif self.availability_evidence == AvailabilityEvidence.ESTIMATED_SCHEDULE:
+                self.classification = DataClassification.REAL_ESTIMATED_AVAILABILITY
+            elif self.availability_evidence == AvailabilityEvidence.UNVERIFIED_SAME_DAY:
+                self.classification = DataClassification.REAL_ESTIMATED_AVAILABILITY
+            elif self.availability_evidence == AvailabilityEvidence.RETROSPECTIVE:
+                self.classification = DataClassification.REAL_RETROSPECTIVE
+            elif self.publication_timestamp is not None:
+                self.classification = DataClassification.REAL_VERIFIED
             elif self.publication_date is not None:
                 self.classification = DataClassification.REAL_VERIFIED
             else:
                 self.classification = DataClassification.REAL_RETROSPECTIVE
         elif self.classification in (DataClassification.SYNTHETIC, DataClassification.MOCK):
             self.is_synthetic = True
+
+        if self.availability_evidence is None:
+            if self.is_synthetic:
+                self.availability_evidence = None
+            elif self.classification == DataClassification.REAL_VERIFIED and self.publication_timestamp is not None:
+                self.availability_evidence = AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED
+            elif self.publication_date is not None:
+                self.availability_evidence = AvailabilityEvidence.ESTIMATED_SCHEDULE
+            else:
+                self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
         return self
 
 

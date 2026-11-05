@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core.currency import validate_currency_code
 from schemas.strategy import CurrencyPair, InterestConvention
-from data.schemas import Frequency
+from data.schemas import Frequency, StrategyExecutabilityStatus
 
 
 class AvailabilityPolicy(str, Enum):
@@ -216,10 +216,21 @@ class TradeRecord(BaseModel):
     loan_repayment_a: float | None = None
     interest_paid_a: float | None = None
 
-    # Frictions and PnL
+    # Frictions and PnL breakdown
+    pure_gross_gain_a: float = 0.0
+    financing_cost_a: float = 0.0
+    entry_spread_cost_a: float = 0.0
+    entry_slippage_cost_a: float = 0.0
+    entry_fees_a: float = 0.0
+    exit_spread_cost_a: float = 0.0
+    exit_slippage_cost_a: float = 0.0
+    exit_fees_a: float = 0.0
+    fixed_fee_a: float = 0.0
+    total_frictions_a: float = 0.0
     transaction_costs_a: float = 0.0
     slippage_costs_a: float = 0.0
     net_profit_a: float | None = None
+    reconciliation_residual_a: float = 0.0
     return_on_capital: float | None = None
     annualized_return: float | None = None
 
@@ -289,12 +300,22 @@ class PerformanceMetrics(BaseModel):
         description="Annualized volatility computed on deployed position capital rather than total equity.",
     )
 
+    # Exact double-entry accounting reconciliation
+    pure_gross_profit_a: float = 0.0
+    total_financing_costs_a: float = 0.0
+    total_frictions_a: float = 0.0
+    total_cash_interest_a: float = 0.0
+    reconciliation_residual_a: float = 0.0
+    reconciliation_exact: bool = True
+
     # Benchmark comparisons
     benchmark_name: str | None = None
     benchmark_total_return: float | None = None
     benchmark_annualized_return: float | None = None
     benchmark_sharpe_ratio: float | None = None
     alpha: float | None = Field(default=None, description="Strategy return minus benchmark return.")
+    annualized_excess_return: float | None = Field(default=None, description="Strategy annualized return minus benchmark annualized return.")
+    cumulative_excess_return: float | None = Field(default=None, description="Strategy total return minus benchmark total return.")
 
     metric_assumptions: dict[str, str] = Field(
         default_factory=dict,
@@ -395,7 +416,7 @@ class BacktestConfig(BaseModel):
         description="Annual interest rate earned on unencumbered cash balance in borrowing currency A.",
     )
     simulate_trading_days_only: bool = Field(
-        default=False,
+        default=True,
         description="Advance simulation strictly on active FX trading days (skipping weekends and market holidays).",
     )
 
@@ -439,5 +460,7 @@ class BacktestResult(BaseModel):
     rejections: list[dict[str, Any]] = Field(default_factory=list)
     data_quality_flags: list[dict[str, Any]] = Field(default_factory=list)
     audit_trail: list[str] = Field(default_factory=list)
+    strategy_status: StrategyExecutabilityStatus = StrategyExecutabilityStatus.EXECUTABLE_VALIDATED
+    manifest_digest: str | None = None
     is_executable_strategy: bool = True
     unsupported_reason: str | None = None

@@ -20,10 +20,13 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from data.http import get_json
 from data.schemas import (
+    AvailabilityEvidence,
     CurrencyInfo,
+    DataClassification,
     DataObservation,
     FetchResult,
     Frequency,
@@ -58,23 +61,33 @@ class FrankfurterAdapter(SourceAdapter):
         url = f"{FRANKFURTER_BASE_URL}/{start.isoformat()}..{end.isoformat()}"
         payload = get_json(self.client, url, params={"from": base, "to": quote})
         rates: dict[str, dict[str, float]] = payload.get("rates", {})
-        observations = [
-            DataObservation(
-                kind=ObservationKind.EXCHANGE_RATE,
-                source_id=self.source_id,
-                indicator_id=None,
-                entity_code=f"{base}/{quote}",
-                value=float(day_rates[quote]),
-                unit="quote_per_base",
-                frequency=Frequency.DAILY,
-                observation_date=date.fromisoformat(day),
-                publication_date=date.fromisoformat(day),  # ECB reference rates publish same-day
-                retrieved_at=now,
-                metadata={"base_amount": payload.get("amount", 1.0)},
+        cet_tz = ZoneInfo("Europe/Berlin")
+        observations = []
+        for day, day_rates in sorted(rates.items()):
+            if quote not in day_rates:
+                continue
+            d = date.fromisoformat(day)
+            obs_dt = datetime(d.year, d.month, d.day, 14, 15, tzinfo=cet_tz).astimezone(timezone.utc)
+            pub_dt = datetime(d.year, d.month, d.day, 16, 0, tzinfo=cet_tz).astimezone(timezone.utc)
+            observations.append(
+                DataObservation(
+                    kind=ObservationKind.EXCHANGE_RATE,
+                    source_id=self.source_id,
+                    indicator_id=None,
+                    entity_code=f"{base}/{quote}",
+                    value=float(day_rates[quote]),
+                    unit="quote_per_base",
+                    frequency=Frequency.DAILY,
+                    observation_date=d,
+                    publication_date=d,  # ECB reference rates publish same-day
+                    observation_timestamp=obs_dt,
+                    publication_timestamp=pub_dt,
+                    retrieved_at=now,
+                    classification=DataClassification.REAL_VERIFIED,
+                    availability_evidence=AvailabilityEvidence.ESTIMATED_SCHEDULE,
+                    metadata={"base_amount": payload.get("amount", 1.0)},
+                )
             )
-            for day, day_rates in sorted(rates.items())
-            if quote in day_rates
-        ]
         n_days = len(rates)
         warning = (
             f"frankfurter {base}/{quote}: {len(observations)} of {n_days} calendar entries in range "

@@ -31,7 +31,10 @@ def build_data_provenance_report(
 ) -> DataProvenanceReport:
     """Generate an auditable data provenance and quality report for a backtest run."""
     cal = calendar or DEFAULT_FX_CALENDAR
-    obs_list = list(observations)
+    obs_list = [
+        o for o in observations
+        if start_date <= o.observation_date <= end_date
+    ] or list(observations)
     total_obs = len(obs_list)
 
     sources = sorted(set(o.source_id for o in obs_list))

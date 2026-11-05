@@ -196,6 +196,13 @@ class ExecutionEngine:
         effective_principal_converted = principal_borrowed_a - entry_variable_fee_a
         invested_b = convert_to_b(effective_principal_converted, entry_prices.effective_rate)
 
+        # Decompose entry frictions
+        half_spread_entry = (self.config.bid_ask_spread_bps / 2.0) / 10_000.0
+        ask_entry = spot_mid_entry * (1.0 + half_spread_entry)
+        entry_spread_cost_a = effective_principal_converted * (1.0 - (spot_mid_entry / ask_entry))
+        entry_slippage_cost_a = effective_principal_converted * ((spot_mid_entry / ask_entry) - (spot_mid_entry / entry_prices.effective_rate))
+        entry_fees_a = entry_variable_fee_a
+
         # Slippage cost in A
         mid_invested_b = convert_to_b(principal_borrowed_a, spot_mid_entry)
         slippage_loss_a = (mid_invested_b - invested_b) * spot_mid_entry
@@ -246,6 +253,9 @@ class ExecutionEngine:
             invested_amount_b=invested_b,
             is_covered=is_covered,
             forward_exec_rate=forward_exec,
+            entry_spread_cost_a=entry_spread_cost_a,
+            entry_slippage_cost_a=entry_slippage_cost_a,
+            entry_fees_a=entry_fees_a,
             transaction_costs_a=entry_variable_fee_a,
             slippage_costs_a=max(0.0, slippage_loss_a),
             status=TradeStatus.OPEN,
@@ -272,11 +282,19 @@ class ExecutionEngine:
             actual_days = 1  # Minimum 1 day holding
         years = days_to_years(actual_days)
 
-        # Determine effective exit exchange rate
+        # 1. Accumulate investment in B
+        f_b = growth_factor(trade.investment_rate, years, self.config.interest_convention)
+        investment_value_b = trade.invested_amount_b * f_b
+
+        # Determine effective exit exchange rate and frictions
+        half_spread_exit = (self.config.bid_ask_spread_bps / 2.0) / 10_000.0
         if trade.is_covered and trade.forward_exec_rate is not None:
             # Locked forward rate
             exec_exit_rate = trade.forward_exec_rate
             exit_mid = spot_mid_exit
+            bid_rate_exit = spot_mid_exit * (1.0 - half_spread_exit)
+            exit_spread_cost_a = investment_value_b * (spot_mid_exit - bid_rate_exit)
+            exit_slippage_cost_a = investment_value_b * max(0.0, bid_rate_exit - exec_exit_rate)
             exit_slippage = 0.0
         else:
             # Unhedged: spot conversion with bid spread and adverse slippage
@@ -289,11 +307,10 @@ class ExecutionEngine:
             )
             exec_exit_rate = exit_prices.effective_rate
             exit_mid = spot_mid_exit
+            bid_rate_exit = spot_mid_exit * (1.0 - half_spread_exit)
+            exit_spread_cost_a = investment_value_b * (spot_mid_exit - bid_rate_exit)
+            exit_slippage_cost_a = investment_value_b * max(0.0, bid_rate_exit - exec_exit_rate)
             exit_slippage = (spot_mid_exit - exec_exit_rate)
-
-        # 1. Accumulate investment in B
-        f_b = growth_factor(trade.investment_rate, years, self.config.interest_convention)
-        investment_value_b = trade.invested_amount_b * f_b
 
         # 2. Convert B back to A
         converted_back_a = convert_to_a(investment_value_b, exec_exit_rate)
@@ -310,19 +327,27 @@ class ExecutionEngine:
 
         # 4. Transaction fees on exit
         exit_variable_fee_a = converted_back_a * (self.config.variable_fee_bps / 10_000.0)
+        fixed_fee_a = self.config.fixed_fee
         total_transaction_costs = (
             trade.transaction_costs_a
             + exit_variable_fee_a
-            + self.config.fixed_fee
+            + fixed_fee_a
         )
 
         # Exit slippage cost in A
         total_slippage = trade.slippage_costs_a + max(0.0, exit_slippage * investment_value_b)
 
         # 5. Net profit in A
-        # Profit = Converted back - Repayment - Transaction costs
-        net_profit_a = converted_back_a - repayment_a - exit_variable_fee_a - self.config.fixed_fee
+        net_profit_a = converted_back_a - repayment_a - exit_variable_fee_a - fixed_fee_a
         roi = net_profit_a / trade.principal_borrowed_a
+
+        # Pure gross mid-to-mid gain:
+        pure_gross_value_a = (trade.principal_borrowed_a / trade.spot_mid_entry) * f_b * exit_mid
+        pure_gross_gain_a = pure_gross_value_a - trade.principal_borrowed_a
+
+        # Total frictions: exact difference between pure gross value and net cash realized before financing
+        total_frictions_a = pure_gross_value_a - (converted_back_a - exit_variable_fee_a - fixed_fee_a)
+        reconciliation_residual_a = abs(net_profit_a - (pure_gross_gain_a - interest_a - total_frictions_a))
 
         # Annualized return
         ann_return: float | None = None
@@ -342,9 +367,17 @@ class ExecutionEngine:
                 "converted_back_a": converted_back_a,
                 "loan_repayment_a": repayment_a,
                 "interest_paid_a": interest_a,
+                "pure_gross_gain_a": pure_gross_gain_a,
+                "financing_cost_a": interest_a,
+                "exit_spread_cost_a": exit_spread_cost_a,
+                "exit_slippage_cost_a": exit_slippage_cost_a,
+                "exit_fees_a": exit_variable_fee_a,
+                "fixed_fee_a": fixed_fee_a,
+                "total_frictions_a": total_frictions_a,
                 "transaction_costs_a": total_transaction_costs,
                 "slippage_costs_a": total_slippage,
                 "net_profit_a": net_profit_a,
+                "reconciliation_residual_a": reconciliation_residual_a,
                 "return_on_capital": roi,
                 "annualized_return": ann_return,
                 "status": TradeStatus.CLOSED,

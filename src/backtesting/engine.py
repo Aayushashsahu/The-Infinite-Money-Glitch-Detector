@@ -12,7 +12,9 @@ Coordinates:
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any, Sequence
 
 from schemas.backtest import (
@@ -36,7 +38,7 @@ from backtesting.signals import (
     TradingSignal,
     UnhedgedCarrySignalGenerator,
 )
-from data.schemas import DataObservation, Frequency, ObservationKind
+from data.schemas import DataObservation, Frequency, ObservationKind, StrategyExecutabilityStatus
 
 
 class BacktestEngine:
@@ -84,12 +86,25 @@ class BacktestEngine:
         is_executable = True
         unsupported_reason: str | None = None
 
-        # Check research-only mode status
+        # Determine initial executability classification
+        strategy_status = StrategyExecutabilityStatus.EXECUTABLE_VALIDATED
+        PROXY_SERIES = {
+            "DGS3MO", "DGS1MO", "DGS6MO", "DGS1YR",
+            "KR.DFR.LEV", "KR.MRR_FR.LEV", "DFEDTARU", "FEDFUNDS",
+        }
         if self.config.availability_config.policy == AvailabilityPolicy.RESEARCH_ONLY:
             is_executable = False
+            strategy_status = StrategyExecutabilityStatus.RESEARCH_ONLY
             self._audit_trail.append(
                 "WARNING: Backtest executed in RESEARCH_ONLY mode. "
                 "Historical publication dates were ignored; results are retrospective and strictly unexecutable."
+            )
+        elif self.config.borrowing_rate_series_id in PROXY_SERIES or \
+             self.config.investment_rate_series_id in PROXY_SERIES:
+            strategy_status = StrategyExecutabilityStatus.RESEARCH_PROXY
+            self._audit_trail.append(
+                "RESEARCH PROXY: Strategy uses sovereign Treasury yields or central bank policy rates "
+                "rather than commercial bank borrowing/deposit rates. Classified as RESEARCH_PROXY."
             )
 
         # Check covered strategy feasibility: check if actual forward rates exist in dataset
@@ -102,6 +117,7 @@ class BacktestEngine:
             )
             if forward_sample is None:
                 is_executable = False
+                strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
                 unsupported_reason = (
                     "Covered carry trade strategy cannot be executed: "
                     "actual historical forward exchange rate quotes are unavailable. "
@@ -124,9 +140,11 @@ class BacktestEngine:
             # Check FX calendar for active trading day
             from backtesting.calendar import DEFAULT_FX_CALENDAR
             is_active_trading_day = DEFAULT_FX_CALENDAR.is_trading_day(current_date)
-            if self.config.simulate_trading_days_only and not is_active_trading_day:
-                # On non-trading days, accrue unallocated cash interest if configured, but skip market steps
+            if not is_active_trading_day:
+                # Markets closed: no trade entry, no trade exit. Defer maturities to next active trading day.
                 self.portfolio.accrue_cash_interest(1, self.config.execution_config.interest_convention)
+                if not self.config.simulate_trading_days_only:
+                    self.portfolio.snapshot(as_of=current_date, current_spot_rates={})
                 current_date += timedelta(days=1)
                 continue
 
@@ -317,6 +335,23 @@ class BacktestEngine:
             cash_interest_earned=self.portfolio.total_cash_interest_earned,
         )
 
+        # Check if 0 trades executed or unexecutable
+        if len(self.portfolio.closed_trades) == 0:
+            if is_covered_strategy and forward_sample is None:
+                strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+            elif not is_executable:
+                strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+            else:
+                strategy_status = StrategyExecutabilityStatus.NO_TRADES
+        elif is_covered_strategy and forward_sample is None:
+            strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+
+        # Manifest digest
+        manifest_digest: str | None = None
+        manifest_file = Path("data/manifest.json")
+        if manifest_file.exists():
+            manifest_digest = hashlib.sha256(manifest_file.read_bytes()).hexdigest()
+
         # 8. Data Provenance & Traceability Report
         from backtesting.provenance import build_data_provenance_report
         provenance = build_data_provenance_report(
@@ -336,6 +371,8 @@ class BacktestEngine:
             rejections=self._rejections,
             data_quality_flags=self._data_quality_flags,
             audit_trail=self._audit_trail,
+            strategy_status=strategy_status,
+            manifest_digest=manifest_digest,
             is_executable_strategy=is_executable,
             unsupported_reason=unsupported_reason,
         )

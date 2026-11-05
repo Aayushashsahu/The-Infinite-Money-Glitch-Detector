@@ -24,15 +24,19 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from data.http import get_json, get_text
 from data.schemas import (
+    AvailabilityEvidence,
+    DataClassification,
     DataObservation,
     FetchResult,
     Frequency,
     ObservationKind,
+    RateRole,
     RawRecordInfo,
 )
 
@@ -113,6 +117,9 @@ class EcbPolicyRateAdapter(SourceAdapter):
             if pd.isna(raw_value) or raw_value in (".", ""):
                 continue  # explicitly missing: skipped, counted, never filled
             obs_date = date.fromisoformat(str(raw_date))
+            eff_dt = datetime(obs_date.year, obs_date.month, obs_date.day, 0, 0, tzinfo=timezone.utc)
+            obs_dt = eff_dt
+            pub_dt = datetime(obs_date.year, obs_date.month, obs_date.day, 6, 0, tzinfo=timezone.utc)
             observations.append(
                 DataObservation(
                     kind=ObservationKind.INTEREST_RATE,
@@ -124,6 +131,12 @@ class EcbPolicyRateAdapter(SourceAdapter):
                     frequency=spec["frequency"],
                     observation_date=obs_date,
                     publication_date=obs_date,  # ECB publishes rate levels same-day
+                    observation_timestamp=obs_dt,
+                    publication_timestamp=pub_dt,
+                    effective_timestamp=eff_dt,
+                    rate_role=RateRole.POLICY_RATE,
+                    availability_evidence=AvailabilityEvidence.ESTIMATED_SCHEDULE,
+                    classification=DataClassification.REAL_VERIFIED,
                     retrieved_at=now,
                     metadata={"series_key": spec.get("sdmx_path", f"FM/B.U2.EUR.4F.{series_key}"), "series_name": spec["name"]},
                 )
@@ -177,11 +190,15 @@ class FredAdapter(SourceAdapter):
             params["observation_start"] = start.isoformat()
         payload = get_json(self.client, f"{FRED_BASE_URL}/series/observations", params=params)
         observations: list[DataObservation] = []
+        ny_tz = ZoneInfo("America/New_York")
         for obs in payload.get("observations", []):
             value = obs.get("value")
             if value in (None, ".", ""):
                 continue  # FRED encodes missing as '.': skipped, never filled
             obs_date = date.fromisoformat(obs["date"])
+            eff_dt = datetime(obs_date.year, obs_date.month, obs_date.day, 0, 0, tzinfo=timezone.utc)
+            obs_dt = eff_dt
+            pub_dt = datetime(obs_date.year, obs_date.month, obs_date.day, 9, 0, tzinfo=ny_tz).astimezone(timezone.utc)
             observations.append(
                 DataObservation(
                     kind=ObservationKind.INTEREST_RATE,
@@ -193,6 +210,12 @@ class FredAdapter(SourceAdapter):
                     frequency=spec["frequency"],
                     observation_date=obs_date,
                     publication_date=obs_date,  # governing policy decisions are public same-day
+                    observation_timestamp=obs_dt,
+                    publication_timestamp=pub_dt,
+                    effective_timestamp=eff_dt,
+                    rate_role=RateRole.POLICY_RATE,
+                    availability_evidence=AvailabilityEvidence.ESTIMATED_SCHEDULE,
+                    classification=DataClassification.REAL_VERIFIED,
                     retrieved_at=now,
                     metadata={"series_id": series_id, "series_name": spec["name"]},
                 )

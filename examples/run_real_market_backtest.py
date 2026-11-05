@@ -56,6 +56,7 @@ def print_metrics_table(name: str, res) -> None:
     m = res.metrics
     final_eq = res.snapshots[-1].equity_a if res.snapshots else res.config.initial_capital_a
     print(f"\n--- Performance Summary: {name} ---")
+    print(f"Strategy Status:          {res.strategy_status.value}")
     print(f"Total Trades Executed:    {m.total_trades}")
     print(f"Win Rate:                 {m.win_rate:.1%}")
     print(f"Initial Capital:          ${res.config.initial_capital_a:,.2f}")
@@ -68,18 +69,14 @@ def print_metrics_table(name: str, res) -> None:
     print(f"Maximum Drawdown:         {m.max_drawdown:.2%}")
     print(f"Daily VaR (95%):          {m.var_95:.2%}")
     print(f"Daily CVaR (95%):         {m.cvar_95:.2%}")
-    print("\nReturn Attribution Breakdown:")
-    print(f"  Gross Trade Return:     {m.gross_trade_return:+.2%}" if m.gross_trade_return is not None else "  Gross Trade Return:     N/A")
-    print(f"  - Financing Drag:       {m.financing_cost_drag:.2%}" if m.financing_cost_drag is not None else "  - Financing Drag:       N/A")
-    print(f"  - Frictions Drag:       {m.transaction_cost_drag:.2%}" if m.transaction_cost_drag is not None else "  - Frictions Drag:       N/A")
-    print(f"  + Cash Yield Return:    {m.cash_yield_return:+.2%}" if m.cash_yield_return is not None else "  + Cash Yield Return:    N/A")
-    reconciled = (
-        (m.gross_trade_return or 0.0)
-        - (m.financing_cost_drag or 0.0)
-        - (m.transaction_cost_drag or 0.0)
-        + (m.cash_yield_return or 0.0)
-    )
-    print(f"  = Net Calculated:       {reconciled:+.2%}")
+    print("\nExact Double-Entry Cash Attribution Ledger:")
+    print(f"  Pure Gross Profit:      ${m.pure_gross_profit_a:+,.2f} ({m.gross_trade_return:+.2%})")
+    print(f"  - Financing Debt Costs: ${m.total_financing_costs_a:,.2f} ({m.financing_cost_drag:.2%})")
+    print(f"  - Total Frictions Drag: ${m.total_frictions_a:,.2f} ({m.transaction_cost_drag:.2%})")
+    print(f"  + Idle Cash Interest:   ${m.total_cash_interest_a:+,.2f} ({m.cash_yield_return:+.2%})")
+    print(f"  -------------------------------------------------------------")
+    print(f"  = Cumulative Net PnL:   ${m.cumulative_net_profit:+,.2f} ({m.total_return:+.2%})")
+    print(f"  Reconciliation Residual: {m.reconciliation_residual_a:.10f} (Exact: {m.reconciliation_exact})")
     bm_ret_str = f"{m.benchmark_total_return:+.2%}" if m.benchmark_total_return is not None else "N/A"
     print(f"Benchmark ({m.benchmark_name}): {bm_ret_str}")
     alpha_str = f"{m.alpha:+.2%}" if m.alpha is not None else "N/A"
@@ -87,6 +84,8 @@ def print_metrics_table(name: str, res) -> None:
     print(f"Is Executable:            {res.is_executable_strategy}")
     if res.unsupported_reason:
         print(f"Rejection Reason:         {res.unsupported_reason}")
+    if res.manifest_digest:
+        print(f"Manifest Digest (SHA256): {res.manifest_digest[:16]}...")
 
 
 def main() -> None:

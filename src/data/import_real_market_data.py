@@ -18,6 +18,7 @@ Enforces:
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -210,6 +211,10 @@ def run_import(
         with open(archive_dir / f"ecb_dfr_{start_date}_{end_date}.csv", "w", encoding="utf-8") as f:
             f.write(str(raw.payload))
 
+    for raw in ecb_mro_res.raw_records:
+        with open(archive_dir / f"ecb_mro_{start_date}_{end_date}.csv", "w", encoding="utf-8") as f:
+            f.write(str(raw.payload))
+
     ecb_dfr_valid, _ = validate_batch(ecb_dfr_obs)
     ecb_dfr_stats = repo.insert_observations(ecb_dfr_valid)
     stats["ecb_dfr_inserted"] = ecb_dfr_stats.inserted
@@ -222,10 +227,39 @@ def run_import(
     stats["ecb_mro_skipped"] = ecb_mro_stats.duplicates_skipped
     print(f"   -> ECB Main Refinancing: {len(ecb_mro_valid)} valid observations (new: {ecb_mro_stats.inserted}, skipped: {ecb_mro_stats.duplicates_skipped})")
 
+    manifest_path = archive_dir.parent / "manifest.json"
+    generate_manifest(archive_dir, manifest_path)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Manifest generated at {manifest_path}")
+
     total_new = sum(v for k, v in stats.items() if k.endswith("_inserted"))
     total_skipped = sum(v for k, v in stats.items() if k.endswith("_skipped"))
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Import complete. Total new rows: {total_new}, Total skipped duplicates: {total_skipped}.\n")
     return stats
+
+
+def generate_manifest(archive_dir: Path, manifest_path: Path) -> dict[str, Any]:
+    """Generate SHA-256 manifest of raw archived files."""
+    manifest_entries: list[dict[str, Any]] = []
+    if archive_dir.exists():
+        for file_path in sorted(archive_dir.glob("*")):
+            if file_path.is_file() and file_path.name != ".gitkeep":
+                content = file_path.read_bytes()
+                digest = hashlib.sha256(content).hexdigest()
+                size_bytes = len(content)
+                manifest_entries.append({
+                    "file_name": file_path.name,
+                    "sha256": digest,
+                    "file_size_bytes": size_bytes,
+                })
+    manifest_data = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "files_count": len(manifest_entries),
+        "files": manifest_entries,
+    }
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest_data, f, indent=2)
+    return manifest_data
 
 
 if __name__ == "__main__":

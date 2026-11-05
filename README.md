@@ -9,15 +9,17 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 2 — Economic Data Infrastructure ✅
+## Status: Phase 3.2.1 — Quantitative Integrity & Executability Audit ✅
 
-Phase 1 (deterministic math engine) is complete and unchanged. Phase 2
-adds retrieval, normalization, validation and persistence of historical
-economic observations — still no machine learning, no LLM, no dashboard,
-by design, and reviewed in that order.
+- **Phase 1 (Mathematical Foundation):** Complete (46 tests).
+- **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
+- **Phase 3 (Historical Backtesting Engine):** Complete (127 tests).
+- **Phase 3.1 (Methodology & Benchmark Audit):** Complete (141 tests).
+- **Phase 3.2 (Real Market Data Validation 2020-2024):** Complete (149 tests).
+- **Phase 3.2.1 (Quantitative Integrity & PIT Audit):** Complete (158 passed tests).
 
-See [`docs/phase2.md`](docs/phase2.md) for the storage model, ingestion
-contracts, real dataset results and limitations.
+See [`PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md`](PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md) for the complete quantitative audit, exact cash flow ledger proofs, and regime analysis.
+See [`PHASE_3_2_REAL_DATA_VALIDATION.md`](PHASE_3_2_REAL_DATA_VALIDATION.md) for the preserved historical baseline.
 
 ### What Phase 2 guarantees
 
@@ -173,7 +175,10 @@ alembic upgrade head              # apply the Phase 2 schema to DATABASE_URL
 
 - **Phase 1** ✅ — deterministic math + tests
 - **Phase 2** ✅ — data engineering (World Bank / IMF / central banks / FX adapters, raw vs processed stores, no silent forward-fills, look-ahead-bias prevention)
-- **Phase 3** — backtesting engine (walk-forward, out-of-sample, benchmarks)
+- **Phase 3** ✅ — backtesting engine (walk-forward, out-of-sample, benchmarks)
+- **Phase 3.1** ✅ — quantitative validation audit (comparable benchmarks, provenance reports, risk metric audit)
+- **Phase 3.2** ✅ — real market data validation (2020-2024 genuine data, 2 macro regimes, NIRP vs tightening)
+- **Phase 3.2.1** ✅ — quantitative integrity, point-in-time & executability audit (timestamp firewall, double-entry ledger, weekend rollover)
 - **Phase 4** — Monte Carlo simulation (historical bootstrap, stress scenarios, fat tails)
 - **Phase 5** — Streamlit/Plotly dashboard (reads, never recomputes, the engine)
 - **Phase 6** — AI assistant (explains outputs; never computes numbers itself)

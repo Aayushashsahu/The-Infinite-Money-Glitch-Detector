@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-11-05T12:12:12.624794+00:00",
+  "files_count": 9,
+  "files": [
+    {
+      "file_name": "ecb_dfr_2020-01-01_2024-12-31.csv",
+      "sha256": "b7cf01828f2ecb6001c76c7634bfb18b7b2e7fa55e28dcff33988701770fa12a",
+      "file_size_bytes": 745488
+    },
+    {
+      "file_name": "frankfurter_EUR_base_USD_quote_2020-01-01_2024-12-31.json",
+      "sha256": "ce39d08f87317c846337e9e5d28fab82c7f00f6ceb8f1b30ff5a43f57504140b",
+      "file_size_bytes": 39757
+    },
+    {
+      "file_name": "frankfurter_USD_base_EUR_quote_2020-01-01_2024-12-31.json",
+      "sha256": "bc7234408b74ffaf02b77df38265d1168f05ae7bac7da6e903240ef9d2a7e918",
+      "file_size_bytes": 40979
+    },
+    {
+      "file_name": "frankfurter_USD_EUR_2020-01-01_2024-12-31.json",
+      "sha256": "bc7234408b74ffaf02b77df38265d1168f05ae7bac7da6e903240ef9d2a7e918",
+      "file_size_bytes": 40979
+    },
+    {
+      "file_name": "us_treasury_2020.csv",
+      "sha256": "c028621ad8755f62cc0bfc8b7c09f62be9e49d4e1a17bc57582ed53249b0466f",
+      "file_size_bytes": 18163
+    },
+    {
+      "file_name": "us_treasury_2021.csv",
+      "sha256": "bd50bb1530b07850e3f696114724f950da8be1171c42f5b8f0624af167dd534c",
+      "file_size_bytes": 18163
+    },
+    {
+      "file_name": "us_treasury_2022.csv",
+      "sha256": "b3aeb9ab6998878be2c82722fd42933b1e461f1953f999b3dd2fb6f200707bc9",
+      "file_size_bytes": 18475
+    },
+    {
+      "file_name": "us_treasury_2023.csv",
+      "sha256": "1d5072667b66fda85631219d9b8baab95d631a92765c0bf2885558019f2d0816",
+      "file_size_bytes": 19348
+    },
+    {
+      "file_name": "us_treasury_2024.csv",
+      "sha256": "27898e5d4409074f9f387a736f6864574b5f5721b38b0199286eaf9d1ef575d8",
+      "file_size_bytes": 19348
+    }
+  ]
+}

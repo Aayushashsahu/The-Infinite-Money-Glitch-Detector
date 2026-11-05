@@ -203,15 +203,25 @@ def calculate_performance_metrics(
         bm_sharpe = benchmark.sharpe_ratio
         alpha = ann_return - benchmark.annualized_return
 
-    # Return attribution decomposition
-    gross_gain_a = sum(((t.converted_back_a or 0.0) - t.principal_borrowed_a) for t in closed)
-    financing_costs_a = sum((t.interest_paid_a or 0.0) for t in closed)
-    tx_costs_a = sum((t.transaction_costs_a or 0.0) for t in closed)
+    # Exact double-entry return attribution decomposition
+    pure_gross_profit_a = sum((t.pure_gross_gain_a or 0.0) for t in closed)
+    total_financing_costs_a = sum((t.interest_paid_a or 0.0) for t in closed)
+    total_frictions_a = sum((t.total_frictions_a or 0.0) for t in closed)
+    total_cash_interest_a = cash_interest_earned
 
-    gross_ret = gross_gain_a / initial_capital_a if initial_capital_a > 0 else 0.0
-    fin_drag = financing_costs_a / initial_capital_a if initial_capital_a > 0 else 0.0
-    tx_drag = tx_costs_a / initial_capital_a if initial_capital_a > 0 else 0.0
-    cash_yield_ret = cash_interest_earned / initial_capital_a if initial_capital_a > 0 else 0.0
+    reconciliation_residual_a = abs(
+        cum_net_profit - (pure_gross_profit_a - total_financing_costs_a - total_frictions_a + total_cash_interest_a)
+    )
+    reconciliation_exact = reconciliation_residual_a <= 1e-10
+
+    gross_ret = pure_gross_profit_a / initial_capital_a if initial_capital_a > 0 else 0.0
+    fin_drag = total_financing_costs_a / initial_capital_a if initial_capital_a > 0 else 0.0
+    tx_drag = total_frictions_a / initial_capital_a if initial_capital_a > 0 else 0.0
+    cash_yield_ret = total_cash_interest_a / initial_capital_a if initial_capital_a > 0 else 0.0
+
+    # Benchmark excess returns
+    ann_excess = (ann_return - bm_ann) if bm_ann is not None else None
+    cum_excess = (tot_return - bm_tot) if bm_tot is not None else None
 
     # Position-level volatility (on deployed capital rather than diluted portfolio equity)
     trade_rocs = [t.return_on_capital for t in closed if t.return_on_capital is not None]
@@ -235,6 +245,12 @@ def calculate_performance_metrics(
         financing_cost_drag=fin_drag,
         transaction_cost_drag=tx_drag,
         cash_yield_return=cash_yield_ret,
+        pure_gross_profit_a=pure_gross_profit_a,
+        total_financing_costs_a=total_financing_costs_a,
+        total_frictions_a=total_frictions_a,
+        total_cash_interest_a=total_cash_interest_a,
+        reconciliation_residual_a=reconciliation_residual_a,
+        reconciliation_exact=reconciliation_exact,
         sharpe_ratio=sharpe,
         sortino_ratio=sortino,
         max_drawdown=mdd,
@@ -251,5 +267,7 @@ def calculate_performance_metrics(
         benchmark_annualized_return=bm_ann,
         benchmark_sharpe_ratio=bm_sharpe,
         alpha=alpha,
+        annualized_excess_return=ann_excess,
+        cumulative_excess_return=cum_excess,
         metric_assumptions=dict(METRIC_ASSUMPTIONS_DOC),
     )
