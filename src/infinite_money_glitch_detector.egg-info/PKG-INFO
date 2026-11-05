@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: infinite-money-glitch-detector
+Version: 0.2.0
+Summary: Macro-financial research platform - Phase 1: math engine; Phase 2: data infrastructure
+Requires-Python: >=3.11
+Requires-Dist: numpy>=1.26
+Requires-Dist: pandas>=2.1
+Requires-Dist: pydantic>=2.6
+Requires-Dist: SQLAlchemy>=2.0
+Requires-Dist: httpx>=0.27
+Requires-Dist: psycopg2-binary>=2.9
+Requires-Dist: alembic>=1.13
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "infinite-money-glitch-detector"
+version = "0.2.0"
+description = "Macro-financial research platform - Phase 1: math engine; Phase 2: data infrastructure"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pydantic>=2.6",
+    "SQLAlchemy>=2.0",
+    "httpx>=0.27",
+    "psycopg2-binary>=2.9",
+    "alembic>=1.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["core", "models", "simulation", "schemas", "data", "data.adapters", "data.db", "backtesting"]
+py-modules = ["main"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
