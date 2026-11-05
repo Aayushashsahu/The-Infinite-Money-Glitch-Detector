@@ -5,7 +5,7 @@
   "end_date": "2024-12-31",
   "initial_capital_a": 100000.0,
   "strategy_status": "UNEXECUTABLE",
-  "can_simulate": true,
+  "can_simulate": false,
   "is_point_in_time_credible": true,
   "is_economically_representative": false,
   "is_executable_strategy": false,
@@ -39,12 +39,12 @@
   },
   "benchmark": {
     "benchmark_name": "Zero Cash Benchmark (0.0% annual)",
-    "benchmark_total_return": 0.0,
-    "benchmark_annualized_return": 0.0,
+    "benchmark_total_return": null,
+    "benchmark_annualized_return": null,
     "benchmark_sharpe_ratio": null,
-    "alpha": 0.0,
-    "cumulative_excess_return": 0.0,
-    "annualized_excess_return": 0.0
+    "alpha": null,
+    "cumulative_excess_return": null,
+    "annualized_excess_return": null
   },
   "trades": {
     "total_trades": 0,

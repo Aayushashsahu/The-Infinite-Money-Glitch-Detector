@@ -238,7 +238,7 @@ def test_real_market_backtest_execution_and_reconciliation():
             fixed_amount=50_000.0,
             max_active_positions=1,
         ),
-        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.STRICT, allow_synthetic=False),
+        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.ESTIMATED_LAG, allow_synthetic=False),
     )
 
     bt_engine = BacktestEngine(config, obs)

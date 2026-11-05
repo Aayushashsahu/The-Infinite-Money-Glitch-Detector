@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 3.2.2 — Integration Integrity & Reproducibility Closure ✅
+## Status: Phase 3.2.2.1 — Database Round-Trip, Strict PIT & Execution Consistency Patch ✅
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -18,9 +18,11 @@ opportunities**, not to assume profit.
 - **Phase 3.2 (Real Market Data Validation 2020-2024):** Complete (149 tests).
 - **Phase 3.2.1 (Quantitative Integrity & PIT Audit):** Complete (158 passed tests).
 - **Phase 3.2.2 (Integration Integrity & Reproducibility Closure):** Complete (170 passed tests).
+- **Phase 3.2.2.1 (Database Round-Trip, Strict PIT & Execution Patch):** Complete (182 passed tests).
 
-See [`PHASE_3_2_2_INTEGRATION_INTEGRITY_REPORT.md`](PHASE_3_2_2_INTEGRATION_INTEGRITY_REPORT.md) for the complete integration audit, simulation clock chronology, byte-stable archive manifest, and 5-scenario reproduction matrix.
-See [`PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md`](PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md) for the previous quantitative audit and exact cash flow ledger proofs.
+See [`PHASE_3_2_2_1_DATABASE_PIT_CLOSURE_REPORT.md`](PHASE_3_2_2_1_DATABASE_PIT_CLOSURE_REPORT.md) for the complete database round-trip audit, strict PIT datetime verification, T+2 business-day settlement, and updated 5-configuration reproduction matrix.
+See [`PHASE_3_2_2_INTEGRATION_INTEGRITY_REPORT.md`](PHASE_3_2_2_INTEGRATION_INTEGRITY_REPORT.md) for the previous integration report and byte-stable archive manifest.
+See [`PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md`](PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md) for the quantitative audit and exact cash flow ledger proofs.
 See [`PHASE_3_2_REAL_DATA_VALIDATION.md`](PHASE_3_2_REAL_DATA_VALIDATION.md) for the preserved historical baseline.
 
 ### What Phase 2 guarantees

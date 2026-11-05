@@ -289,7 +289,14 @@ class Repository:
 
         with self._session() as session:
             rows = session.scalars(stmt).all()
-            from data.schemas import DataClassification, Frequency, ObservationKind, QualityFlag
+            from data.schemas import (
+                AvailabilityEvidence,
+                DataClassification,
+                Frequency,
+                ObservationKind,
+                QualityFlag,
+                RateRole,
+            )
             obs_list: list[ObsSchema] = []
             for r in rows:
                 cls_str = getattr(r, "classification", "real_verified")
@@ -297,6 +304,23 @@ class Repository:
                     cls_enum = DataClassification(cls_str)
                 except ValueError:
                     cls_enum = DataClassification.REAL_VERIFIED
+
+                ev_str = getattr(r, "availability_evidence", None)
+                ev_enum = None
+                if ev_str:
+                    try:
+                        ev_enum = AvailabilityEvidence(ev_str)
+                    except ValueError:
+                        ev_enum = None
+
+                rr_str = getattr(r, "rate_role", None)
+                rr_enum = None
+                if rr_str:
+                    try:
+                        rr_enum = RateRole(rr_str)
+                    except ValueError:
+                        rr_enum = None
+
                 obs_list.append(
                     ObsSchema(
                         kind=ObservationKind(r.kind),
@@ -308,10 +332,15 @@ class Repository:
                         frequency=Frequency(r.frequency),
                         observation_date=r.observation_date,
                         publication_date=r.publication_date,
+                        observation_timestamp=getattr(r, "observation_timestamp", None),
+                        publication_timestamp=getattr(r, "publication_timestamp", None),
+                        effective_timestamp=getattr(r, "effective_timestamp", None),
                         retrieved_at=r.retrieved_at,
                         revision=r.revision,
                         is_synthetic=r.is_synthetic,
                         classification=cls_enum,
+                        availability_evidence=ev_enum,
+                        rate_role=rr_enum,
                         quality_flags=[QualityFlag(f) for f in (r.quality_flags or []) if f in QualityFlag._value2member_map_],
                         metadata=r.extra_metadata,
                     )

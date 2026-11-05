@@ -109,7 +109,7 @@ def run_experiments():
         investment_rate_series_id="DGS3MO",
         execution_config=exec_config,
         position_sizing=sizing_config,
-        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.RESEARCH_ONLY, allow_synthetic=False),
+        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.ESTIMATED_LAG, allow_synthetic=False),
         benchmark_spec=BenchmarkSpecification(
             benchmark_type=BenchmarkType.FIXED_HYPOTHETICAL_PROXY,
             fixed_rate_annual=0.015,
@@ -138,7 +138,7 @@ def run_experiments():
         require_commercial_rates=False,
         execution_config=exec_config,
         position_sizing=sizing_config,
-        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.RESEARCH_ONLY, allow_synthetic=False),
+        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.ESTIMATED_LAG, allow_synthetic=False),
         benchmark_spec=BenchmarkSpecification(
             benchmark_type=BenchmarkType.HISTORICAL_RISK_FREE,
             series_id="DGS3MO",
@@ -166,7 +166,7 @@ def run_experiments():
         investment_rate_series_id="DGS3MO",
         execution_config=exec_config,
         position_sizing=sizing_config,
-        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.RESEARCH_ONLY, allow_synthetic=False),
+        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.ESTIMATED_LAG, allow_synthetic=False),
         benchmark_spec=BenchmarkSpecification(benchmark_type=BenchmarkType.ZERO_CASH, name="Zero Cash Benchmark (0.0%)"),
     )
     res_4 = BacktestEngine(cfg_4, all_obs).run()

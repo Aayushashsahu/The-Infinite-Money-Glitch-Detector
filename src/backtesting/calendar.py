@@ -112,6 +112,23 @@ class MarketCalendar:
             curr += timedelta(days=1)
         return count
 
+    def add_trading_days(self, d: date, n: int) -> date:
+        """Advance (or regress if n < 0) date d by n active trading days.
+
+        For example, advancing Thursday by 2 trading days yields Monday (Friday is 1,
+        Saturday/Sunday skipped, Monday is 2).
+        """
+        if n == 0:
+            return d
+        step = 1 if n > 0 else -1
+        remaining = abs(n)
+        curr = d
+        while remaining > 0:
+            curr += timedelta(days=step)
+            if self.is_trading_day(curr):
+                remaining -= 1
+        return curr
+
 
 # Global default instance
 DEFAULT_FX_CALENDAR = MarketCalendar()

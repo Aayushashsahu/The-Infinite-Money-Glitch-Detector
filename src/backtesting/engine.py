@@ -129,6 +129,29 @@ class BacktestEngine:
                 )
                 self._audit_trail.append(f"EXECUTION REJECTED: {unsupported_reason}")
 
+        # Check dataset feasibility: dataset must contain observations and spot exchange rates for the pair
+        if len(self.observations) == 0:
+            can_simulate = False
+            is_executable = False
+            strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+            unsupported_reason = f"No historical market observations provided for backtest {pair_code}."
+            self._audit_trail.append(f"EXECUTION REJECTED: {unsupported_reason}")
+        else:
+            inv_code = None
+            if "/" in pair_code:
+                b, q = pair_code.split("/", 1)
+                inv_code = f"{q}/{b}"
+            has_pair_data = any(
+                obs.kind == ObservationKind.EXCHANGE_RATE and (obs.entity_code == pair_code or obs.entity_code == inv_code)
+                for obs in self.observations
+            )
+            if not has_pair_data:
+                can_simulate = False
+                is_executable = False
+                strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
+                unsupported_reason = f"Unsupported currency pair {pair_code}: no spot exchange rate observations available in dataset."
+                self._audit_trail.append(f"EXECUTION REJECTED: {unsupported_reason}")
+
         # Chronological daily simulation loop
         current_date = self.config.start_date
         next_rebalance_date = current_date
@@ -140,7 +163,7 @@ class BacktestEngine:
         bm_investment_rates: list[float] = []
         bm_spot_rates: list[float] = []
 
-        while current_date <= self.config.end_date:
+        while can_simulate and current_date <= self.config.end_date:
             # Check FX calendar for active trading day
             from backtesting.calendar import DEFAULT_FX_CALENDAR
             is_active_trading_day = DEFAULT_FX_CALENDAR.is_trading_day(current_date)
@@ -286,7 +309,19 @@ class BacktestEngine:
                         else:
                             exec_ts = signal_timestamp + timedelta(minutes=self.config.execution_delay_minutes)
                             trade_entry_date = current_date
-                        settle_ts = exec_ts + timedelta(days=2)
+
+                        # Obtain eligible price associated with execution time or next session open
+                        exec_spot = self.data_store.get_rate(pair_code, as_of=exec_ts)
+                        if exec_spot is not None:
+                            spot_entry = exec_spot
+                            price_source = "execution_timestamp_market"
+                        else:
+                            spot_entry = signal.spot_rate
+                            price_source = "signal_time_research_proxy"
+
+                        # T+2 FX settlement strictly on business/trading days
+                        settle_date = DEFAULT_FX_CALENDAR.add_trading_days(trade_entry_date, 2)
+                        settle_ts = datetime(settle_date.year, settle_date.month, settle_date.day, exec_ts.hour, exec_ts.minute, tzinfo=timezone.utc)
 
                         trade_rec = self.execution_engine.open_trade(
                             trade_id=trade_id,
@@ -297,7 +332,7 @@ class BacktestEngine:
                             principal_borrowed_a=sizing.allocated_amount_a,
                             borrowing_rate=signal.borrowing_rate,
                             investment_rate=signal.investment_rate,
-                            spot_mid_entry=signal.spot_rate,
+                            spot_mid_entry=spot_entry,
                             forward_mid=signal.forward_rate,
                             is_covered=is_covered_strategy,
                             is_verified_availability=(
@@ -308,6 +343,10 @@ class BacktestEngine:
                             execution_timestamp=exec_ts,
                             settlement_timestamp=settle_ts,
                         )
+                        if trade_rec.metadata is None:
+                            trade_rec.metadata = {}
+                        trade_rec.metadata["price_source"] = price_source
+                        trade_rec.metadata["settlement_convention"] = "T+2_business_days"
                         if self.portfolio.register_open_trade(trade_rec):
                             self._audit_trail.append(
                                 f"Trade {trade_id} OPENED on {trade_entry_date} (exec {exec_ts.isoformat()}): "
@@ -464,6 +503,14 @@ class BacktestEngine:
         elif is_covered_strategy and forward_sample is None:
             strategy_status = StrategyExecutabilityStatus.UNEXECUTABLE
 
+        # If any trade used signal_time_research_proxy, downgrade EXECUTABLE_VALIDATED to RESEARCH_PROXY
+        if any(t.metadata.get("price_source") == "signal_time_research_proxy" for t in self.portfolio.closed_trades):
+            if strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED:
+                strategy_status = StrategyExecutabilityStatus.RESEARCH_PROXY
+                self._audit_trail.append(
+                    "RESEARCH PROXY: Daily fixing rate proxy used for execution timing. Classified as RESEARCH_PROXY."
+                )
+
         # Enforce executability boolean:
         # If strategy_status is not EXECUTABLE_VALIDATED, is_executable MUST be False!
         if strategy_status in (
@@ -474,7 +521,7 @@ class BacktestEngine:
         ):
             is_executable = False
 
-        can_sim = True
+        can_sim = can_simulate and (strategy_status != StrategyExecutabilityStatus.UNEXECUTABLE) and len(self.observations) > 0
         is_pit = (self.config.availability_config.policy != AvailabilityPolicy.RESEARCH_ONLY)
         is_econ = (strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED)
 

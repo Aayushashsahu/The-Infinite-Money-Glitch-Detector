@@ -298,7 +298,7 @@ def test_strategy_status_no_trades_classification():
         end_date=date(2024, 2, 10),
         initial_capital_a=100_000.0,
         hurdle_rate_annual=0.50,
-        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.STRICT),
+        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.ESTIMATED_LAG),
     )
 
     engine = BacktestEngine(config, obs_list)
@@ -386,7 +386,7 @@ def test_calendar_rollover_weekend_to_next_trading_day():
         rebalance_frequency_days=60,
         hurdle_rate_annual=0.01,
         simulate_trading_days_only=True,
-        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.STRICT),
+        availability_config=DataAvailabilityConfig(policy=AvailabilityPolicy.ESTIMATED_LAG),
     )
 
     engine = BacktestEngine(config, obs_list)

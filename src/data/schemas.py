@@ -308,6 +308,13 @@ class DataObservation(BaseModel):
         if self.publication_date is None and self.publication_timestamp is not None:
             self.publication_date = self.publication_timestamp.date()
 
+        # Invariant: publication_timestamp required for EXACT_TIMESTAMP_VERIFIED
+        if self.publication_timestamp is None and self.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED:
+            self.availability_evidence = AvailabilityEvidence.ESTIMATED_SCHEDULE
+            meta = dict(self.metadata) if self.metadata else {}
+            meta["downgraded_evidence"] = "exact_timestamp_requires_publication_timestamp"
+            self.metadata = meta
+
         # Invariant: explicit classifications cannot contradict availability evidence silently
         if self.classification == DataClassification.REAL_RETROSPECTIVE and self.availability_evidence in (
             AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
@@ -336,13 +343,15 @@ class DataObservation(BaseModel):
         elif self.classification in (DataClassification.SYNTHETIC, DataClassification.MOCK):
             self.is_synthetic = True
 
-        if self.availability_evidence is None:
-            if self.is_synthetic:
-                self.availability_evidence = None
-            elif self.classification == DataClassification.REAL_RETROSPECTIVE:
+        if self.is_synthetic:
+            self.availability_evidence = None
+        elif self.availability_evidence is None:
+            if self.classification == DataClassification.REAL_RETROSPECTIVE:
                 self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
-            elif self.publication_timestamp is not None or self.publication_date is not None:
+            elif self.publication_timestamp is not None:
                 self.availability_evidence = AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED
+            elif self.publication_date is not None:
+                self.availability_evidence = AvailabilityEvidence.ESTIMATED_SCHEDULE
             else:
                 self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
         return self
