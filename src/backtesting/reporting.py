@@ -54,10 +54,20 @@ def export_backtest_result_json(result: BacktestResult, output_path: str | Path 
         "attribution": {
             "pure_gross_profit_a": m.pure_gross_profit_a,
             "gross_trade_return": m.gross_trade_return,
+            "fx_translation_gain_a": m.fx_translation_gain_a,
+            "pure_fx_return": m.pure_fx_return,
+            "investment_yield_gain_a": m.investment_yield_gain_a,
+            "investment_yield_return": m.investment_yield_return,
             "total_financing_costs_a": m.total_financing_costs_a,
             "financing_cost_drag": m.financing_cost_drag,
             "total_frictions_a": m.total_frictions_a,
             "transaction_cost_drag": m.transaction_cost_drag,
+            "observed_spread_cost_a": m.observed_spread_cost_a,
+            "observed_spread_drag": m.observed_spread_drag,
+            "modelled_spread_cost_a": m.modelled_spread_cost_a,
+            "modelled_spread_drag": m.modelled_spread_drag,
+            "slippage_cost_a": m.slippage_cost_a,
+            "slippage_drag": m.slippage_drag,
             "total_cash_interest_a": m.total_cash_interest_a,
             "cash_yield_return": m.cash_yield_return,
             "reconciliation_residual_a": m.reconciliation_residual_a,
@@ -145,10 +155,20 @@ def format_backtest_report(result: BacktestResult) -> str:
     lines.append("| :--- | :--- | :--- | :--- |")
     gross_str = f"{m.gross_trade_return:+.4%}" if m.gross_trade_return is not None else "N/A"
     lines.append(f"| **Pure Gross Gain** | `{m.pure_gross_profit_a:+,.2f} {pair.borrowing_currency}` | `{gross_str}` | Asset appreciation & interest before financing & fees |")
+    fx_str = f"{m.pure_fx_return:+.4%}" if m.pure_fx_return is not None else "N/A"
+    lines.append(f"|   ├── *Pure FX Movement* | `{m.fx_translation_gain_a:+,.2f} {pair.borrowing_currency}` | `{fx_str}` | FX spot price change on invested capital |")
+    yd_str = f"{m.investment_yield_return:+.4%}" if m.investment_yield_return is not None else "N/A"
+    lines.append(f"|   └── *Investment Asset Yield* | `{m.investment_yield_gain_a:+,.2f} {pair.borrowing_currency}` | `{yd_str}` | Interest accrued on investment asset |")
     fin_str = f"{-m.financing_cost_drag:+.4%}" if m.financing_cost_drag is not None else "N/A"
     lines.append(f"| **Debt Financing Costs** | `{-m.total_financing_costs_a:,.2f} {pair.borrowing_currency}` | `{fin_str}` | Interest paid on borrowed liabilities |")
     tx_str = f"{-m.transaction_cost_drag:+.4%}" if m.transaction_cost_drag is not None else "N/A"
     lines.append(f"| **Execution Frictions Drag** | `{-m.total_frictions_a:,.2f} {pair.borrowing_currency}` | `{tx_str}` | Total bid/ask spread, slippage, and ticket fees |")
+    obs_sp_str = f"{-m.observed_spread_drag:+.4%}" if m.observed_spread_drag is not None else "N/A"
+    lines.append(f"|   ├── *Observed Spread Cost* | `{-m.observed_spread_cost_a:,.2f} {pair.borrowing_currency}` | `{obs_sp_str}` | Market bid/ask spread paid |")
+    mod_sp_str = f"{-m.modelled_spread_drag:+.4%}" if m.modelled_spread_drag is not None else "N/A"
+    lines.append(f"|   ├── *Modelled Spread Cost* | `{-m.modelled_spread_cost_a:,.2f} {pair.borrowing_currency}` | `{mod_sp_str}` | Synthetic parameter spread paid |")
+    slip_str = f"{-m.slippage_drag:+.4%}" if m.slippage_drag is not None else "N/A"
+    lines.append(f"|   └── *Execution Slippage* | `{-m.slippage_cost_a:,.2f} {pair.borrowing_currency}` | `{slip_str}` | Execution timing slippage |")
     cash_str = f"{m.cash_yield_return:+.4%}" if m.cash_yield_return is not None else "N/A"
     lines.append(f"| **Cash Yield on Unallocated Balances** | `{m.total_cash_interest_a:+,.2f} {pair.borrowing_currency}` | `{cash_str}` | Interest earned on cash balances |")
     lines.append(f"| **Reconciled Net Profit** | `**{m.cumulative_net_profit:+,.2f} {pair.borrowing_currency}**` | `**{m.total_return:+.4%}**` | Gross Gain - Financing - Fees + Cash Yield |")

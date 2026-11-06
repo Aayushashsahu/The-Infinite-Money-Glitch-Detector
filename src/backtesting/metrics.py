@@ -209,6 +209,13 @@ def calculate_performance_metrics(
     total_frictions_a = sum((t.total_frictions_a or 0.0) for t in closed)
     total_cash_interest_a = cash_interest_earned
 
+    # Itemized spread, slippage, and gain decomposition
+    observed_spread_cost_a = sum((t.observed_spread_cost_a or 0.0) for t in closed)
+    modelled_spread_cost_a = sum((t.modelled_spread_cost_a or 0.0) for t in closed)
+    slippage_cost_a = sum((t.slippage_cost_a or 0.0) for t in closed)
+    fx_translation_gain_a = sum((t.fx_translation_gain_a or 0.0) for t in closed)
+    investment_yield_gain_a = sum((t.investment_yield_gain_a or 0.0) for t in closed)
+
     reconciliation_residual_a = abs(
         cum_net_profit - (pure_gross_profit_a - total_financing_costs_a - total_frictions_a + total_cash_interest_a)
     )
@@ -218,6 +225,12 @@ def calculate_performance_metrics(
     fin_drag = total_financing_costs_a / initial_capital_a if initial_capital_a > 0 else 0.0
     tx_drag = total_frictions_a / initial_capital_a if initial_capital_a > 0 else 0.0
     cash_yield_ret = total_cash_interest_a / initial_capital_a if initial_capital_a > 0 else 0.0
+
+    observed_spread_drag = observed_spread_cost_a / initial_capital_a if initial_capital_a > 0 else 0.0
+    modelled_spread_drag = modelled_spread_cost_a / initial_capital_a if initial_capital_a > 0 else 0.0
+    slippage_drag = slippage_cost_a / initial_capital_a if initial_capital_a > 0 else 0.0
+    pure_fx_return = fx_translation_gain_a / initial_capital_a if initial_capital_a > 0 else 0.0
+    investment_yield_return = investment_yield_gain_a / initial_capital_a if initial_capital_a > 0 else 0.0
 
     # Benchmark excess returns
     ann_excess = (ann_return - bm_ann) if bm_ann is not None else None
@@ -249,6 +262,16 @@ def calculate_performance_metrics(
         total_financing_costs_a=total_financing_costs_a,
         total_frictions_a=total_frictions_a,
         total_cash_interest_a=total_cash_interest_a,
+        observed_spread_cost_a=observed_spread_cost_a,
+        modelled_spread_cost_a=modelled_spread_cost_a,
+        slippage_cost_a=slippage_cost_a,
+        fx_translation_gain_a=fx_translation_gain_a,
+        investment_yield_gain_a=investment_yield_gain_a,
+        observed_spread_drag=observed_spread_drag,
+        modelled_spread_drag=modelled_spread_drag,
+        slippage_drag=slippage_drag,
+        pure_fx_return=pure_fx_return,
+        investment_yield_return=investment_yield_return,
         reconciliation_residual_a=reconciliation_residual_a,
         reconciliation_exact=reconciliation_exact,
         sharpe_ratio=sharpe,

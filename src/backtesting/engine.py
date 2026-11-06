@@ -189,7 +189,12 @@ class BacktestEngine:
             )
 
             # Point-in-time market quote retrieval using timestamp
-            spot_mid = self.data_store.get_rate(pair_code, as_of=signal_timestamp)
+            spot_mid = self.data_store.get_rate(
+                pair_code,
+                as_of=signal_timestamp,
+                borrowing_currency=pair.borrowing_currency,
+                investment_currency=pair.investment_currency,
+            )
             record_borrow = self.data_store.get_record(
                 ObservationKind.INTEREST_RATE,
                 pair.borrowing_currency,
@@ -255,8 +260,13 @@ class BacktestEngine:
                     exit_quote = self.data_store.get_executable_quote(
                         pair_code,
                         as_of=exit_exec_ts,
+                        borrowing_currency=pair.borrowing_currency,
+                        investment_currency=pair.investment_currency,
                         max_quote_age_minutes=self.config.execution_config.max_quote_age_minutes,
                         allow_reference_rate_proxy=self.config.execution_config.allow_reference_rate_proxy,
+                        use_observed_spread=self.config.execution_config.use_observed_spread,
+                        max_one_sided_quote_time_diff_seconds=self.config.execution_config.max_one_sided_quote_time_diff_seconds,
+                        required_side="bid",
                     )
                     if exit_quote is None:
                         self._rejections.append({
@@ -270,7 +280,8 @@ class BacktestEngine:
                     closed_trade = self.execution_engine.close_trade(
                         trade=trade,
                         exit_date=current_date,
-                        spot_mid_exit=exit_quote.mid,
+                        spot_mid_exit=exit_quote.rate_a_per_b,
+                        exec_quote=exit_quote,
                         exit_signal_timestamp=exit_sig_ts,
                         exit_order_submission_timestamp=exit_order_sub_ts,
                         exit_execution_timestamp=exit_exec_ts,
@@ -285,8 +296,14 @@ class BacktestEngine:
                     )
 
             # 3. Mark to market snapshot using reference rate
-            ref_val = self.data_store.get_reference_rate(pair_code, as_of=signal_timestamp, allow_stale=True)
-            current_rates = {pair_code: ref_val.rate} if ref_val else ({pair_code: spot_mid} if spot_mid else {})
+            ref_val = self.data_store.get_reference_rate(
+                pair_code,
+                as_of=signal_timestamp,
+                borrowing_currency=pair.borrowing_currency,
+                investment_currency=pair.investment_currency,
+                allow_stale=True,
+            )
+            current_rates = {pair_code: ref_val.rate_a_per_b} if ref_val else ({pair_code: spot_mid} if spot_mid else {})
             self.portfolio.snapshot(as_of=current_date, current_spot_rates=current_rates)
 
             # 4. Signal generation & entry on rebalance schedule
@@ -332,8 +349,13 @@ class BacktestEngine:
                         exec_quote = self.data_store.get_executable_quote(
                             pair_code,
                             as_of=exec_ts,
+                            borrowing_currency=pair.borrowing_currency,
+                            investment_currency=pair.investment_currency,
                             max_quote_age_minutes=self.config.execution_config.max_quote_age_minutes,
                             allow_reference_rate_proxy=self.config.execution_config.allow_reference_rate_proxy,
+                            use_observed_spread=self.config.execution_config.use_observed_spread,
+                            max_one_sided_quote_time_diff_seconds=self.config.execution_config.max_one_sided_quote_time_diff_seconds,
+                            required_side="ask",
                         )
                         if exec_quote is None:
                             self._rejections.append({
@@ -342,10 +364,10 @@ class BacktestEngine:
                                 "reason": f"No valid executable quote for {pair_code} at {exec_ts.isoformat()} (max_age={self.config.execution_config.max_quote_age_minutes}m, proxy={self.config.execution_config.allow_reference_rate_proxy})",
                             })
                         else:
-                            spot_entry = exec_quote.mid
+                            spot_entry = exec_quote.rate_a_per_b
                             meta_price_source = "execution_timestamp_market"
                             quote_source_desc = f"{exec_quote.data_source}_{exec_quote.price_type.value}"
-                            if exec_quote.price_type == PriceType.REFERENCE_RATE:
+                            if exec_quote.price_type == PriceType.REFERENCE_RATE or not exec_quote.is_executable:
                                 if not self.config.availability_config.allow_synthetic and strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED:
                                     strategy_status = StrategyExecutabilityStatus.RESEARCH_PROXY
 
@@ -362,6 +384,7 @@ class BacktestEngine:
                                 borrowing_rate=signal.borrowing_rate,
                                 investment_rate=signal.investment_rate,
                                 spot_mid_entry=spot_entry,
+                                exec_quote=exec_quote,
                                 forward_mid=signal.forward_rate,
                                 is_covered=is_covered_strategy,
                                 is_verified_availability=(
@@ -478,6 +501,8 @@ class BacktestEngine:
                 elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_RISK_FREE:
                     rf_rates: list[float] = []
                     is_missing = False
+                    stale_count = 0
+                    max_stale = self.config.execution_config.max_benchmark_stale_days
                     for d in bm_dates:
                         ts = datetime(d.year, d.month, d.day, self.config.signal_time_utc[0], self.config.signal_time_utc[1], tzinfo=timezone.utc)
                         r = self.data_store.get_interest_rate(
@@ -488,8 +513,10 @@ class BacktestEngine:
                         )
                         if r is not None:
                             rf_rates.append(r)
-                        elif rf_rates:
+                            stale_count = 0
+                        elif rf_rates and stale_count < max_stale:
                             rf_rates.append(rf_rates[-1])
+                            stale_count += 1
                         else:
                             is_missing = True
                             break
@@ -497,7 +524,7 @@ class BacktestEngine:
                         benchmark_series = None
                         self._audit_trail.append(
                             f"BENCHMARK UNAVAILABLE: Historical risk-free rate series '{bm_spec.series_id or ''}' "
-                            f"missing for borrowing currency {pair.borrowing_currency}."
+                            f"missing or stale (> {max_stale} days) for borrowing currency {pair.borrowing_currency}."
                         )
                     else:
                         benchmark_series = compute_borrowing_currency_benchmark(
@@ -508,6 +535,8 @@ class BacktestEngine:
                 elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_DEPOSIT:
                     dep_rates: list[float] = []
                     is_missing = False
+                    stale_count = 0
+                    max_stale = self.config.execution_config.max_benchmark_stale_days
                     for d in bm_dates:
                         ts = datetime(d.year, d.month, d.day, self.config.signal_time_utc[0], self.config.signal_time_utc[1], tzinfo=timezone.utc)
                         r = self.data_store.get_interest_rate(
@@ -517,15 +546,17 @@ class BacktestEngine:
                         )
                         if r is not None:
                             dep_rates.append(r)
-                        elif dep_rates:
+                            stale_count = 0
+                        elif dep_rates and stale_count < max_stale:
                             dep_rates.append(dep_rates[-1])
+                            stale_count += 1
                         else:
                             is_missing = True
                             break
                     if is_missing or not dep_rates:
                         benchmark_series = None
                         self._audit_trail.append(
-                            f"BENCHMARK UNAVAILABLE: Historical deposit rate series missing for borrowing currency {pair.borrowing_currency}."
+                            f"BENCHMARK UNAVAILABLE: Historical deposit rate series missing or stale (> {max_stale} days) for borrowing currency {pair.borrowing_currency}."
                         )
                     else:
                         benchmark_series = compute_borrowing_currency_benchmark(
@@ -545,8 +576,13 @@ class BacktestEngine:
             risk_free_ref = bm_spec.fixed_rate_annual or self.config.cash_deposit_rate_annual
         elif bm_spec and bm_spec.benchmark_type == BenchmarkType.ZERO_CASH:
             risk_free_ref = 0.0
-        elif bm_borrowing_rates:
-            risk_free_ref = bm_borrowing_rates[-1]
+        elif bm_spec and bm_spec.benchmark_type == BenchmarkType.HISTORICAL_RISK_FREE and benchmark_series is not None and rf_rates:
+            risk_free_ref = rf_rates[-1]
+        elif bm_spec and bm_spec.benchmark_type == BenchmarkType.HISTORICAL_DEPOSIT and benchmark_series is not None and dep_rates:
+            risk_free_ref = dep_rates[-1]
+        else:
+            # Do not substitute commercial borrowing rate or policy-rate proxy without justification
+            risk_free_ref = 0.0
 
         periods_factor = 252.0 if self.config.simulate_trading_days_only else 365.0
 
@@ -602,8 +638,16 @@ class BacktestEngine:
         # Manifest digest
         manifest_digest: str | None = None
         manifest_file = Path("data/manifest.json")
-        if manifest_file.exists():
-            manifest_digest = hashlib.sha256(manifest_file.read_bytes()).hexdigest()
+        import time
+        for attempt in range(5):
+            try:
+                if manifest_file.exists():
+                    manifest_digest = hashlib.sha256(manifest_file.read_bytes()).hexdigest()
+                break
+            except OSError:
+                if attempt == 4:
+                    break
+                time.sleep(0.2)
 
         # 8. Data Provenance & Traceability Report
         from backtesting.provenance import build_data_provenance_report

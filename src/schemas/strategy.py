@@ -12,7 +12,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from core.currency import validate_currency_code
+from core.currency import QuoteConvention, validate_currency_code
 
 
 class InterestConvention(str, Enum):

@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from core.currency import validate_currency_code
+from core.currency import QuoteConvention, validate_currency_code
 from schemas.strategy import CurrencyPair, InterestConvention
 from data.schemas import Frequency, PriceType, RateRole, StrategyExecutabilityStatus
 
@@ -120,12 +120,16 @@ class ValuationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rate: float
+    rate_a_per_b: float = 1.0
     observation_timestamp: datetime | None = None
     availability_timestamp: datetime | None = None
     age_at_valuation_days: int
     data_source: str
     price_type: PriceType
     pair_code: str
+    base_currency: str = ""
+    quote_currency: str = ""
+    quote_convention: QuoteConvention = QuoteConvention.QUOTE_PER_BASE
 
 
 class ExecutableQuoteResult(BaseModel):
@@ -134,16 +138,23 @@ class ExecutableQuoteResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     pair_code: str
-    bid: float
-    ask: float
-    mid: float
+    bid: float | None = None
+    ask: float | None = None
+    mid: float | None = None
+    rate_a_per_b: float = 1.0
+    bid_a_per_b: float | None = None
+    ask_a_per_b: float | None = None
+    base_currency: str = ""
+    quote_currency: str = ""
+    quote_convention: QuoteConvention = QuoteConvention.QUOTE_PER_BASE
     observation_timestamp: datetime
     availability_timestamp: datetime
     age_minutes: float
     data_source: str
     price_type: PriceType
     is_executable: bool
-    quote_convention: str = "quote_per_base"
+    is_observed_spread: bool = False
+    quote_assembly_method: str = "direct_two_way"
 
 
 class DataAvailabilityConfig(BaseModel):
@@ -218,6 +229,20 @@ class ExecutionConfig(BaseModel):
         default=True,
         description="Allow using daily reference rates as execution proxies for historical research simulations.",
     )
+    use_observed_spread: bool = Field(
+        default=True,
+        description="If True, use genuine market bid/ask quotes directly without adding modelled spread_bps (prevents spread double counting).",
+    )
+    max_one_sided_quote_time_diff_seconds: float = Field(
+        default=60.0,
+        ge=0.0,
+        description="Maximum permissible time difference between separate bid and ask observations when assembling two-way quote.",
+    )
+    max_benchmark_stale_days: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum active trading days benchmark rates may be carried forward before marking benchmark UNAVAILABLE.",
+    )
 
 
 class PositionSizingConfig(BaseModel):
@@ -286,6 +311,8 @@ class TradeRecord(BaseModel):
 
     # Frictions and PnL breakdown
     pure_gross_gain_a: float = 0.0
+    fx_translation_gain_a: float = 0.0
+    investment_yield_gain_a: float = 0.0
     financing_cost_a: float = 0.0
     entry_spread_cost_a: float = 0.0
     entry_slippage_cost_a: float = 0.0
@@ -294,6 +321,9 @@ class TradeRecord(BaseModel):
     exit_slippage_cost_a: float = 0.0
     exit_fees_a: float = 0.0
     fixed_fee_a: float = 0.0
+    observed_spread_cost_a: float = 0.0
+    modelled_spread_cost_a: float = 0.0
+    slippage_cost_a: float = 0.0
     total_frictions_a: float = 0.0
     transaction_costs_a: float = 0.0
     slippage_costs_a: float = 0.0
@@ -301,6 +331,8 @@ class TradeRecord(BaseModel):
     reconciliation_residual_a: float = 0.0
     return_on_capital: float | None = None
     annualized_return: float | None = None
+    is_proxy_execution: bool = False
+    is_proxy_exit: bool = False
 
     # Status and Execution Provenance
     status: TradeStatus = TradeStatus.OPEN
@@ -383,9 +415,19 @@ class PerformanceMetrics(BaseModel):
 
     # Exact double-entry accounting reconciliation
     pure_gross_profit_a: float = 0.0
+    fx_translation_gain_a: float = 0.0
+    investment_yield_gain_a: float = 0.0
     total_financing_costs_a: float = 0.0
     total_frictions_a: float = 0.0
+    observed_spread_cost_a: float = 0.0
+    modelled_spread_cost_a: float = 0.0
+    slippage_cost_a: float = 0.0
     total_cash_interest_a: float = 0.0
+    observed_spread_drag: float | None = 0.0
+    modelled_spread_drag: float | None = 0.0
+    slippage_drag: float | None = 0.0
+    pure_fx_return: float | None = 0.0
+    investment_yield_return: float | None = 0.0
     reconciliation_residual_a: float = 0.0
     reconciliation_exact: bool = True
 

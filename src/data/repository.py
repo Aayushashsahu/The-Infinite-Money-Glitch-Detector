@@ -321,7 +321,7 @@ class Repository:
                     except ValueError:
                         rr_enum = None
 
-                from data.schemas import PriceType
+                from data.schemas import PriceType, QuoteConvention
                 pt_val = getattr(r, "price_type", None) or (r.extra_metadata or {}).get("price_type")
                 pt_enum = None
                 if pt_val:
@@ -329,6 +329,19 @@ class Repository:
                         pt_enum = PriceType(pt_val)
                     except ValueError:
                         pt_enum = None
+
+                qc_val = getattr(r, "quote_convention", None) or (r.extra_metadata or {}).get("quote_convention")
+                qc_enum = None
+                if qc_val:
+                    try:
+                        qc_enum = QuoteConvention(qc_val)
+                    except ValueError:
+                        qc_enum = None
+
+                base_c = getattr(r, "base_currency", None) or (r.extra_metadata or {}).get("base_currency")
+                quote_c = getattr(r, "quote_currency", None) or (r.extra_metadata or {}).get("quote_currency")
+                bid_v = getattr(r, "bid", None) if getattr(r, "bid", None) is not None else (r.extra_metadata or {}).get("bid")
+                ask_v = getattr(r, "ask", None) if getattr(r, "ask", None) is not None else (r.extra_metadata or {}).get("ask")
 
                 obs_list.append(
                     ObsSchema(
@@ -351,6 +364,11 @@ class Repository:
                         availability_evidence=ev_enum,
                         rate_role=rr_enum,
                         price_type=pt_enum,
+                        quote_convention=qc_enum,
+                        base_currency=base_c,
+                        quote_currency=quote_c,
+                        bid=bid_v,
+                        ask=ask_v,
                         quality_flags=[QualityFlag(f) for f in (r.quality_flags or []) if f in QualityFlag._value2member_map_],
                         metadata=r.extra_metadata,
                     )
@@ -502,6 +520,16 @@ def _to_row(obs: ObsSchema) -> ObsRow:
     meta = dict(obs.metadata) if obs.metadata else {}
     if obs.price_type:
         meta["price_type"] = obs.price_type.value
+    if obs.quote_convention:
+        meta["quote_convention"] = obs.quote_convention.value
+    if obs.base_currency:
+        meta["base_currency"] = obs.base_currency
+    if obs.quote_currency:
+        meta["quote_currency"] = obs.quote_currency
+    if obs.bid is not None:
+        meta["bid"] = obs.bid
+    if obs.ask is not None:
+        meta["ask"] = obs.ask
 
     return ObsRow(
         kind=obs.kind.value,

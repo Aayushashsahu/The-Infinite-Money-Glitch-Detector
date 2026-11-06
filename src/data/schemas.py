@@ -198,6 +198,9 @@ class IndicatorInfo(BaseModel):
         return v
 
 
+from core.currency import QuoteConvention
+
+
 class RawRecordInfo(BaseModel):
     """An archived original source payload (raw store, pre-normalization)."""
 
@@ -250,6 +253,11 @@ class DataObservation(BaseModel):
     availability_evidence: AvailabilityEvidence | None = None
     rate_role: RateRole | None = None
     price_type: PriceType | None = None
+    quote_convention: QuoteConvention | None = None
+    base_currency: str | None = None
+    quote_currency: str | None = None
+    bid: float | None = None
+    ask: float | None = None
     metadata: dict[str, Any] | None = None
     quality_flags: list[QualityFlag] = Field(default_factory=list)
 
@@ -364,17 +372,51 @@ class DataObservation(BaseModel):
             else:
                 self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
 
-        # Default price_type for exchange rates
-        if self.kind == ObservationKind.EXCHANGE_RATE and self.price_type is None:
-            if self.metadata and "price_type" in self.metadata:
-                try:
-                    self.price_type = PriceType(self.metadata["price_type"])
-                except ValueError:
+        # Default price_type, quote_convention, and currency pair metadata for exchange rates
+        if self.kind == ObservationKind.EXCHANGE_RATE:
+            if self.base_currency is None or self.quote_currency is None:
+                if "/" in self.entity_code:
+                    b_part, q_part = self.entity_code.split("/", 1)
+                    if self.base_currency is None:
+                        self.base_currency = b_part.upper()
+                    if self.quote_currency is None:
+                        self.quote_currency = q_part.upper()
+
+            if self.quote_convention is None:
+                self.quote_convention = QuoteConvention.QUOTE_PER_BASE
+
+            if self.bid is not None and self.bid <= 0:
+                raise ValueError(f"Bid rate must be strictly positive, got {self.bid}")
+            if self.ask is not None and self.ask <= 0:
+                raise ValueError(f"Ask rate must be strictly positive, got {self.ask}")
+            if self.bid is not None and self.ask is not None and self.bid > self.ask:
+                raise ValueError(f"Crossed quote: bid ({self.bid}) cannot be strictly greater than ask ({self.ask})")
+
+            if self.price_type is None:
+                if self.metadata and "price_type" in self.metadata:
+                    try:
+                        self.price_type = PriceType(self.metadata["price_type"])
+                    except ValueError:
+                        self.price_type = PriceType.REFERENCE_RATE
+                elif self.bid is not None and self.ask is not None:
+                    self.price_type = PriceType.EXECUTABLE_TWO_WAY_QUOTE
+                elif self.bid is not None:
+                    self.price_type = PriceType.BID_QUOTE
+                elif self.ask is not None:
+                    self.price_type = PriceType.ASK_QUOTE
+                elif self.is_synthetic and self.value > 0:
+                    self.price_type = PriceType.EXECUTABLE_TWO_WAY_QUOTE
+                else:
                     self.price_type = PriceType.REFERENCE_RATE
-            elif self.is_synthetic:
-                self.price_type = PriceType.EXECUTABLE_TWO_WAY_QUOTE
-            else:
-                self.price_type = PriceType.REFERENCE_RATE
+
+            if self.price_type in (PriceType.EXECUTABLE_TWO_WAY_QUOTE, PriceType.BID_QUOTE, PriceType.ASK_QUOTE) and self.value <= 0:
+                raise ValueError(f"Executable quote value must be strictly positive, got {self.value}")
+
+            if self.price_type == PriceType.EXECUTABLE_TWO_WAY_QUOTE and not self.is_synthetic:
+                if self.bid is None or self.ask is None:
+                    raise ValueError(
+                        f"EXECUTABLE_TWO_WAY_QUOTE requires valid bid and ask values, got bid={self.bid}, ask={self.ask}."
+                    )
         return self
 
 

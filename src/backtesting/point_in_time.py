@@ -27,6 +27,7 @@ from typing import Any, Sequence
 
 import pandas as pd
 
+from core.currency import QuoteConvention, get_rate_a_per_b, get_two_way_quote_a_per_b, invert_two_way_quote
 from data.schemas import AvailabilityEvidence, DataObservation, Frequency, ObservationKind, PriceType, RateRole
 from schemas.backtest import (
     AvailabilityPolicy,
@@ -418,9 +419,16 @@ class PointInTimeDataStore:
         self,
         pair_code: str,
         as_of: date | datetime,
+        borrowing_currency: str | None = None,
+        investment_currency: str | None = None,
         allow_stale: bool = False,
     ) -> float | None:
-        """Retrieve executable spot exchange rate for pair_code as of date/datetime."""
+        """Retrieve spot exchange rate for pair_code as of date/datetime.
+
+        If borrowing_currency and investment_currency are specified, returns the canonical
+        rate_a_per_b (units of borrowing currency A per 1 unit of investment currency B).
+        Otherwise returns the raw observation value (or reciprocal if inverted pair).
+        """
         candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, pair_code)
         record = self.firewall.get_latest_observation(
             candidates,
@@ -443,9 +451,35 @@ class PointInTimeDataStore:
                         allow_stale=allow_stale,
                     )
                     if inv_rec is not None and inv_rec.observation.value > 0:
-                        return 1.0 / inv_rec.observation.value
+                        obs = inv_rec.observation
+                        if borrowing_currency and investment_currency:
+                            return get_rate_a_per_b(
+                                value=obs.value,
+                                obs_base=obs.base_currency or q,
+                                obs_quote=obs.quote_currency or b,
+                                borrowing_currency=borrowing_currency,
+                                investment_currency=investment_currency,
+                                convention=obs.quote_convention or QuoteConvention.QUOTE_PER_BASE,
+                            )
+                        return 1.0 / obs.value
             return None
-        return record.observation.value
+
+        obs = record.observation
+        if borrowing_currency and investment_currency:
+            b_curr = obs.base_currency
+            q_curr = obs.quote_currency
+            if not b_curr or not q_curr:
+                if "/" in pair_code:
+                    b_curr, q_curr = pair_code.split("/", 1)
+            return get_rate_a_per_b(
+                value=obs.value,
+                obs_base=b_curr or "",
+                obs_quote=q_curr or "",
+                borrowing_currency=borrowing_currency,
+                investment_currency=investment_currency,
+                convention=obs.quote_convention or QuoteConvention.QUOTE_PER_BASE,
+            )
+        return obs.value
 
     def get_forward_rate(
         self,
@@ -523,9 +557,17 @@ class PointInTimeDataStore:
         self,
         pair_code: str,
         as_of: date | datetime,
+        borrowing_currency: str | None = None,
+        investment_currency: str | None = None,
         allow_stale: bool = False,
     ) -> ValuationResult | None:
-        """Retrieve reference rate for mark-to-market valuation with age and price_type metadata."""
+        """Retrieve reference rate for mark-to-market valuation with age, convention, and price_type metadata."""
+        if not borrowing_currency or not investment_currency:
+            if "/" in pair_code:
+                c_a, c_b = pair_code.split("/", 1)
+                borrowing_currency = borrowing_currency or c_a
+                investment_currency = investment_currency or c_b
+
         candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, pair_code)
         record = self.firewall.get_latest_observation(
             candidates,
@@ -552,192 +594,478 @@ class PointInTimeDataStore:
                         obs = inv_rec.observation
                         pt = obs.price_type or PriceType.REFERENCE_RATE
                         val = 1.0 / obs.value
+                        obs_b = obs.base_currency or q
+                        obs_q = obs.quote_currency or b
+                        conv = obs.quote_convention or QuoteConvention.QUOTE_PER_BASE
+                        rate_a_b = val
+                        if borrowing_currency and investment_currency:
+                            rate_a_b = get_rate_a_per_b(
+                                value=obs.value,
+                                obs_base=obs_b,
+                                obs_quote=obs_q,
+                                borrowing_currency=borrowing_currency,
+                                investment_currency=investment_currency,
+                                convention=conv,
+                            )
                         return ValuationResult(
                             rate=val,
+                            rate_a_per_b=rate_a_b,
                             observation_timestamp=obs.observation_timestamp,
                             availability_timestamp=inv_rec.availability_timestamp,
                             age_at_valuation_days=inv_rec.stale_days,
                             data_source=obs.source_id,
                             price_type=pt,
                             pair_code=pair_code,
+                            base_currency=obs_b,
+                            quote_currency=obs_q,
+                            quote_convention=conv,
                         )
             return None
 
         obs = record.observation
         pt = obs.price_type or PriceType.REFERENCE_RATE
+        obs_b = obs.base_currency or (pair_code.split("/")[0] if "/" in pair_code else "")
+        obs_q = obs.quote_currency or (pair_code.split("/")[1] if "/" in pair_code else "")
+        conv = obs.quote_convention or QuoteConvention.QUOTE_PER_BASE
+        rate_a_b = obs.value
+        if borrowing_currency and investment_currency:
+            rate_a_b = get_rate_a_per_b(
+                value=obs.value,
+                obs_base=obs_b,
+                obs_quote=obs_q,
+                borrowing_currency=borrowing_currency,
+                investment_currency=investment_currency,
+                convention=conv,
+            )
         return ValuationResult(
             rate=obs.value,
+            rate_a_per_b=rate_a_b,
             observation_timestamp=obs.observation_timestamp,
             availability_timestamp=record.availability_timestamp,
             age_at_valuation_days=record.stale_days,
             data_source=obs.source_id,
             price_type=pt,
             pair_code=pair_code,
+            base_currency=obs_b,
+            quote_currency=obs_q,
+            quote_convention=conv,
         )
 
     def get_executable_quote(
         self,
         pair_code: str,
         as_of: datetime,
+        borrowing_currency: str | None = None,
+        investment_currency: str | None = None,
         max_quote_age_minutes: float = 1440.0,
         allow_reference_rate_proxy: bool = False,
+        use_observed_spread: bool = True,
+        max_one_sided_quote_time_diff_seconds: float = 60.0,
+        required_side: str | None = None,
     ) -> ExecutableQuoteResult | None:
         """Retrieve executable market quote with bid/ask prices and freshness validation.
 
-        If allow_reference_rate_proxy is False:
-            Only genuine quotes (price_type in (BID_QUOTE, ASK_QUOTE, EXECUTABLE_TWO_WAY_QUOTE)) are eligible.
-            If none exist, returns None.
-        If allow_reference_rate_proxy is True:
-            Reference rates / mid-market observations are accepted as research proxies.
+        Enforces:
+        - Actual observation timestamp requirement (no midnight fallback for real market data).
+        - Price positivity and bid <= ask validation.
+        - Two-way quotes vs assembled one-sided quotes vs standalone one-sided quotes.
+        - Direct and reciprocal freshness symmetry.
+        - Canonical rate_a_per_b, bid_a_per_b, and ask_a_per_b resolution.
         """
         as_of_d, as_of_dt = _parse_as_of(as_of)
         if as_of_dt is None:
             as_of_dt = datetime.combine(as_of_d, datetime.min.time(), tzinfo=timezone.utc)
 
+        if not borrowing_currency or not investment_currency:
+            if "/" in pair_code:
+                c_a, c_b = pair_code.split("/", 1)
+                borrowing_currency = borrowing_currency or c_a
+                investment_currency = investment_currency or c_b
+        curr_a = borrowing_currency or ""
+        curr_b = investment_currency or ""
+
+        def _is_record_fresh(r: PointInTimeRecord) -> tuple[bool, datetime, float]:
+            obs = r.observation
+            if obs.value <= 0:
+                return False, datetime.min.replace(tzinfo=timezone.utc), 0.0
+
+            if not obs.is_synthetic:
+                if obs.observation_timestamp is None:
+                    return False, datetime.min.replace(tzinfo=timezone.utc), 0.0
+                quote_dt = obs.observation_timestamp
+            else:
+                quote_dt = (
+                    obs.observation_timestamp
+                    or obs.publication_timestamp
+                    or datetime.combine(obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
+                )
+
+            if quote_dt > as_of_dt:
+                return False, quote_dt, 0.0
+
+            age_sec = (as_of_dt - quote_dt).total_seconds()
+            if age_sec < 0:
+                return False, quote_dt, 0.0
+            age_min = age_sec / 60.0
+            if age_min > max_quote_age_minutes:
+                return False, quote_dt, age_min
+
+            return True, quote_dt, age_min
+
+        epoch_utc = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+        # 1. Search direct candidates
         candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, pair_code)
         available_records = self.firewall.filter_available(candidates, as_of=as_of_dt)
 
-        executable_records = [
-            r for r in available_records
-            if r.observation.price_type in (
-                PriceType.EXECUTABLE_TWO_WAY_QUOTE,
-                PriceType.BID_QUOTE,
-                PriceType.ASK_QUOTE,
-            )
-        ]
+        two_way_candidates: list[tuple[PointInTimeRecord, datetime, float]] = []
+        bid_candidates: list[tuple[PointInTimeRecord, datetime, float]] = []
+        ask_candidates: list[tuple[PointInTimeRecord, datetime, float]] = []
+        ref_candidates: list[tuple[PointInTimeRecord, datetime, float]] = []
 
-        target_record = None
-        is_proxy = False
+        for r in available_records:
+            obs = r.observation
+            fresh, q_dt, q_age = _is_record_fresh(r)
+            if obs.price_type == PriceType.EXECUTABLE_TWO_WAY_QUOTE:
+                if fresh:
+                    if obs.is_synthetic:
+                        bid_v = obs.bid if obs.bid is not None else (obs.metadata.get("bid", obs.value) if obs.metadata else obs.value)
+                        ask_v = obs.ask if obs.ask is not None else (obs.metadata.get("ask", obs.value) if obs.metadata else obs.value)
+                    else:
+                        bid_v = obs.bid if obs.bid is not None else (obs.metadata.get("bid") if obs.metadata else None)
+                        ask_v = obs.ask if obs.ask is not None else (obs.metadata.get("ask") if obs.metadata else None)
+                    if bid_v is not None and ask_v is not None and bid_v > 0 and ask_v > 0 and bid_v <= ask_v:
+                        two_way_candidates.append((r, q_dt, q_age))
+            elif obs.price_type == PriceType.BID_QUOTE:
+                if fresh:
+                    bid_candidates.append((r, q_dt, q_age))
+            elif obs.price_type == PriceType.ASK_QUOTE:
+                if fresh:
+                    ask_candidates.append((r, q_dt, q_age))
+            else:
+                ref_candidates.append((r, q_dt, q_age))
 
-        epoch_utc = datetime(1970, 1, 1, tzinfo=timezone.utc)
-        if executable_records:
-            executable_records.sort(
-                key=lambda r: (
-                    r.observation.observation_date,
-                    r.observation.observation_timestamp or epoch_utc,
-                    r.observation.revision,
+        # Direct two-way quote match
+        if two_way_candidates:
+            two_way_candidates.sort(
+                key=lambda x: (
+                    x[0].observation.observation_date,
+                    x[1],
+                    x[0].observation.revision,
                 )
             )
-            target_record = executable_records[-1]
-        elif allow_reference_rate_proxy:
-            if available_records:
-                available_records.sort(
-                    key=lambda r: (
-                        r.observation.observation_date,
-                        r.observation.observation_timestamp or epoch_utc,
-                        r.observation.revision,
+            best_r, best_dt, best_age = two_way_candidates[-1]
+            obs = best_r.observation
+            if obs.is_synthetic:
+                bid_v = obs.bid if obs.bid is not None else (obs.metadata.get("bid", obs.value) if obs.metadata else obs.value)
+                ask_v = obs.ask if obs.ask is not None else (obs.metadata.get("ask", obs.value) if obs.metadata else obs.value)
+            else:
+                bid_v = obs.bid if obs.bid is not None else obs.metadata.get("bid")
+                ask_v = obs.ask if obs.ask is not None else obs.metadata.get("ask")
+            obs_b = obs.base_currency or (pair_code.split("/")[0] if "/" in pair_code else "")
+            obs_q = obs.quote_currency or (pair_code.split("/")[1] if "/" in pair_code else "")
+            conv = obs.quote_convention or QuoteConvention.QUOTE_PER_BASE
+            bid_ab, ask_ab = get_two_way_quote_a_per_b(
+                bid=bid_v,
+                ask=ask_v,
+                obs_base=obs_b,
+                obs_quote=obs_q,
+                borrowing_currency=curr_a or obs_b,
+                investment_currency=curr_b or obs_q,
+                convention=conv,
+            )
+            mid_val = (bid_v + ask_v) / 2.0
+            mid_ab = (bid_ab + ask_ab) / 2.0
+            return ExecutableQuoteResult(
+                pair_code=pair_code,
+                bid=bid_v,
+                ask=ask_v,
+                mid=mid_val,
+                rate_a_per_b=mid_ab,
+                bid_a_per_b=bid_ab,
+                ask_a_per_b=ask_ab,
+                base_currency=obs_b,
+                quote_currency=obs_q,
+                quote_convention=conv,
+                observation_timestamp=best_dt,
+                availability_timestamp=best_r.availability_timestamp or best_dt,
+                age_minutes=best_age,
+                data_source=obs.source_id,
+                price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                is_executable=True,
+                is_observed_spread=True,
+                quote_assembly_method="genuine_two_way",
+            )
+
+        # Check assembled one-sided quotes
+        if bid_candidates and ask_candidates:
+            bid_candidates.sort(key=lambda x: (x[0].observation.observation_date, x[1], x[0].observation.revision))
+            ask_candidates.sort(key=lambda x: (x[0].observation.observation_date, x[1], x[0].observation.revision))
+            b_r, b_dt, b_age = bid_candidates[-1]
+            a_r, a_dt, a_age = ask_candidates[-1]
+            time_diff = abs((b_dt - a_dt).total_seconds())
+            bid_v = b_r.observation.bid if b_r.observation.bid is not None else b_r.observation.value
+            ask_v = a_r.observation.ask if a_r.observation.ask is not None else a_r.observation.value
+            same_source = (b_r.observation.source_id == a_r.observation.source_id)
+            same_conv = (b_r.observation.quote_convention == a_r.observation.quote_convention)
+            if time_diff <= max_one_sided_quote_time_diff_seconds and bid_v <= ask_v and same_source and same_conv:
+                obs_b = b_r.observation.base_currency or (pair_code.split("/")[0] if "/" in pair_code else "")
+                obs_q = b_r.observation.quote_currency or (pair_code.split("/")[1] if "/" in pair_code else "")
+                conv = b_r.observation.quote_convention or QuoteConvention.QUOTE_PER_BASE
+                bid_ab, ask_ab = get_two_way_quote_a_per_b(
+                    bid=bid_v,
+                    ask=ask_v,
+                    obs_base=obs_b,
+                    obs_quote=obs_q,
+                    borrowing_currency=curr_a or obs_b,
+                    investment_currency=curr_b or obs_q,
+                    convention=conv,
+                )
+                mid_val = (bid_v + ask_v) / 2.0
+                mid_ab = (bid_ab + ask_ab) / 2.0
+                return ExecutableQuoteResult(
+                    pair_code=pair_code,
+                    bid=bid_v,
+                    ask=ask_v,
+                    mid=mid_val,
+                    rate_a_per_b=mid_ab,
+                    bid_a_per_b=bid_ab,
+                    ask_a_per_b=ask_ab,
+                    base_currency=obs_b,
+                    quote_currency=obs_q,
+                    quote_convention=conv,
+                    observation_timestamp=max(b_dt, a_dt),
+                    availability_timestamp=max(b_r.availability_timestamp or b_dt, a_r.availability_timestamp or a_dt),
+                    age_minutes=min(b_age, a_age),
+                    data_source=b_r.observation.source_id,
+                    price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                    is_executable=True,
+                    is_observed_spread=True,
+                    quote_assembly_method="assembled_one_sided_quotes",
+                )
+
+        # Standalone one-sided quote if required_side is explicitly requested
+        if required_side == "ask" and ask_candidates:
+            ask_candidates.sort(key=lambda x: (x[0].observation.observation_date, x[1], x[0].observation.revision))
+            a_r, a_dt, a_age = ask_candidates[-1]
+            ask_v = a_r.observation.ask if a_r.observation.ask is not None else a_r.observation.value
+            obs_b = a_r.observation.base_currency or (pair_code.split("/")[0] if "/" in pair_code else "")
+            obs_q = a_r.observation.quote_currency or (pair_code.split("/")[1] if "/" in pair_code else "")
+            conv = a_r.observation.quote_convention or QuoteConvention.QUOTE_PER_BASE
+            rate_ab = get_rate_a_per_b(
+                value=ask_v,
+                obs_base=obs_b,
+                obs_quote=obs_q,
+                borrowing_currency=curr_a or obs_b,
+                investment_currency=curr_b or obs_q,
+                convention=conv,
+            )
+            return ExecutableQuoteResult(
+                pair_code=pair_code,
+                bid=None,
+                ask=ask_v,
+                mid=ask_v,
+                rate_a_per_b=rate_ab,
+                bid_a_per_b=None,
+                ask_a_per_b=rate_ab,
+                base_currency=obs_b,
+                quote_currency=obs_q,
+                quote_convention=conv,
+                observation_timestamp=a_dt,
+                availability_timestamp=a_r.availability_timestamp or a_dt,
+                age_minutes=a_age,
+                data_source=a_r.observation.source_id,
+                price_type=PriceType.ASK_QUOTE,
+                is_executable=True,
+                is_observed_spread=True,
+                quote_assembly_method="standalone_one_sided",
+            )
+        elif required_side == "bid" and bid_candidates:
+            bid_candidates.sort(key=lambda x: (x[0].observation.observation_date, x[1], x[0].observation.revision))
+            b_r, b_dt, b_age = bid_candidates[-1]
+            bid_v = b_r.observation.bid if b_r.observation.bid is not None else b_r.observation.value
+            obs_b = b_r.observation.base_currency or (pair_code.split("/")[0] if "/" in pair_code else "")
+            obs_q = b_r.observation.quote_currency or (pair_code.split("/")[1] if "/" in pair_code else "")
+            conv = b_r.observation.quote_convention or QuoteConvention.QUOTE_PER_BASE
+            rate_ab = get_rate_a_per_b(
+                value=bid_v,
+                obs_base=obs_b,
+                obs_quote=obs_q,
+                borrowing_currency=curr_a or obs_b,
+                investment_currency=curr_b or obs_q,
+                convention=conv,
+            )
+            return ExecutableQuoteResult(
+                pair_code=pair_code,
+                bid=bid_v,
+                ask=None,
+                mid=bid_v,
+                rate_a_per_b=rate_ab,
+                bid_a_per_b=rate_ab,
+                ask_a_per_b=None,
+                base_currency=obs_b,
+                quote_currency=obs_q,
+                quote_convention=conv,
+                observation_timestamp=b_dt,
+                availability_timestamp=b_r.availability_timestamp or b_dt,
+                age_minutes=b_age,
+                data_source=b_r.observation.source_id,
+                price_type=PriceType.BID_QUOTE,
+                is_executable=True,
+                is_observed_spread=True,
+                quote_assembly_method="standalone_one_sided",
+            )
+
+        # 2. Check reciprocal pair candidates
+        if "/" in pair_code:
+            b, q = pair_code.split("/", 1)
+            inv_pair = f"{q}/{b}"
+            inv_candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, inv_pair)
+            inv_available = self.firewall.filter_available(inv_candidates, as_of=as_of_dt)
+
+            inv_two_way: list[tuple[PointInTimeRecord, datetime, float]] = []
+
+            for r in inv_available:
+                fresh, q_dt, q_age = _is_record_fresh(r)
+                if r.observation.price_type == PriceType.EXECUTABLE_TWO_WAY_QUOTE:
+                    if fresh:
+                        if r.observation.is_synthetic:
+                            b_val = r.observation.bid if r.observation.bid is not None else (r.observation.metadata.get("bid", r.observation.value) if r.observation.metadata else r.observation.value)
+                            a_val = r.observation.ask if r.observation.ask is not None else (r.observation.metadata.get("ask", r.observation.value) if r.observation.metadata else r.observation.value)
+                        else:
+                            b_val = r.observation.bid if r.observation.bid is not None else (r.observation.metadata.get("bid") if r.observation.metadata else None)
+                            a_val = r.observation.ask if r.observation.ask is not None else (r.observation.metadata.get("ask") if r.observation.metadata else None)
+                        if b_val is not None and a_val is not None and b_val > 0 and a_val > 0 and b_val <= a_val:
+                            inv_two_way.append((r, q_dt, q_age))
+
+            if inv_two_way:
+                inv_two_way.sort(key=lambda x: (x[0].observation.observation_date, x[1], x[0].observation.revision))
+                inv_rec, inv_dt, inv_age = inv_two_way[-1]
+                obs = inv_rec.observation
+                if obs.is_synthetic:
+                    b_val = obs.bid if obs.bid is not None else (obs.metadata.get("bid", obs.value) if obs.metadata else obs.value)
+                    a_val = obs.ask if obs.ask is not None else (obs.metadata.get("ask", obs.value) if obs.metadata else obs.value)
+                else:
+                    b_val = obs.bid if obs.bid is not None else obs.metadata.get("bid")
+                    a_val = obs.ask if obs.ask is not None else obs.metadata.get("ask")
+                inv_bid, inv_ask = invert_two_way_quote(b_val, a_val)
+                obs_b = obs.base_currency or q
+                obs_q = obs.quote_currency or b
+                conv = obs.quote_convention or QuoteConvention.QUOTE_PER_BASE
+                bid_ab, ask_ab = get_two_way_quote_a_per_b(
+                    bid=inv_bid,
+                    ask=inv_ask,
+                    obs_base=b,
+                    obs_quote=q,
+                    borrowing_currency=curr_a or b,
+                    investment_currency=curr_b or q,
+                    convention=conv,
+                )
+                mid_val = (inv_bid + inv_ask) / 2.0
+                mid_ab = (bid_ab + ask_ab) / 2.0
+                return ExecutableQuoteResult(
+                    pair_code=pair_code,
+                    bid=inv_bid,
+                    ask=inv_ask,
+                    mid=mid_val,
+                    rate_a_per_b=mid_ab,
+                    bid_a_per_b=bid_ab,
+                    ask_a_per_b=ask_ab,
+                    base_currency=b,
+                    quote_currency=q,
+                    quote_convention=conv,
+                    observation_timestamp=inv_dt,
+                    availability_timestamp=inv_rec.availability_timestamp or inv_dt,
+                    age_minutes=inv_age,
+                    data_source=obs.source_id,
+                    price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                    is_executable=True,
+                    is_observed_spread=True,
+                    quote_assembly_method="reciprocal_two_way",
+                )
+
+        # 3. Reference-rate proxy mode
+        if allow_reference_rate_proxy:
+            if ref_candidates:
+                ref_candidates.sort(key=lambda x: (x[0].observation.observation_date, x[1], x[0].observation.revision))
+                target_rec, q_dt, q_age = ref_candidates[-1]
+                obs = target_rec.observation
+                if obs.value > 0 and not target_rec.is_stale:
+                    obs_b = obs.base_currency or (pair_code.split("/")[0] if "/" in pair_code else "")
+                    obs_q = obs.quote_currency or (pair_code.split("/")[1] if "/" in pair_code else "")
+                    conv = obs.quote_convention or QuoteConvention.QUOTE_PER_BASE
+                    rate_ab = get_rate_a_per_b(
+                        value=obs.value,
+                        obs_base=obs_b,
+                        obs_quote=obs_q,
+                        borrowing_currency=curr_a or obs_b,
+                        investment_currency=curr_b or obs_q,
+                        convention=conv,
                     )
-                )
-                target_record = available_records[-1]
-                is_proxy = True
-
-        if target_record is None:
+                    return ExecutableQuoteResult(
+                        pair_code=pair_code,
+                        bid=obs.value,
+                        ask=obs.value,
+                        mid=obs.value,
+                        rate_a_per_b=rate_ab,
+                        bid_a_per_b=rate_ab,
+                        ask_a_per_b=rate_ab,
+                        base_currency=obs_b,
+                        quote_currency=obs_q,
+                        quote_convention=conv,
+                        observation_timestamp=q_dt,
+                        availability_timestamp=target_rec.availability_timestamp or q_dt,
+                        age_minutes=q_age,
+                        data_source=obs.source_id,
+                        price_type=obs.price_type or PriceType.REFERENCE_RATE,
+                        is_executable=False,
+                        is_observed_spread=False,
+                        quote_assembly_method="reference_rate_proxy",
+                    )
             if "/" in pair_code:
                 b, q = pair_code.split("/", 1)
                 inv_pair = f"{q}/{b}"
                 inv_candidates = self._lookup_candidates(ObservationKind.EXCHANGE_RATE, inv_pair)
                 inv_available = self.firewall.filter_available(inv_candidates, as_of=as_of_dt)
-                inv_exec = [
-                    r for r in inv_available
-                    if r.observation.price_type in (
-                        PriceType.EXECUTABLE_TWO_WAY_QUOTE,
-                        PriceType.BID_QUOTE,
-                        PriceType.ASK_QUOTE,
+                inv_ref = [r for r in inv_available if r.observation.value > 0 and not r.is_stale]
+                if inv_ref:
+                    inv_ref.sort(key=lambda r: (r.observation.observation_date, r.observation.observation_timestamp or epoch_utc, r.observation.revision))
+                    target_rec = inv_ref[-1]
+                    obs = target_rec.observation
+                    val = 1.0 / obs.value
+                    obs_b = obs.base_currency or q
+                    obs_q = obs.quote_currency or b
+                    conv = obs.quote_convention or QuoteConvention.QUOTE_PER_BASE
+                    rate_ab = get_rate_a_per_b(
+                        value=obs.value,
+                        obs_base=obs_b,
+                        obs_quote=obs_q,
+                        borrowing_currency=curr_a or b,
+                        investment_currency=curr_b or q,
+                        convention=conv,
                     )
-                ]
-                if inv_exec:
-                    inv_exec.sort(
-                        key=lambda r: (
-                            r.observation.observation_date,
-                            r.observation.observation_timestamp or epoch_utc,
-                            r.observation.revision,
-                        )
+                    q_dt = obs.observation_timestamp or datetime.combine(obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
+                    age_min = max(0.0, (as_of_dt - q_dt).total_seconds()) / 60.0
+                    return ExecutableQuoteResult(
+                        pair_code=pair_code,
+                        bid=val,
+                        ask=val,
+                        mid=val,
+                        rate_a_per_b=rate_ab,
+                        bid_a_per_b=rate_ab,
+                        ask_a_per_b=rate_ab,
+                        base_currency=b,
+                        quote_currency=q,
+                        quote_convention=conv,
+                        observation_timestamp=q_dt,
+                        availability_timestamp=target_rec.availability_timestamp or q_dt,
+                        age_minutes=age_min,
+                        data_source=obs.source_id,
+                        price_type=obs.price_type or PriceType.REFERENCE_RATE,
+                        is_executable=False,
+                        is_observed_spread=False,
+                        quote_assembly_method="reference_rate_proxy",
                     )
-                    inv_target = inv_exec[-1]
-                    inv_obs = inv_target.observation
-                    if inv_obs.value > 0:
-                        quote_dt = inv_obs.observation_timestamp or inv_obs.publication_timestamp
-                        if quote_dt is None:
-                            quote_dt = datetime.combine(inv_obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
-                        age_sec = max(0.0, (as_of_dt - quote_dt).total_seconds())
-                        age_min = age_sec / 60.0
-                        if not inv_obs.is_synthetic and age_min > max_quote_age_minutes:
-                            return None
-                        rate = 1.0 / inv_obs.value
-                        return ExecutableQuoteResult(
-                            pair_code=pair_code,
-                            bid=rate,
-                            ask=rate,
-                            mid=rate,
-                            observation_timestamp=quote_dt,
-                            availability_timestamp=inv_target.availability_timestamp or quote_dt,
-                            age_minutes=age_min,
-                            data_source=inv_obs.source_id,
-                            price_type=inv_obs.price_type or PriceType.EXECUTABLE_TWO_WAY_QUOTE,
-                            is_executable=True,
-                            quote_convention="quote_per_base",
-                        )
-                elif allow_reference_rate_proxy and inv_available:
-                    inv_available.sort(
-                        key=lambda r: (
-                            r.observation.observation_date,
-                            r.observation.observation_timestamp or epoch_utc,
-                            r.observation.revision,
-                        )
-                    )
-                    inv_target = inv_available[-1]
-                    inv_obs = inv_target.observation
-                    if inv_obs.value > 0:
-                        quote_dt = inv_obs.observation_timestamp or inv_obs.publication_timestamp
-                        if quote_dt is None:
-                            quote_dt = datetime.combine(inv_obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
-                        age_sec = max(0.0, (as_of_dt - quote_dt).total_seconds())
-                        age_min = age_sec / 60.0
-                        if quote_dt.date() < as_of_dt.date() or inv_target.is_stale:
-                            return None
-                        rate = 1.0 / inv_obs.value
-                        return ExecutableQuoteResult(
-                            pair_code=pair_code,
-                            bid=rate,
-                            ask=rate,
-                            mid=rate,
-                            observation_timestamp=quote_dt,
-                            availability_timestamp=inv_target.availability_timestamp or quote_dt,
-                            age_minutes=age_min,
-                            data_source=inv_obs.source_id,
-                            price_type=inv_obs.price_type or PriceType.REFERENCE_RATE,
-                            is_executable=False,
-                            quote_convention="quote_per_base",
-                        )
-            return None
 
-        obs = target_record.observation
-        quote_dt = obs.observation_timestamp or obs.publication_timestamp
-        if quote_dt is None:
-            quote_dt = datetime.combine(obs.observation_date, datetime.min.time(), tzinfo=timezone.utc)
-        age_sec = max(0.0, (as_of_dt - quote_dt).total_seconds())
-        age_min = age_sec / 60.0
-
-        if age_min > max_quote_age_minutes:
-            return None
-
-        pt = obs.price_type or (PriceType.REFERENCE_RATE if is_proxy else PriceType.MID_MARKET)
-        rate = obs.value
-        bid = obs.metadata.get("bid", rate) if obs.metadata else rate
-        ask = obs.metadata.get("ask", rate) if obs.metadata else rate
-        mid = (bid + ask) / 2.0 if (bid is not None and ask is not None) else rate
-
-        return ExecutableQuoteResult(
-            pair_code=pair_code,
-            bid=bid,
-            ask=ask,
-            mid=mid,
-            observation_timestamp=quote_dt,
-            availability_timestamp=target_record.availability_timestamp or quote_dt,
-            age_minutes=age_min,
-            data_source=obs.source_id,
-            price_type=pt,
-            is_executable=not is_proxy and (pt == PriceType.EXECUTABLE_TWO_WAY_QUOTE),
-            quote_convention="quote_per_base",
-        )
+        return None
 

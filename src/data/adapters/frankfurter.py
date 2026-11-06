@@ -32,6 +32,7 @@ from data.schemas import (
     Frequency,
     ObservationKind,
     PriceType,
+    QuoteConvention,
     RawRecordInfo,
 )
 
@@ -76,6 +77,9 @@ class FrankfurterAdapter(SourceAdapter):
                     source_id=self.source_id,
                     indicator_id=None,
                     entity_code=f"{base}/{quote}",
+                    base_currency=base,
+                    quote_currency=quote,
+                    quote_convention=QuoteConvention.QUOTE_PER_BASE,
                     value=float(day_rates[quote]),
                     unit="quote_per_base",
                     frequency=Frequency.DAILY,
@@ -87,7 +91,11 @@ class FrankfurterAdapter(SourceAdapter):
                     classification=DataClassification.REAL_VERIFIED,
                     availability_evidence=AvailabilityEvidence.ESTIMATED_SCHEDULE,
                     price_type=PriceType.REFERENCE_RATE,
-                    metadata={"base_amount": payload.get("amount", 1.0)},
+                    metadata={
+                        "base_amount": payload.get("amount", 1.0),
+                        "original_quote_convention": "quote_per_base",
+                        "raw_provider_value": float(day_rates[quote]),
+                    },
                 )
             )
         n_days = len(rates)
