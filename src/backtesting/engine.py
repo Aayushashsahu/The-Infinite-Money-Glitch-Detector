@@ -583,15 +583,39 @@ class BacktestEngine:
             elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_RISK_FREE:
                 if benchmark_series is not None and rf_rates:
                     risk_free_ref = rf_rates[-1]
-                    if len(benchmark_series.returns) == max(0, len(self.portfolio.snapshots) - 1) and len(benchmark_series.returns) > 0:
+                    snap_dates = [s.as_of for s in self.portfolio.snapshots]
+                    if (
+                        benchmark_series.dates == snap_dates
+                        and len(benchmark_series.returns) == max(0, len(self.portfolio.snapshots) - 1)
+                        and len(benchmark_series.returns) > 0
+                    ):
                         periodic_rf_rates = list(benchmark_series.returns)
+                    else:
+                        periodic_rf_rates = None
+                        if benchmark_series.dates != snap_dates:
+                            self._audit_trail.append(
+                                "BENCHMARK MISALIGNMENT: Benchmark dates do not match portfolio snapshot dates; "
+                                "periodic risk-free rates rejected."
+                            )
                 else:
                     risk_free_ref = None
             elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_DEPOSIT:
                 if benchmark_series is not None and dep_rates:
                     risk_free_ref = dep_rates[-1]
-                    if len(benchmark_series.returns) == max(0, len(self.portfolio.snapshots) - 1) and len(benchmark_series.returns) > 0:
+                    snap_dates = [s.as_of for s in self.portfolio.snapshots]
+                    if (
+                        benchmark_series.dates == snap_dates
+                        and len(benchmark_series.returns) == max(0, len(self.portfolio.snapshots) - 1)
+                        and len(benchmark_series.returns) > 0
+                    ):
                         periodic_rf_rates = list(benchmark_series.returns)
+                    else:
+                        periodic_rf_rates = None
+                        if benchmark_series.dates != snap_dates:
+                            self._audit_trail.append(
+                                "BENCHMARK MISALIGNMENT: Benchmark dates do not match portfolio snapshot dates; "
+                                "periodic risk-free rates rejected."
+                            )
                 else:
                     risk_free_ref = None
             elif bm_spec.benchmark_type == BenchmarkType.UNAVAILABLE:

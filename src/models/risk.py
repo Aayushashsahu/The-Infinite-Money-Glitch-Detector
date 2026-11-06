@@ -108,6 +108,8 @@ def sharpe_ratio(
     risk_free_rate_annual: float | None = 0.0,
     periods_per_year: float = 1.0,
     periodic_risk_free_rates=None,
+    return_dates=None,
+    periodic_risk_free_dates=None,
 ) -> float:
     """Annualized Sharpe ratio of period returns.
 
@@ -119,10 +121,18 @@ def sharpe_ratio(
     ``risk_free_rate_annual`` or ``periodic_risk_free_rates``; this module does not invent one.
 
     Raises:
-        ValueError: if volatility is zero (Sharpe is undefined) or if benchmark is missing.
+        ValueError: if volatility is zero (Sharpe is undefined), if benchmark is missing,
+            or if return_dates and periodic_risk_free_dates are misaligned.
     """
     if risk_free_rate_annual is None and periodic_risk_free_rates is None:
         raise ValueError("Defensible risk_free_rate_annual or periodic_risk_free_rates must be supplied.")
+
+    if return_dates is not None and periodic_risk_free_dates is not None:
+        if list(return_dates) != list(periodic_risk_free_dates):
+            raise ValueError(
+                f"Date misalignment: return_dates ({len(return_dates)}) and "
+                f"periodic_risk_free_dates ({len(periodic_risk_free_dates)}) do not match."
+            )
 
     r = _as_observations(returns)
     _check_periods_per_year(periods_per_year)

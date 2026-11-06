@@ -802,6 +802,13 @@ class PointInTimeDataStore:
                 is_executable=True,
                 is_observed_spread=True,
                 quote_assembly_method="genuine_two_way",
+                provider_price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                provider_side="two_way",
+                provider_base_currency=obs_b,
+                provider_quote_currency=obs_q,
+                provider_convention=conv,
+                canonical_side="two_way",
+                canonical_price=mid_ab,
             )
 
         # Check assembled one-sided quotes
@@ -849,6 +856,13 @@ class PointInTimeDataStore:
                     is_executable=True,
                     is_observed_spread=True,
                     quote_assembly_method="assembled_one_sided_quotes",
+                    provider_price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                    provider_side="two_way",
+                    provider_base_currency=obs_b,
+                    provider_quote_currency=obs_q,
+                    provider_convention=conv,
+                    canonical_side="two_way",
+                    canonical_price=mid_ab,
                 )
 
         # Standalone one-sided quote if required_side is explicitly requested
@@ -907,6 +921,13 @@ class PointInTimeDataStore:
                     is_executable=True,
                     is_observed_spread=True,
                     quote_assembly_method="standalone_one_sided",
+                    provider_price_type=target_obs.price_type,
+                    provider_side=target_prov_side,
+                    provider_base_currency=obs_b,
+                    provider_quote_currency=obs_q,
+                    provider_convention=conv,
+                    canonical_side=norm.canonical_side,
+                    canonical_price=norm.canonical_price,
                 )
 
         # 2. Check reciprocal pair candidates
@@ -983,6 +1004,13 @@ class PointInTimeDataStore:
                     is_executable=True,
                     is_observed_spread=True,
                     quote_assembly_method="reciprocal_two_way",
+                    provider_price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                    provider_side="two_way",
+                    provider_base_currency=obs.base_currency or q,
+                    provider_quote_currency=obs.quote_currency or b,
+                    provider_convention=conv,
+                    canonical_side="two_way",
+                    canonical_price=mid_ab,
                 )
 
             # Check assembled one-sided quotes on reciprocal pair
@@ -1031,6 +1059,13 @@ class PointInTimeDataStore:
                         is_executable=True,
                         is_observed_spread=True,
                         quote_assembly_method="assembled_reciprocal_one_sided_quotes",
+                        provider_price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
+                        provider_side="two_way",
+                        provider_base_currency=obs_b,
+                        provider_quote_currency=obs_q,
+                        provider_convention=conv,
+                        canonical_side="two_way",
+                        canonical_price=mid_ab,
                     )
 
             # Standalone one-sided quote from reciprocal pair if required_side is requested
@@ -1089,6 +1124,13 @@ class PointInTimeDataStore:
                         is_executable=True,
                         is_observed_spread=True,
                         quote_assembly_method="standalone_one_sided",
+                        provider_price_type=target_obs.price_type,
+                        provider_side=target_prov_side,
+                        provider_base_currency=obs_b,
+                        provider_quote_currency=obs_q,
+                        provider_convention=conv,
+                        canonical_side=norm.canonical_side,
+                        canonical_price=norm.canonical_price,
                     )
 
         # 3. Reference-rate proxy mode
@@ -1128,6 +1170,13 @@ class PointInTimeDataStore:
                         is_executable=False,
                         is_observed_spread=False,
                         quote_assembly_method="reference_rate_proxy",
+                        provider_price_type=obs.price_type or PriceType.REFERENCE_RATE,
+                        provider_side="reference",
+                        provider_base_currency=obs_b,
+                        provider_quote_currency=obs_q,
+                        provider_convention=conv,
+                        canonical_side="reference",
+                        canonical_price=rate_ab,
                     )
             if "/" in pair_code:
                 b, q = pair_code.split("/", 1)
@@ -1172,6 +1221,13 @@ class PointInTimeDataStore:
                         is_executable=False,
                         is_observed_spread=False,
                         quote_assembly_method="reference_rate_proxy",
+                        provider_price_type=obs.price_type or PriceType.REFERENCE_RATE,
+                        provider_side="reference",
+                        provider_base_currency=obs_b,
+                        provider_quote_currency=obs_q,
+                        provider_convention=conv,
+                        canonical_side="reference",
+                        canonical_price=rate_ab,
                     )
 
         return None

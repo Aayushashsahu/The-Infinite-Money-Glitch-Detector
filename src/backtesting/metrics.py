@@ -62,6 +62,8 @@ def calculate_sortino_ratio(
     risk_free_rate_annual: float | None = 0.0,
     periods_per_year: float = 252.0,
     periodic_risk_free_rates: Sequence[float] | None = None,
+    return_dates: Sequence[Any] | None = None,
+    periodic_risk_free_dates: Sequence[Any] | None = None,
 ) -> float | None:
     """Annualized Sortino ratio.
 
@@ -72,6 +74,9 @@ def calculate_sortino_ratio(
     arr = np.asarray(returns, dtype=float)
     if arr.size < 2:
         return None
+    if return_dates is not None and periodic_risk_free_dates is not None:
+        if list(return_dates) != list(periodic_risk_free_dates):
+            return None
     if periodic_risk_free_rates is not None:
         rf_arr = np.asarray(periodic_risk_free_rates, dtype=float)
         if len(rf_arr) != len(arr):
@@ -101,6 +106,7 @@ def calculate_performance_metrics(
     periods_per_year: float = 252.0,
     cash_interest_earned: float = 0.0,
     periodic_risk_free_rates: Sequence[float] | None = None,
+    periodic_risk_free_dates: Sequence[date] | None = None,
 ) -> PerformanceMetrics:
     """Calculate standardized performance and risk statistics for a completed backtest.
 
@@ -113,6 +119,7 @@ def calculate_performance_metrics(
         interest_convention: Compounding rule.
         periods_per_year: Observation frequency (252 for daily snapshots, 12 for monthly).
         periodic_risk_free_rates: Optional time-varying periodic risk-free rates.
+        periodic_risk_free_dates: Optional observation dates corresponding to periodic_risk_free_rates.
     """
     closed = [t for t in trades if t.status == TradeStatus.CLOSED and t.net_profit_a is not None]
     total_trades = len(closed)
@@ -158,6 +165,16 @@ def calculate_performance_metrics(
         else:
             period_returns.append(0.0)
 
+    # Date alignment verification for risk-free benchmark series
+    ret_dates = [s.as_of for s in snapshots[1:]] if len(snapshots) >= 2 else None
+    if periodic_risk_free_rates is not None:
+        if periodic_risk_free_dates is not None and ret_dates is not None:
+            if list(periodic_risk_free_dates) != ret_dates:
+                periodic_risk_free_rates = None
+        elif benchmark is not None and len(benchmark.dates) >= 2 and ret_dates is not None:
+            if list(benchmark.dates[1:]) != ret_dates:
+                periodic_risk_free_rates = None
+
     # Risk metrics from periodic returns
     if len(period_returns) >= 2:
         vol = historical_volatility(period_returns, periods_per_year=periods_per_year)
@@ -171,6 +188,8 @@ def calculate_performance_metrics(
                     risk_free_rate_annual=risk_free_rate_annual,
                     periods_per_year=periods_per_year,
                     periodic_risk_free_rates=periodic_risk_free_rates,
+                    return_dates=ret_dates,
+                    periodic_risk_free_dates=periodic_risk_free_dates,
                 )
             except ValueError:
                 sharpe = None
@@ -180,6 +199,8 @@ def calculate_performance_metrics(
                 risk_free_rate_annual=risk_free_rate_annual,
                 periods_per_year=periods_per_year,
                 periodic_risk_free_rates=periodic_risk_free_rates,
+                return_dates=ret_dates,
+                periodic_risk_free_dates=periodic_risk_free_dates,
             )
 
         try:

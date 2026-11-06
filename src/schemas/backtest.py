@@ -171,6 +171,15 @@ class ExecutableQuoteResult(BaseModel):
     is_observed_spread: bool = False
     quote_assembly_method: str = "direct_two_way"
 
+    # Explicit Quote-Side Provenance (Phase 3.2.2.3.2)
+    provider_price_type: PriceType | None = None
+    provider_side: str | None = None  # "bid", "ask", "two_way", "reference"
+    provider_base_currency: str = ""
+    provider_quote_currency: str = ""
+    provider_convention: QuoteConvention | None = None
+    canonical_side: str | None = None  # "bid", "ask", "two_way", "reference"
+    canonical_price: float | None = None
+
 
 class DataAvailabilityConfig(BaseModel):
     """Configuration for the Historical Information Firewall."""
@@ -366,6 +375,21 @@ class TradeRecord(BaseModel):
     exit_price_source: str | None = None
     exit_quote_timestamp: datetime | None = None
     exit_price_type: PriceType | None = None
+
+    # Explicit Quote-Side Provenance (Phase 3.2.2.3.2)
+    entry_provider_price_type: PriceType | None = None
+    entry_provider_side: str | None = None
+    entry_provider_base: str = ""
+    entry_provider_quote: str = ""
+    entry_provider_convention: QuoteConvention | None = None
+    entry_canonical_side: str | None = None
+    exit_provider_price_type: PriceType | None = None
+    exit_provider_side: str | None = None
+    exit_provider_base: str = ""
+    exit_provider_quote: str = ""
+    exit_provider_convention: QuoteConvention | None = None
+    exit_canonical_side: str | None = None
+
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

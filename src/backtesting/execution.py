@@ -199,9 +199,11 @@ class ExecutionEngine:
             )
 
         if exec_quote is not None:
-            if exec_quote.price_type == PriceType.BID_QUOTE or (
+            if exec_quote.canonical_side == "bid" or (
                 exec_quote.quote_assembly_method.startswith("standalone_one_sided")
                 and exec_quote.ask_a_per_b is None
+            ) or (
+                exec_quote.price_type == PriceType.BID_QUOTE and exec_quote.ask_a_per_b is None
             ):
                 return TradeRecord(
                     trade_id=trade_id,
@@ -342,6 +344,12 @@ class ExecutionEngine:
             entry_price_type=entry_price_type or (exec_quote.price_type if exec_quote else None),
             entry_price_source=entry_price_source or (exec_quote.data_source if exec_quote else None),
             entry_quote_timestamp=entry_quote_timestamp or (exec_quote.observation_timestamp if exec_quote else None),
+            entry_provider_price_type=exec_quote.provider_price_type if exec_quote else None,
+            entry_provider_side=exec_quote.provider_side if exec_quote else None,
+            entry_provider_base=exec_quote.provider_base_currency if exec_quote else "",
+            entry_provider_quote=exec_quote.provider_quote_currency if exec_quote else "",
+            entry_provider_convention=exec_quote.provider_convention if exec_quote else None,
+            entry_canonical_side=exec_quote.canonical_side if exec_quote else None,
             signal_timestamp=signal_timestamp,
             order_submission_timestamp=order_submission_timestamp,
             execution_timestamp=execution_timestamp,
@@ -371,9 +379,11 @@ class ExecutionEngine:
             raise ValueError(f"Cannot close trade {trade.trade_id} with status {trade.status}")
 
         if exec_quote is not None:
-            if exec_quote.price_type == PriceType.ASK_QUOTE or (
+            if exec_quote.canonical_side == "ask" or (
                 exec_quote.quote_assembly_method.startswith("standalone_one_sided")
                 and exec_quote.bid_a_per_b is None
+            ) or (
+                exec_quote.price_type == PriceType.ASK_QUOTE and exec_quote.bid_a_per_b is None
             ):
                 raise ValueError("Cannot execute exit with a standalone ASK quote (missing bid quote).")
 
@@ -520,5 +530,11 @@ class ExecutionEngine:
                 "exit_price_source": exit_price_source or (exec_quote.data_source if exec_quote else None),
                 "exit_quote_timestamp": exit_quote_timestamp or (exec_quote.observation_timestamp if exec_quote else None),
                 "exit_price_type": exit_price_type or (exec_quote.price_type if exec_quote else None),
+                "exit_provider_price_type": exec_quote.provider_price_type if exec_quote else None,
+                "exit_provider_side": exec_quote.provider_side if exec_quote else None,
+                "exit_provider_base": exec_quote.provider_base_currency if exec_quote else "",
+                "exit_provider_quote": exec_quote.provider_quote_currency if exec_quote else "",
+                "exit_provider_convention": exec_quote.provider_convention if exec_quote else None,
+                "exit_canonical_side": exec_quote.canonical_side if exec_quote else None,
             }
         )
