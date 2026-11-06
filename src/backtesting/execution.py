@@ -349,7 +349,11 @@ class ExecutionEngine:
             entry_provider_base=exec_quote.provider_base_currency if exec_quote else "",
             entry_provider_quote=exec_quote.provider_quote_currency if exec_quote else "",
             entry_provider_convention=exec_quote.provider_convention if exec_quote else None,
+            entry_provider_bid=exec_quote.provider_bid if exec_quote else None,
+            entry_provider_ask=exec_quote.provider_ask if exec_quote else None,
+            entry_provider_mid=exec_quote.provider_mid if exec_quote else None,
             entry_canonical_side=exec_quote.canonical_side if exec_quote else None,
+            entry_canonical_price=exec_quote.canonical_price if exec_quote else None,
             signal_timestamp=signal_timestamp,
             order_submission_timestamp=order_submission_timestamp,
             execution_timestamp=execution_timestamp,
@@ -535,6 +539,10 @@ class ExecutionEngine:
                 "exit_provider_base": exec_quote.provider_base_currency if exec_quote else "",
                 "exit_provider_quote": exec_quote.provider_quote_currency if exec_quote else "",
                 "exit_provider_convention": exec_quote.provider_convention if exec_quote else None,
+                "exit_provider_bid": exec_quote.provider_bid if exec_quote else None,
+                "exit_provider_ask": exec_quote.provider_ask if exec_quote else None,
+                "exit_provider_mid": exec_quote.provider_mid if exec_quote else None,
                 "exit_canonical_side": exec_quote.canonical_side if exec_quote else None,
+                "exit_canonical_price": exec_quote.canonical_price if exec_quote else None,
             }
         )

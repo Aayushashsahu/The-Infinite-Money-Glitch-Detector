@@ -240,7 +240,7 @@ def calculate_performance_metrics(
         bm_tot = benchmark.total_return
         bm_ann = benchmark.annualized_return
         bm_sharpe = benchmark.sharpe_ratio
-        alpha = ann_return - benchmark.annualized_return
+        alpha = (ann_return - benchmark.annualized_return) if len(closed) > 0 else None
 
     # Exact double-entry return attribution decomposition
     pure_gross_profit_a = sum((t.pure_gross_gain_a or 0.0) for t in closed)

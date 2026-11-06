@@ -362,11 +362,17 @@ class DataObservation(BaseModel):
         elif self.classification in (DataClassification.SYNTHETIC, DataClassification.MOCK):
             self.is_synthetic = True
 
-        if self.is_synthetic:
+        if self.is_synthetic and self.classification != DataClassification.MOCK:
             self.availability_evidence = None
         elif self.availability_evidence is None:
             if self.classification == DataClassification.REAL_RETROSPECTIVE:
                 self.availability_evidence = AvailabilityEvidence.RETROSPECTIVE
+            elif self.classification == DataClassification.MOCK:
+                self.availability_evidence = (
+                    AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED
+                    if self.publication_timestamp is not None
+                    else AvailabilityEvidence.ESTIMATED_SCHEDULE
+                )
             elif self.publication_timestamp is not None or self.publication_date is not None:
                 self.availability_evidence = AvailabilityEvidence.ESTIMATED_SCHEDULE
             else:

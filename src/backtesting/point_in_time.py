@@ -35,7 +35,7 @@ from core.currency import (
     map_canonical_side_to_provider_side,
     normalize_directional_quote,
 )
-from data.schemas import AvailabilityEvidence, DataObservation, Frequency, ObservationKind, PriceType, RateRole
+from data.schemas import AvailabilityEvidence, DataClassification, DataObservation, Frequency, ObservationKind, PriceType, RateRole
 from schemas.backtest import (
     AvailabilityPolicy,
     DataAvailabilityConfig,
@@ -164,13 +164,15 @@ class PointInTimeFirewall:
         # 2. Strict mode: requires verified publication date / timestamp AND excludes unverified evidence
         if self.config.policy == AvailabilityPolicy.STRICT:
             if as_of_dt is not None:
-                # Synthetic/test unit-test observations: allow if synthetic is permitted
-                is_fixture = obs.is_synthetic or (obs.source_id in ("test", "test_source", "mock", "simulated"))
-                if is_fixture and (self.config.allow_synthetic or obs.source_id in ("test", "test_source")):
+                # Synthetic/test unit-test observations: allow if synthetic or mock is permitted
+                is_fixture = obs.is_synthetic or (obs.classification == DataClassification.MOCK) or (obs.source_id in ("test", "test_source", "mock", "simulated", "mock_test_feed", "test_fixture_dealer"))
+                allow_fix = self.config.allow_synthetic or (getattr(self.config, "allow_mock", False) and obs.classification == DataClassification.MOCK) or (obs.source_id in ("test", "test_source", "mock_test_feed", "test_fixture_dealer"))
+                if is_fixture and allow_fix:
                     if obs.publication_timestamp is not None:
                         if obs.publication_timestamp > as_of_dt:
                             return False, obs.publication_timestamp.date(), obs.publication_timestamp, False, "publication_timestamp_after_signal_blocked"
-                        return True, obs.publication_timestamp.date(), obs.publication_timestamp, False, "test_fixture_publication_timestamp"
+                        is_exact_ver = (obs.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED)
+                        return True, obs.publication_timestamp.date(), obs.publication_timestamp, is_exact_ver, "test_fixture_publication_timestamp"
                     if obs.publication_date is not None:
                         if obs.publication_date > as_of_d:
                             return False, obs.publication_date, None, False, "publication_date_after_as_of_blocked"
@@ -275,7 +277,8 @@ class PointInTimeFirewall:
         records: list[PointInTimeRecord] = []
         for obs in observations:
             if not self.config.allow_synthetic and obs.is_synthetic:
-                continue
+                if not (getattr(self.config, "allow_mock", False) and obs.classification == DataClassification.MOCK):
+                    continue
 
             is_eligible, avail_date, avail_dt, is_verified, note = self.resolve_availability(obs, as_of)
             if not is_eligible or avail_date is None:
@@ -332,7 +335,8 @@ class PointInTimeFirewall:
         candidates: list[tuple[DataObservation, date, datetime | None, bool, str]] = []
         for obs in observations:
             if not self.config.allow_synthetic and obs.is_synthetic:
-                continue
+                if not (getattr(self.config, "allow_mock", False) and obs.classification == DataClassification.MOCK):
+                    continue
             if kind is not None and obs.kind != kind:
                 continue
             if allowed_entities is not None and obs.entity_code not in allowed_entities:
@@ -395,7 +399,11 @@ class PointInTimeDataStore:
         firewall: PointInTimeFirewall | None = None,
     ):
         self._observations = list(observations)
-        self.firewall = firewall or PointInTimeFirewall()
+        if firewall is None:
+            has_mock = any(obs.classification == DataClassification.MOCK for obs in self._observations)
+            self.firewall = PointInTimeFirewall(DataAvailabilityConfig(allow_mock=True)) if has_mock else PointInTimeFirewall()
+        else:
+            self.firewall = firewall
         self._rebuild_index()
 
     def _rebuild_index(self) -> None:
@@ -807,8 +815,14 @@ class PointInTimeDataStore:
                 provider_base_currency=obs_b,
                 provider_quote_currency=obs_q,
                 provider_convention=conv,
+                provider_bid=bid_v,
+                provider_ask=ask_v,
+                provider_mid=mid_val,
                 canonical_side="two_way",
-                canonical_price=mid_ab,
+                canonical_price=mid_ab if required_side is None else (ask_ab if required_side == "ask" else bid_ab),
+                canonical_bid=bid_ab,
+                canonical_ask=ask_ab,
+                canonical_mid=mid_ab,
             )
 
         # Check assembled one-sided quotes
@@ -861,8 +875,14 @@ class PointInTimeDataStore:
                     provider_base_currency=obs_b,
                     provider_quote_currency=obs_q,
                     provider_convention=conv,
+                    provider_bid=bid_v,
+                    provider_ask=ask_v,
+                    provider_mid=mid_val,
                     canonical_side="two_way",
-                    canonical_price=mid_ab,
+                    canonical_price=mid_ab if required_side is None else (ask_ab if required_side == "ask" else bid_ab),
+                    canonical_bid=bid_ab,
+                    canonical_ask=ask_ab,
+                    canonical_mid=mid_ab,
                 )
 
         # Standalone one-sided quote if required_side is explicitly requested
@@ -926,8 +946,14 @@ class PointInTimeDataStore:
                     provider_base_currency=obs_b,
                     provider_quote_currency=obs_q,
                     provider_convention=conv,
+                    provider_bid=prov_val if target_prov_side == "bid" else None,
+                    provider_ask=prov_val if target_prov_side == "ask" else None,
+                    provider_mid=prov_val,
                     canonical_side=norm.canonical_side,
                     canonical_price=norm.canonical_price,
+                    canonical_bid=norm.canonical_price if norm.canonical_side == "bid" else None,
+                    canonical_ask=norm.canonical_price if norm.canonical_side == "ask" else None,
+                    canonical_mid=norm.canonical_price,
                 )
 
         # 2. Check reciprocal pair candidates
@@ -970,31 +996,30 @@ class PointInTimeDataStore:
                 else:
                     b_val = obs.bid if obs.bid is not None else obs.metadata.get("bid")
                     a_val = obs.ask if obs.ask is not None else obs.metadata.get("ask")
-                inv_bid, inv_ask = invert_two_way_quote(b_val, a_val)
                 obs_b = obs.base_currency or q
                 obs_q = obs.quote_currency or b
                 conv = obs.quote_convention or QuoteConvention.QUOTE_PER_BASE
                 bid_ab, ask_ab = get_two_way_quote_a_per_b(
-                    bid=inv_bid,
-                    ask=inv_ask,
-                    obs_base=b,
-                    obs_quote=q,
+                    bid=b_val,
+                    ask=a_val,
+                    obs_base=obs_b,
+                    obs_quote=obs_q,
                     borrowing_currency=curr_a or b,
                     investment_currency=curr_b or q,
                     convention=conv,
                 )
-                mid_val = (inv_bid + inv_ask) / 2.0
+                mid_val = (b_val + a_val) / 2.0
                 mid_ab = (bid_ab + ask_ab) / 2.0
                 return ExecutableQuoteResult(
                     pair_code=pair_code,
-                    bid=inv_bid,
-                    ask=inv_ask,
+                    bid=b_val,
+                    ask=a_val,
                     mid=mid_val,
                     rate_a_per_b=mid_ab,
                     bid_a_per_b=bid_ab,
                     ask_a_per_b=ask_ab,
-                    base_currency=b,
-                    quote_currency=q,
+                    base_currency=obs_b,
+                    quote_currency=obs_q,
                     quote_convention=conv,
                     observation_timestamp=inv_dt,
                     availability_timestamp=inv_rec.availability_timestamp or inv_dt,
@@ -1006,11 +1031,17 @@ class PointInTimeDataStore:
                     quote_assembly_method="reciprocal_two_way",
                     provider_price_type=PriceType.EXECUTABLE_TWO_WAY_QUOTE,
                     provider_side="two_way",
-                    provider_base_currency=obs.base_currency or q,
-                    provider_quote_currency=obs.quote_currency or b,
+                    provider_base_currency=obs_b,
+                    provider_quote_currency=obs_q,
                     provider_convention=conv,
+                    provider_bid=b_val,
+                    provider_ask=a_val,
+                    provider_mid=mid_val,
                     canonical_side="two_way",
-                    canonical_price=mid_ab,
+                    canonical_price=mid_ab if required_side is None else (ask_ab if required_side == "ask" else bid_ab),
+                    canonical_bid=bid_ab,
+                    canonical_ask=ask_ab,
+                    canonical_mid=mid_ab,
                 )
 
             # Check assembled one-sided quotes on reciprocal pair
@@ -1025,31 +1056,30 @@ class PointInTimeDataStore:
                 same_source = (b_r.observation.source_id == a_r.observation.source_id)
                 same_conv = (b_r.observation.quote_convention == a_r.observation.quote_convention)
                 if time_diff <= max_one_sided_quote_time_diff_seconds and bid_v <= ask_v and same_source and same_conv:
-                    inv_bid, inv_ask = invert_two_way_quote(bid_v, ask_v)
                     obs_b = b_r.observation.base_currency or q
                     obs_q = b_r.observation.quote_currency or b
                     conv = b_r.observation.quote_convention or QuoteConvention.QUOTE_PER_BASE
                     bid_ab, ask_ab = get_two_way_quote_a_per_b(
-                        bid=inv_bid,
-                        ask=inv_ask,
-                        obs_base=b,
-                        obs_quote=q,
+                        bid=bid_v,
+                        ask=ask_v,
+                        obs_base=obs_b,
+                        obs_quote=obs_q,
                         borrowing_currency=curr_a or b,
                         investment_currency=curr_b or q,
                         convention=conv,
                     )
-                    mid_val = (inv_bid + inv_ask) / 2.0
+                    mid_val = (bid_v + ask_v) / 2.0
                     mid_ab = (bid_ab + ask_ab) / 2.0
                     return ExecutableQuoteResult(
                         pair_code=pair_code,
-                        bid=inv_bid,
-                        ask=inv_ask,
+                        bid=bid_v,
+                        ask=ask_v,
                         mid=mid_val,
                         rate_a_per_b=mid_ab,
                         bid_a_per_b=bid_ab,
                         ask_a_per_b=ask_ab,
-                        base_currency=b,
-                        quote_currency=q,
+                        base_currency=obs_b,
+                        quote_currency=obs_q,
                         quote_convention=conv,
                         observation_timestamp=max(b_dt, a_dt),
                         availability_timestamp=max(b_r.availability_timestamp or b_dt, a_r.availability_timestamp or a_dt),
@@ -1064,8 +1094,14 @@ class PointInTimeDataStore:
                         provider_base_currency=obs_b,
                         provider_quote_currency=obs_q,
                         provider_convention=conv,
+                        provider_bid=bid_v,
+                        provider_ask=ask_v,
+                        provider_mid=mid_val,
                         canonical_side="two_way",
-                        canonical_price=mid_ab,
+                        canonical_price=mid_ab if required_side is None else (ask_ab if required_side == "ask" else bid_ab),
+                        canonical_bid=bid_ab,
+                        canonical_ask=ask_ab,
+                        canonical_mid=mid_ab,
                     )
 
             # Standalone one-sided quote from reciprocal pair if required_side is requested
@@ -1129,8 +1165,14 @@ class PointInTimeDataStore:
                         provider_base_currency=obs_b,
                         provider_quote_currency=obs_q,
                         provider_convention=conv,
+                        provider_bid=prov_val if target_prov_side == "bid" else None,
+                        provider_ask=prov_val if target_prov_side == "ask" else None,
+                        provider_mid=prov_val,
                         canonical_side=norm.canonical_side,
                         canonical_price=norm.canonical_price,
+                        canonical_bid=norm.canonical_price if norm.canonical_side == "bid" else None,
+                        canonical_ask=norm.canonical_price if norm.canonical_side == "ask" else None,
+                        canonical_mid=norm.canonical_price,
                     )
 
         # 3. Reference-rate proxy mode
@@ -1153,8 +1195,8 @@ class PointInTimeDataStore:
                     )
                     return ExecutableQuoteResult(
                         pair_code=pair_code,
-                        bid=obs.value,
-                        ask=obs.value,
+                        bid=None,
+                        ask=None,
                         mid=obs.value,
                         rate_a_per_b=rate_ab,
                         bid_a_per_b=rate_ab,
@@ -1175,8 +1217,14 @@ class PointInTimeDataStore:
                         provider_base_currency=obs_b,
                         provider_quote_currency=obs_q,
                         provider_convention=conv,
+                        provider_bid=None,
+                        provider_ask=None,
+                        provider_mid=obs.value,
                         canonical_side="reference",
                         canonical_price=rate_ab,
+                        canonical_bid=rate_ab,
+                        canonical_ask=rate_ab,
+                        canonical_mid=rate_ab,
                     )
             if "/" in pair_code:
                 b, q = pair_code.split("/", 1)
@@ -1204,14 +1252,14 @@ class PointInTimeDataStore:
                     age_min = max(0.0, (as_of_dt - q_dt).total_seconds()) / 60.0
                     return ExecutableQuoteResult(
                         pair_code=pair_code,
-                        bid=val,
-                        ask=val,
+                        bid=None,
+                        ask=None,
                         mid=val,
                         rate_a_per_b=rate_ab,
                         bid_a_per_b=rate_ab,
                         ask_a_per_b=rate_ab,
-                        base_currency=b,
-                        quote_currency=q,
+                        base_currency=obs_b,
+                        quote_currency=obs_q,
                         quote_convention=conv,
                         observation_timestamp=q_dt,
                         availability_timestamp=target_rec.availability_timestamp or q_dt,
@@ -1226,8 +1274,14 @@ class PointInTimeDataStore:
                         provider_base_currency=obs_b,
                         provider_quote_currency=obs_q,
                         provider_convention=conv,
+                        provider_bid=None,
+                        provider_ask=None,
+                        provider_mid=val,
                         canonical_side="reference",
                         canonical_price=rate_ab,
+                        canonical_bid=rate_ab,
+                        canonical_ask=rate_ab,
+                        canonical_mid=rate_ab,
                     )
 
         return None

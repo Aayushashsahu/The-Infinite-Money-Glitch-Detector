@@ -83,10 +83,10 @@ def make_real_obs(
     quote_curr: str = "USD",
     convention: QuoteConvention = QuoteConvention.QUOTE_PER_BASE,
     pub_time: datetime | None = None,
-    source_id: str = "real_dealer_feed",
+    source_id: str = "test_fixture_dealer",
     evidence: AvailabilityEvidence = AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
 ) -> DataObservation:
-    """Helper to construct genuine, validated market observations."""
+    """Helper to construct dedicated test mock observations with explicit fixture provenance."""
     pub_dt = pub_time or obs_time
     return DataObservation(
         kind=ObservationKind.EXCHANGE_RATE,
@@ -106,8 +106,8 @@ def make_real_obs(
         frequency=Frequency.DAILY,
         source_id=source_id,
         availability_evidence=evidence,
-        classification=DataClassification.REAL_VERIFIED,
-        is_synthetic=False,
+        classification=DataClassification.MOCK,
+        is_synthetic=True,
         retrieved_at=pub_dt + timedelta(minutes=1),
     )
 

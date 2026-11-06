@@ -171,14 +171,20 @@ class ExecutableQuoteResult(BaseModel):
     is_observed_spread: bool = False
     quote_assembly_method: str = "direct_two_way"
 
-    # Explicit Quote-Side Provenance (Phase 3.2.2.3.2)
+    # Explicit Quote-Side Provenance (Phase 3.2.2.3.2 & Phase 3.2.2.3.3)
     provider_price_type: PriceType | None = None
     provider_side: str | None = None  # "bid", "ask", "two_way", "reference"
     provider_base_currency: str = ""
     provider_quote_currency: str = ""
     provider_convention: QuoteConvention | None = None
+    provider_bid: float | None = None
+    provider_ask: float | None = None
+    provider_mid: float | None = None
     canonical_side: str | None = None  # "bid", "ask", "two_way", "reference"
     canonical_price: float | None = None
+    canonical_bid: float | None = None
+    canonical_ask: float | None = None
+    canonical_mid: float | None = None
 
 
 class DataAvailabilityConfig(BaseModel):
@@ -210,6 +216,10 @@ class DataAvailabilityConfig(BaseModel):
     allow_synthetic: bool = Field(
         default=False,
         description="Whether to permit synthetic observations (must be explicitly enabled for unit tests).",
+    )
+    allow_mock: bool = Field(
+        default=False,
+        description="Whether to permit test mock fixture observations (explicit test-mode flag).",
     )
 
 
@@ -376,19 +386,27 @@ class TradeRecord(BaseModel):
     exit_quote_timestamp: datetime | None = None
     exit_price_type: PriceType | None = None
 
-    # Explicit Quote-Side Provenance (Phase 3.2.2.3.2)
+    # Explicit Quote-Side Provenance (Phase 3.2.2.3.2 & Phase 3.2.2.3.3)
     entry_provider_price_type: PriceType | None = None
     entry_provider_side: str | None = None
     entry_provider_base: str = ""
     entry_provider_quote: str = ""
     entry_provider_convention: QuoteConvention | None = None
+    entry_provider_bid: float | None = None
+    entry_provider_ask: float | None = None
+    entry_provider_mid: float | None = None
     entry_canonical_side: str | None = None
+    entry_canonical_price: float | None = None
     exit_provider_price_type: PriceType | None = None
     exit_provider_side: str | None = None
     exit_provider_base: str = ""
     exit_provider_quote: str = ""
     exit_provider_convention: QuoteConvention | None = None
+    exit_provider_bid: float | None = None
+    exit_provider_ask: float | None = None
+    exit_provider_mid: float | None = None
     exit_canonical_side: str | None = None
+    exit_canonical_price: float | None = None
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
