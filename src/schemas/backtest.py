@@ -41,6 +41,21 @@ class AvailabilityPolicy(str, Enum):
     RESEARCH_ONLY = "research_only"
 
 
+class PointInTimeAvailabilityStatus(str, Enum):
+    """Explicit point-in-time availability assessment for a backtest run.
+
+    - STRICT_VERIFIED: Verified publication timestamps independently confirmed <= signal time.
+    - ESTIMATED_AVAILABILITY: Observations admitted using estimated publication schedules/lags.
+    - RETROSPECTIVE: Retrospective research analysis ignoring publication availability.
+    - INSUFFICIENT_EVIDENCE: Missing or unverified publication evidence.
+    """
+
+    STRICT_VERIFIED = "strict_verified"
+    ESTIMATED_AVAILABILITY = "estimated_availability"
+    RETROSPECTIVE = "retrospective"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+
+
 class PositionSizingMethod(str, Enum):
     """Position sizing algorithms."""
 
@@ -467,6 +482,12 @@ class DataProvenanceReport(BaseModel):
     real_verified_count: int = 0
     real_estimated_count: int = 0
     real_retrospective_count: int = 0
+    timestamp_populated_count: int = 0
+    timestamp_populated_pct: float = 0.0
+    exact_timestamp_verified_count: int = 0
+    exact_timestamp_verified_pct: float = 0.0
+    estimated_schedule_count: int = 0
+    retrospective_count: int = 0
     classification_breakdown: dict[str, int] = Field(default_factory=dict)
     is_synthetic_dataset: bool
     provenance_declaration: str
@@ -623,7 +644,8 @@ class BacktestResult(BaseModel):
     strategy_status: StrategyExecutabilityStatus = StrategyExecutabilityStatus.EXECUTABLE_VALIDATED
     manifest_digest: str | None = None
     can_simulate: bool = True
-    is_point_in_time_credible: bool = True
+    is_point_in_time_credible: bool = False
+    pit_availability_status: PointInTimeAvailabilityStatus = PointInTimeAvailabilityStatus.ESTIMATED_AVAILABILITY
     is_economically_representative: bool = False
     is_executable_strategy: bool = False
     unsupported_reason: str | None = None
@@ -639,5 +661,15 @@ class BacktestResult(BaseModel):
             if self.is_executable_strategy:
                 raise ValueError(
                     f"is_executable_strategy cannot be True when strategy_status is {self.strategy_status}!"
+                )
+        if self.config.availability_config.policy == AvailabilityPolicy.ESTIMATED_LAG:
+            if self.is_point_in_time_credible:
+                raise ValueError(
+                    "is_point_in_time_credible cannot be True for ESTIMATED_LAG availability policy."
+                )
+        if self.config.availability_config.policy == AvailabilityPolicy.RESEARCH_ONLY:
+            if self.is_point_in_time_credible:
+                raise ValueError(
+                    "is_point_in_time_credible cannot be True for RESEARCH_ONLY availability policy."
                 )
         return self

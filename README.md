@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 3.2.2.3 — Canonical FX Convention & Execution Mathematics Audit ✅
+## Status: Phase 3.2.2.3.1 — Directional Quote, Evidence & Risk-Metric Integrity ✅
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -21,7 +21,9 @@ opportunities**, not to assume profit.
 - **Phase 3.2.2.1 (Database Round-Trip, Strict PIT & Execution Patch):** Complete (182 passed tests).
 - **Phase 3.2.2.2 (Execution Quote Integrity, Settlement Calendars & Benchmark Validation):** Complete (198 passed tests).
 - **Phase 3.2.2.3 (Canonical FX Convention & Execution Mathematics Audit):** Complete (213 passed tests).
+- **Phase 3.2.2.3.1 (Directional Quote, Evidence & Risk-Metric Integrity):** Complete (233 passed tests).
 
+See [`PHASE_3_2_2_3_1_DIRECTIONAL_QUOTE_AND_EVIDENCE_CLOSURE.md`](PHASE_3_2_2_3_1_DIRECTIONAL_QUOTE_AND_EVIDENCE_CLOSURE.md) for directional one-sided quote inversion mathematics, standalone quote execution restrictions, PIT credibility and availability classification, non-fallback benchmark Sharpe/Sortino ratios, and full 2020-2024 reproduction results.
 See [`PHASE_3_2_2_3_FX_CONVENTION_EXECUTION_MATHEMATICS_AUDIT.md`](PHASE_3_2_2_3_FX_CONVENTION_EXECUTION_MATHEMATICS_AUDIT.md) for the complete mathematical FX audit, canonical quote normalization, reciprocal quote proofs, Mode A/B spread isolation, double-entry P&L reconciliation, and 2020-2024 historical return correction (+2.91%).
 See [`PHASE_3_2_2_2_EXECUTION_BENCHMARK_INTEGRITY_REPORT.md`](PHASE_3_2_2_2_EXECUTION_BENCHMARK_INTEGRITY_REPORT.md) for the execution quote separation, TARGET2/US Fed settlement calendars, and benchmark currency validation.
 See [`PHASE_3_2_2_1_DATABASE_PIT_CLOSURE_REPORT.md`](PHASE_3_2_2_1_DATABASE_PIT_CLOSURE_REPORT.md) for the previous database round-trip audit and strict PIT datetime verification.

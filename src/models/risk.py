@@ -103,25 +103,46 @@ def historical_cvar(returns, confidence: float = 0.95) -> float:
     return float(tail.mean())
 
 
-def sharpe_ratio(returns, risk_free_rate_annual: float = 0.0, periods_per_year: float = 1.0) -> float:
+def sharpe_ratio(
+    returns,
+    risk_free_rate_annual: float | None = 0.0,
+    periods_per_year: float = 1.0,
+    periodic_risk_free_rates=None,
+) -> float:
     """Annualized Sharpe ratio of period returns.
 
     ``(mean(returns) - per-period risk-free) / std(returns) * sqrt(periods_per_year)``,
     where the per-period risk-free rate is ``risk_free_rate_annual /
-    periods_per_year`` (simple allocation).
+    periods_per_year`` (simple allocation), or period-by-period from ``periodic_risk_free_rates``.
 
     The caller must supply a *defensible* benchmark for
-    ``risk_free_rate_annual``; this module does not invent one.
+    ``risk_free_rate_annual`` or ``periodic_risk_free_rates``; this module does not invent one.
 
     Raises:
-        ValueError: if volatility is zero (Sharpe is undefined).
+        ValueError: if volatility is zero (Sharpe is undefined) or if benchmark is missing.
     """
+    if risk_free_rate_annual is None and periodic_risk_free_rates is None:
+        raise ValueError("Defensible risk_free_rate_annual or periodic_risk_free_rates must be supplied.")
+
     r = _as_observations(returns)
     _check_periods_per_year(periods_per_year)
+
+    if periodic_risk_free_rates is not None:
+        rf_arr = np.asarray(periodic_risk_free_rates, dtype=float)
+        if len(rf_arr) != len(r):
+            raise ValueError(
+                f"Length of periodic_risk_free_rates ({len(rf_arr)}) does not match returns ({len(r)})."
+            )
+        excess_series = r - rf_arr
+        std_excess = np.std(excess_series, ddof=1)
+        if std_excess == 0:
+            raise ValueError("Sharpe ratio is undefined for zero volatility.")
+        return float(np.mean(excess_series) / std_excess * np.sqrt(periods_per_year))
+
     std = np.std(r, ddof=1)
     if std == 0:
         raise ValueError("Sharpe ratio is undefined for zero volatility.")
-    per_period_rf = risk_free_rate_annual / periods_per_year
+    per_period_rf = (risk_free_rate_annual or 0.0) / periods_per_year
     excess = float(np.mean(r)) - per_period_rf
     return float(excess / std * np.sqrt(periods_per_year))
 

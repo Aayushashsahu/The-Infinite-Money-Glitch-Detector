@@ -23,6 +23,7 @@ from schemas.backtest import (
     BacktestResult,
     BenchmarkSpecification,
     BenchmarkType,
+    PointInTimeAvailabilityStatus,
     TradeRecord,
     TradeStatus,
 )
@@ -571,18 +572,34 @@ class BacktestEngine:
 
         # 7. Compute final performance metrics with return attribution
         all_trades = self.portfolio.closed_trades + self.portfolio.rejected_trades
-        risk_free_ref = 0.0
-        if bm_spec and bm_spec.benchmark_type == BenchmarkType.FIXED_HYPOTHETICAL_PROXY:
-            risk_free_ref = bm_spec.fixed_rate_annual or self.config.cash_deposit_rate_annual
-        elif bm_spec and bm_spec.benchmark_type == BenchmarkType.ZERO_CASH:
-            risk_free_ref = 0.0
-        elif bm_spec and bm_spec.benchmark_type == BenchmarkType.HISTORICAL_RISK_FREE and benchmark_series is not None and rf_rates:
-            risk_free_ref = rf_rates[-1]
-        elif bm_spec and bm_spec.benchmark_type == BenchmarkType.HISTORICAL_DEPOSIT and benchmark_series is not None and dep_rates:
-            risk_free_ref = dep_rates[-1]
+        risk_free_ref: float | None = None
+        periodic_rf_rates: list[float] | None = None
+
+        if bm_spec is not None:
+            if bm_spec.benchmark_type == BenchmarkType.ZERO_CASH:
+                risk_free_ref = 0.0
+            elif bm_spec.benchmark_type == BenchmarkType.FIXED_HYPOTHETICAL_PROXY:
+                risk_free_ref = bm_spec.fixed_rate_annual or self.config.cash_deposit_rate_annual
+            elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_RISK_FREE:
+                if benchmark_series is not None and rf_rates:
+                    risk_free_ref = rf_rates[-1]
+                    if len(benchmark_series.returns) == max(0, len(self.portfolio.snapshots) - 1) and len(benchmark_series.returns) > 0:
+                        periodic_rf_rates = list(benchmark_series.returns)
+                else:
+                    risk_free_ref = None
+            elif bm_spec.benchmark_type == BenchmarkType.HISTORICAL_DEPOSIT:
+                if benchmark_series is not None and dep_rates:
+                    risk_free_ref = dep_rates[-1]
+                    if len(benchmark_series.returns) == max(0, len(self.portfolio.snapshots) - 1) and len(benchmark_series.returns) > 0:
+                        periodic_rf_rates = list(benchmark_series.returns)
+                else:
+                    risk_free_ref = None
+            elif bm_spec.benchmark_type == BenchmarkType.UNAVAILABLE:
+                risk_free_ref = None
+            else:
+                risk_free_ref = None
         else:
-            # Do not substitute commercial borrowing rate or policy-rate proxy without justification
-            risk_free_ref = 0.0
+            risk_free_ref = None
 
         periods_factor = 252.0 if self.config.simulate_trading_days_only else 365.0
 
@@ -595,6 +612,7 @@ class BacktestEngine:
             interest_convention=self.config.execution_config.interest_convention,
             periods_per_year=periods_factor,
             cash_interest_earned=self.portfolio.total_cash_interest_earned,
+            periodic_risk_free_rates=periodic_rf_rates,
         )
         if bm_spec:
             metrics.benchmark_name = bm_spec.name
@@ -631,8 +649,35 @@ class BacktestEngine:
         ):
             is_executable = False
 
+        # 8. Data Provenance & Traceability Report
+        from backtesting.provenance import build_data_provenance_report
+        provenance = build_data_provenance_report(
+            observations=self.observations,
+            start_date=self.config.start_date,
+            end_date=self.config.end_date,
+            currency_pair_code=pair_code,
+            policy=self.config.availability_config.policy,
+        )
+
+        # Strict Point-in-Time Credibility & Availability Status
+        if self.config.availability_config.policy == AvailabilityPolicy.STRICT:
+            if provenance.exact_timestamp_verified_pct >= 1.0 and provenance.total_observations > 0:
+                is_pit = True
+                pit_status = PointInTimeAvailabilityStatus.STRICT_VERIFIED
+            else:
+                is_pit = False
+                pit_status = PointInTimeAvailabilityStatus.INSUFFICIENT_EVIDENCE
+        elif self.config.availability_config.policy == AvailabilityPolicy.ESTIMATED_LAG:
+            is_pit = False
+            pit_status = PointInTimeAvailabilityStatus.ESTIMATED_AVAILABILITY
+        elif self.config.availability_config.policy == AvailabilityPolicy.RESEARCH_ONLY:
+            is_pit = False
+            pit_status = PointInTimeAvailabilityStatus.RETROSPECTIVE
+        else:
+            is_pit = False
+            pit_status = PointInTimeAvailabilityStatus.INSUFFICIENT_EVIDENCE
+
         can_sim = can_simulate and (strategy_status != StrategyExecutabilityStatus.UNEXECUTABLE) and len(self.observations) > 0
-        is_pit = (self.config.availability_config.policy != AvailabilityPolicy.RESEARCH_ONLY)
         is_econ = (strategy_status == StrategyExecutabilityStatus.EXECUTABLE_VALIDATED)
 
         # Manifest digest
@@ -649,16 +694,6 @@ class BacktestEngine:
                     break
                 time.sleep(0.2)
 
-        # 8. Data Provenance & Traceability Report
-        from backtesting.provenance import build_data_provenance_report
-        provenance = build_data_provenance_report(
-            observations=self.observations,
-            start_date=self.config.start_date,
-            end_date=self.config.end_date,
-            currency_pair_code=pair_code,
-            policy=self.config.availability_config.policy,
-        )
-
         return BacktestResult(
             config=self.config,
             trades=all_trades,
@@ -673,6 +708,7 @@ class BacktestEngine:
             manifest_digest=manifest_digest,
             can_simulate=can_sim,
             is_point_in_time_credible=is_pit,
+            pit_availability_status=pit_status,
             is_economically_representative=is_econ,
             is_executable_strategy=is_executable,
             unsupported_reason=unsupported_reason,

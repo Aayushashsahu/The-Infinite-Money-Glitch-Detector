@@ -59,18 +59,28 @@ METRIC_ASSUMPTIONS_DOC: dict[str, str] = {
 
 def calculate_sortino_ratio(
     returns: Sequence[float],
-    risk_free_rate_annual: float = 0.0,
+    risk_free_rate_annual: float | None = 0.0,
     periods_per_year: float = 252.0,
+    periodic_risk_free_rates: Sequence[float] | None = None,
 ) -> float | None:
     """Annualized Sortino ratio.
 
     Penalizes only downside deviations below the per-period risk-free rate.
     """
+    if risk_free_rate_annual is None and periodic_risk_free_rates is None:
+        return None
     arr = np.asarray(returns, dtype=float)
     if arr.size < 2:
         return None
-    per_period_rf = risk_free_rate_annual / periods_per_year
-    excess = arr - per_period_rf
+    if periodic_risk_free_rates is not None:
+        rf_arr = np.asarray(periodic_risk_free_rates, dtype=float)
+        if len(rf_arr) != len(arr):
+            return None
+        excess = arr - rf_arr
+    else:
+        per_period_rf = (risk_free_rate_annual or 0.0) / periods_per_year
+        excess = arr - per_period_rf
+
     downside = np.minimum(excess, 0.0)
     downside_sq = np.sum(downside ** 2) / max(1, len(arr) - 1)
     downside_std = math.sqrt(downside_sq)
@@ -85,11 +95,12 @@ def calculate_performance_metrics(
     trades: Sequence[TradeRecord],
     snapshots: Sequence[PortfolioSnapshot],
     initial_capital_a: float,
-    risk_free_rate_annual: float = 0.0,
+    risk_free_rate_annual: float | None = 0.0,
     benchmark: BenchmarkSeries | None = None,
     interest_convention: InterestConvention = InterestConvention.COMPOUND,
     periods_per_year: float = 252.0,
     cash_interest_earned: float = 0.0,
+    periodic_risk_free_rates: Sequence[float] | None = None,
 ) -> PerformanceMetrics:
     """Calculate standardized performance and risk statistics for a completed backtest.
 
@@ -97,10 +108,11 @@ def calculate_performance_metrics(
         trades: Full history of closed and open trades.
         snapshots: Periodic mark-to-market portfolio snapshots.
         initial_capital_a: Starting capital in currency A.
-        risk_free_rate_annual: Annualized risk-free rate benchmark.
+        risk_free_rate_annual: Annualized risk-free rate benchmark. If None, Sharpe and Sortino are None.
         benchmark: Optional comparative benchmark series.
         interest_convention: Compounding rule.
         periods_per_year: Observation frequency (252 for daily snapshots, 12 for monthly).
+        periodic_risk_free_rates: Optional time-varying periodic risk-free rates.
     """
     closed = [t for t in trades if t.status == TradeStatus.CLOSED and t.net_profit_a is not None]
     total_trades = len(closed)
@@ -149,20 +161,26 @@ def calculate_performance_metrics(
     # Risk metrics from periodic returns
     if len(period_returns) >= 2:
         vol = historical_volatility(period_returns, periods_per_year=periods_per_year)
-        try:
-            sharpe = sharpe_ratio(
+        if risk_free_rate_annual is None and periodic_risk_free_rates is None:
+            sharpe = None
+            sortino = None
+        else:
+            try:
+                sharpe = sharpe_ratio(
+                    period_returns,
+                    risk_free_rate_annual=risk_free_rate_annual,
+                    periods_per_year=periods_per_year,
+                    periodic_risk_free_rates=periodic_risk_free_rates,
+                )
+            except ValueError:
+                sharpe = None
+
+            sortino = calculate_sortino_ratio(
                 period_returns,
                 risk_free_rate_annual=risk_free_rate_annual,
                 periods_per_year=periods_per_year,
+                periodic_risk_free_rates=periodic_risk_free_rates,
             )
-        except ValueError:
-            sharpe = None
-
-        sortino = calculate_sortino_ratio(
-            period_returns,
-            risk_free_rate_annual=risk_free_rate_annual,
-            periods_per_year=periods_per_year,
-        )
 
         try:
             mdd = max_drawdown(period_returns)

@@ -198,6 +198,29 @@ class ExecutionEngine:
                 rejection_reason=f"Principal {principal_borrowed_a} exceeds max_trade_size_a {self.config.max_trade_size_a}",
             )
 
+        if exec_quote is not None:
+            if exec_quote.price_type == PriceType.BID_QUOTE or (
+                exec_quote.quote_assembly_method.startswith("standalone_one_sided")
+                and exec_quote.ask_a_per_b is None
+            ):
+                return TradeRecord(
+                    trade_id=trade_id,
+                    strategy_name=strategy_name,
+                    currency_pair=currency_pair,
+                    borrowing_currency=currency_pair.borrowing_currency,
+                    investment_currency=currency_pair.investment_currency,
+                    entry_date=entry_date,
+                    target_tenor_days=tenor_days,
+                    principal_borrowed_a=principal_borrowed_a,
+                    borrowing_rate=borrowing_rate,
+                    investment_rate=investment_rate,
+                    spot_mid_entry=max(1e-9, spot_mid_entry),
+                    spot_exec_entry=max(1e-9, spot_mid_entry),
+                    invested_amount_b=0.0,
+                    status=TradeStatus.REJECTED,
+                    rejection_reason="Cannot execute long-entry with a standalone BID quote (missing ask quote).",
+                )
+
         spot_mid = exec_quote.rate_a_per_b if (exec_quote and exec_quote.rate_a_per_b > 0) else spot_mid_entry
         if spot_mid <= 0:
             return TradeRecord(
@@ -346,6 +369,13 @@ class ExecutionEngine:
         """
         if trade.status != TradeStatus.OPEN:
             raise ValueError(f"Cannot close trade {trade.trade_id} with status {trade.status}")
+
+        if exec_quote is not None:
+            if exec_quote.price_type == PriceType.ASK_QUOTE or (
+                exec_quote.quote_assembly_method.startswith("standalone_one_sided")
+                and exec_quote.bid_a_per_b is None
+            ):
+                raise ValueError("Cannot execute exit with a standalone ASK quote (missing bid quote).")
 
         actual_days = (exit_date - trade.entry_date).days
         if actual_days <= 0:

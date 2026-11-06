@@ -14,6 +14,8 @@ common arithmetic error in cross-currency work: silently inverting a rate.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
 import re
 
 _CURRENCY_CODE = re.compile(r"^[A-Za-z]{3}$")
@@ -89,9 +91,6 @@ def inverse_rate(rate_a_per_b: float) -> float:
     """
     _check_rate(rate_a_per_b)
     return 1.0 / rate_a_per_b
-
-
-from enum import Enum
 
 
 class QuoteConvention(str, Enum):
@@ -224,3 +223,171 @@ def get_two_way_quote_a_per_b(
         raise ValueError(
             f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}."
         )
+
+
+@dataclass(frozen=True)
+class DirectionalQuoteResult:
+    """Canonicalized result of a directional one-sided or two-way quote translation."""
+
+    canonical_price: float
+    canonical_side: str  # "ask" or "bid"
+    provider_price: float
+    provider_side: str  # "ask" or "bid"
+    provider_base: str
+    provider_quote: str
+    provider_convention: QuoteConvention
+    borrowing_currency: str
+    investment_currency: str
+
+
+def map_canonical_side_to_provider_side(
+    requested_canonical_side: str,
+    obs_base: str,
+    obs_quote: str,
+    borrowing_currency: str,
+    investment_currency: str,
+    convention: QuoteConvention | str = QuoteConvention.QUOTE_PER_BASE,
+) -> str:
+    """Determine which provider quote side ('bid' or 'ask') is required to obtain requested_canonical_side.
+
+    Rules:
+    - requested_canonical_side="ask": Strategy buying investment currency B using borrowing currency A.
+      - If provider quote is already in units of A per B: requires provider ASK.
+      - If provider quote is in units of B per A: requires provider BID (which inverts to canonical ask 1.0 / bid).
+    - requested_canonical_side="bid": Strategy selling investment currency B to receive borrowing currency A.
+      - If provider quote is already in units of A per B: requires provider BID.
+      - If provider quote is in units of B per A: requires provider ASK (which inverts to canonical bid 1.0 / ask).
+    """
+    req = requested_canonical_side.lower()
+    if req not in ("bid", "ask"):
+        raise ValueError(f"requested_canonical_side must be 'bid' or 'ask', got {requested_canonical_side!r}")
+
+    if isinstance(convention, str):
+        convention = QuoteConvention(convention)
+
+    b_obs = validate_currency_code(obs_base)
+    q_obs = validate_currency_code(obs_quote)
+    curr_a = validate_currency_code(borrowing_currency)
+    curr_b = validate_currency_code(investment_currency)
+
+    if curr_a == curr_b:
+        raise ValueError(f"Borrowing and investment currencies must differ, got {curr_a!r} twice.")
+
+    # Determine whether provider's quote is inherently units of A per B
+    if convention == QuoteConvention.QUOTE_PER_BASE:
+        if curr_a == q_obs and curr_b == b_obs:
+            is_a_per_b = True
+        elif curr_a == b_obs and curr_b == q_obs:
+            is_a_per_b = False
+        else:
+            raise ValueError(f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}.")
+    elif convention == QuoteConvention.BASE_PER_QUOTE:
+        if curr_a == b_obs and curr_b == q_obs:
+            is_a_per_b = True
+        elif curr_a == q_obs and curr_b == b_obs:
+            is_a_per_b = False
+        else:
+            raise ValueError(f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}.")
+    else:
+        raise ValueError(f"Unsupported quote convention: {convention}")
+
+    if is_a_per_b:
+        return req
+    else:
+        return "bid" if req == "ask" else "ask"
+
+
+def normalize_directional_quote(
+    provider_price: float,
+    provider_side: str,
+    obs_base: str,
+    obs_quote: str,
+    borrowing_currency: str,
+    investment_currency: str,
+    convention: QuoteConvention | str = QuoteConvention.QUOTE_PER_BASE,
+    transaction_direction: str | None = None,
+    requested_canonical_side: str | None = None,
+) -> DirectionalQuoteResult:
+    """Normalize a provider quote side into a strategy canonical rate_a_per_b.
+
+    Args:
+        provider_price: Raw price from the provider observation (> 0).
+        provider_side: Provider price side ('bid' or 'ask').
+        obs_base: Base currency of provider pair.
+        obs_quote: Quote currency of provider pair.
+        borrowing_currency: Strategy currency A.
+        investment_currency: Strategy currency B.
+        convention: QUOTE_PER_BASE or BASE_PER_QUOTE.
+        transaction_direction: Optional 'entry' (buy B) or 'exit' (sell B).
+        requested_canonical_side: Optional 'ask' (entry) or 'bid' (exit).
+
+    Returns:
+        DirectionalQuoteResult containing canonical_price and canonical_side.
+    """
+    _check_rate(provider_price)
+    prov_side = provider_side.lower()
+    if prov_side not in ("bid", "ask"):
+        raise ValueError(f"provider_side must be 'bid' or 'ask', got {provider_side!r}")
+
+    if isinstance(convention, str):
+        convention = QuoteConvention(convention)
+
+    b_obs = validate_currency_code(obs_base)
+    q_obs = validate_currency_code(obs_quote)
+    curr_a = validate_currency_code(borrowing_currency)
+    curr_b = validate_currency_code(investment_currency)
+
+    if curr_a == curr_b:
+        raise ValueError(f"Borrowing and investment currencies must differ, got {curr_a!r} twice.")
+
+    if convention == QuoteConvention.QUOTE_PER_BASE:
+        if curr_a == q_obs and curr_b == b_obs:
+            is_a_per_b = True
+        elif curr_a == b_obs and curr_b == q_obs:
+            is_a_per_b = False
+        else:
+            raise ValueError(f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}.")
+    elif convention == QuoteConvention.BASE_PER_QUOTE:
+        if curr_a == b_obs and curr_b == q_obs:
+            is_a_per_b = True
+        elif curr_a == q_obs and curr_b == b_obs:
+            is_a_per_b = False
+        else:
+            raise ValueError(f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}.")
+    else:
+        raise ValueError(f"Unsupported quote convention: {convention}")
+
+    if is_a_per_b:
+        canonical_price = provider_price
+        canonical_side = prov_side
+    else:
+        canonical_price = 1.0 / provider_price
+        canonical_side = "ask" if prov_side == "bid" else "bid"
+
+    expected_side = requested_canonical_side
+    if expected_side is None and transaction_direction is not None:
+        direction_lower = transaction_direction.lower()
+        if direction_lower in ("entry", "open", "buy_b"):
+            expected_side = "ask"
+        elif direction_lower in ("exit", "close", "sell_b"):
+            expected_side = "bid"
+
+    if expected_side is not None:
+        if canonical_side != expected_side.lower():
+            raise ValueError(
+                f"Directional mismatch: Provider {prov_side.upper()} normalizes to canonical {canonical_side.upper()} "
+                f"({canonical_price:.6f} {curr_a}/{curr_b}), which does not satisfy requested canonical {expected_side.upper()}."
+            )
+
+    return DirectionalQuoteResult(
+        canonical_price=canonical_price,
+        canonical_side=canonical_side,
+        provider_price=provider_price,
+        provider_side=prov_side,
+        provider_base=b_obs,
+        provider_quote=q_obs,
+        provider_convention=convention,
+        borrowing_currency=curr_a,
+        investment_currency=curr_b,
+    )
+

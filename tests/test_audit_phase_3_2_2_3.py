@@ -286,16 +286,17 @@ def test_standalone_one_sided_quote_cannot_produce_round_trip():
     two_way = store.get_executable_quote("EUR/USD", as_of=ts + timedelta(minutes=1), required_side=None)
     assert two_way is None
 
-    # Requesting ask when only bid exists returns None
-    ask_fill = store.get_executable_quote("EUR/USD", as_of=ts + timedelta(minutes=1), required_side="ask")
-    assert ask_fill is None
-
-    # Requesting bid succeeds for standalone side
+    # Requesting canonical bid (exit: selling USD for EUR requires provider ask, missing) returns None
     bid_fill = store.get_executable_quote("EUR/USD", as_of=ts + timedelta(minutes=1), required_side="bid")
-    assert bid_fill is not None
-    assert bid_fill.quote_assembly_method == "standalone_one_sided"
-    assert bid_fill.bid == 1.08
-    assert bid_fill.ask is None
+    assert bid_fill is None
+
+    # Requesting canonical ask (entry: buying USD with EUR requires provider bid, present) succeeds
+    ask_fill = store.get_executable_quote("EUR/USD", as_of=ts + timedelta(minutes=1), required_side="ask")
+    assert ask_fill is not None
+    assert ask_fill.quote_assembly_method == "standalone_one_sided"
+    assert ask_fill.bid == 1.08
+    assert ask_fill.ask is None
+    assert ask_fill.rate_a_per_b == pytest.approx(1.0 / 1.08)
 
 
 def test_quote_timestamp_requirement_for_real_data():

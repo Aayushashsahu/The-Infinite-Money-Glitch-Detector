@@ -33,6 +33,7 @@ def export_backtest_result_json(result: BacktestResult, output_path: str | Path 
         "strategy_status": result.strategy_status.value,
         "can_simulate": result.can_simulate,
         "is_point_in_time_credible": result.is_point_in_time_credible,
+        "pit_availability_status": result.pit_availability_status.value,
         "is_economically_representative": result.is_economically_representative,
         "is_executable_strategy": result.is_executable_strategy,
         "unsupported_reason": result.unsupported_reason,
@@ -98,15 +99,15 @@ def export_backtest_result_json(result: BacktestResult, output_path: str | Path 
         p = Path(output_path).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
         import time
-        for attempt in range(5):
+        for attempt in range(10):
             try:
                 with open(p, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2)
                 break
             except OSError:
-                if attempt == 4:
+                if attempt == 9:
                     raise
-                time.sleep(0.2)
+                time.sleep(0.5)
 
     return data
 
@@ -125,6 +126,8 @@ def format_backtest_report(result: BacktestResult) -> str:
     lines.append(f"**Initial Capital**: `{cfg.initial_capital_a:,.2f} {pair.borrowing_currency}`  ")
     lines.append(f"**Trade Tenor**: `{cfg.tenor_days} calendar days`  ")
     lines.append(f"**Data Availability Policy**: `{cfg.availability_config.policy.value.upper()}`  ")
+    lines.append(f"**PIT Availability Status**: `{result.pit_availability_status.value.upper()}`  ")
+    lines.append(f"**PIT Credible**: `{'YES' if result.is_point_in_time_credible else 'NO'}`  ")
     lines.append(f"**Executable Strategy**: `{'YES' if result.is_executable_strategy else 'NO'}`  ")
 
     if not result.is_executable_strategy and result.unsupported_reason:
@@ -219,9 +222,12 @@ def format_backtest_report(result: BacktestResult) -> str:
         lines.append(f"- **Source Providers**: `{', '.join(p.source_providers)}`")
         lines.append(f"- **Dataset Identifiers**: `{', '.join(p.dataset_identifiers)}`")
         lines.append(f"- **Date Range**: `{p.date_range[0]}` to `{p.date_range[1]}` (`{p.calendar_days}` calendar days, `{p.trading_days}` trading days)")
-        lines.append(f"- **Missing Trading Days Quote Coverage**: `{p.missing_trading_days_pct:.1%}` missing trading-day quotes")
-        lines.append(f"- **Verified Publication Dates**: `{p.publication_date_availability_pct:.1%}` of observations have verified publication timestamps")
-        lines.append(f"- **Observation Counts**: Total = `{p.total_observations}`, Real = `{p.real_observations_count}`, Synthetic = `{p.synthetic_observations_count}`")
+        lines.append(f"- **Publication Timestamps Populated**: `{p.timestamp_populated_pct:.1%}` ({p.timestamp_populated_count:,} / {p.total_observations:,} observations)")
+        lines.append(f"- **Exact Publication Timestamps Verified**: `{p.exact_timestamp_verified_pct:.1%}` ({p.exact_timestamp_verified_count:,} / {p.total_observations:,} observations)")
+        if p.estimated_schedule_count > 0:
+            lines.append(f"- **Estimated Publication Schedule**: `{p.estimated_schedule_count / p.total_observations:.1%}` ({p.estimated_schedule_count:,} / {p.total_observations:,} observations)")
+        if p.retrospective_count > 0:
+            lines.append(f"- **Retrospective Research**: `{p.retrospective_count / p.total_observations:.1%}` ({p.retrospective_count:,} / {p.total_observations:,} observations)")
         if p.classification_breakdown:
             breakdown_str = ", ".join(f"{k} = {v}" for k, v in sorted(p.classification_breakdown.items()))
             lines.append(f"- **Classification Breakdown**: `{breakdown_str}`")
