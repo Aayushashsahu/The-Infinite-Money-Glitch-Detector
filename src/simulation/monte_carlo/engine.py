@@ -40,6 +40,7 @@ from simulation.monte_carlo.schemas import (
 from simulation.monte_carlo.shocks import (
     apply_stress_scenario,
     build_standard_stress_scenarios,
+    generate_correlation_breakdown_path,
 )
 from simulation.monte_carlo.strategy_adapter import (
     CarryTradeScenarioStrategy,
@@ -222,7 +223,18 @@ class MonteCarloEngine:
         })
 
         for sc in scenarios:
-            stressed_path = apply_stress_scenario(base_path, sc)
+            if sc.correlation_breakdown:
+                stressed_path, _ = generate_correlation_breakdown_path(
+                    panel=self.panel,
+                    random_seed=self.config.random_seed,
+                    horizon=self.config.horizon_steps,
+                    initial_fx=self.config.initial_fx_rate,
+                    initial_borrowing_rate=self.config.initial_borrowing_rate,
+                    initial_investment_rate=self.config.initial_investment_rate,
+                )
+            else:
+                stressed_path = apply_stress_scenario(base_path, sc)
+
             ev = self.strategy.evaluate_path(
                 path=stressed_path,
                 initial_capital_a=100_000.0,
@@ -237,6 +249,7 @@ class MonteCarloEngine:
                 "investment_rate_shock_bps": sc.investment_rate_shock_bps,
                 "spread_multiplier": sc.spread_multiplier,
                 "slippage_multiplier": sc.slippage_multiplier,
+                "correlation_breakdown": sc.correlation_breakdown,
                 "total_return": ev.total_return,
                 "net_profit_a": ev.cumulative_net_profit_a,
                 "pure_gross_gain_a": ev.pure_gross_gain_a,

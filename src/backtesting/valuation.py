@@ -53,7 +53,10 @@ def mark_position_to_market(
     years = days_to_years(days_held)
 
     # 1. Foreign currency value accrued to date
-    f_b = growth_factor(trade.investment_rate, years, config.interest_convention)
+    if days_held == 0:
+        f_b = 1.0
+    else:
+        f_b = growth_factor(trade.investment_rate, years, config.interest_convention)
     inv_val_b = trade.invested_amount_b * f_b
 
     # 2. Liquidation rate in A (bid spread + slippage)

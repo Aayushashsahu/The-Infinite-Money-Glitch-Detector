@@ -101,6 +101,23 @@ class MarketFactor(BaseModel):
     description: str = Field(default="", description="Human-readable description of factor semantics")
 
 
+class FactorRowProvenance(BaseModel):
+    """Row-level audit provenance for a factor observation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    observation_date: date
+    observation_timestamp: datetime | None = None
+    publication_timestamp: datetime | None = None
+    source_id: str
+    series_id: str
+    raw_value: float
+    transformed_value: float
+    data_classification: DataClassification = DataClassification.REAL_VERIFIED
+    availability_evidence: str | None = None
+    revision: int | None = None
+
+
 class FactorObservation(BaseModel):
     """A single transformed factor observation."""
 
@@ -112,6 +129,8 @@ class FactorObservation(BaseModel):
     raw_value: float
     transformed_value: float
     data_classification: DataClassification = DataClassification.REAL_VERIFIED
+    availability_evidence: str | None = None
+    revision: int | None = None
 
 
 class FactorPanel(BaseModel):
@@ -129,6 +148,10 @@ class FactorPanel(BaseModel):
     effective_sample_size: int = Field(description="Number of aligned observation dates")
     is_aligned: bool = Field(default=True, description="True if complete cases across all factors")
     alignment_audit: list[str] = Field(default_factory=list, description="Audit log of alignment operations")
+    row_provenance: dict[str, list[FactorRowProvenance]] = Field(
+        default_factory=dict,
+        description="Factor ID -> row-level audit provenance for each transformed observation",
+    )
 
 
 # =============================================================================
@@ -200,14 +223,33 @@ class StressScenario(BaseModel):
 
     name: str
     description: str
-    category: str = Field(default="single_factor", description="'single_factor', 'compound', 'liquidity', 'jump'")
-    fx_shock_pct: float = Field(default=0.0, description="Instantaneous fractional FX price change")
+    category: str = Field(default="single_factor", description="'single_factor', 'compound', 'liquidity', 'correlation', 'jump'")
+    fx_shock_pct: float = Field(default=0.0, description="Instantaneous fractional FX price change on investment currency B")
     borrowing_rate_shock_bps: float = Field(default=0.0, description="Borrowing rate change in basis points")
     investment_rate_shock_bps: float = Field(default=0.0, description="Investment yield change in basis points")
     spread_multiplier: float = Field(default=1.0, ge=0.1, description="Bid/ask spread expansion factor")
     slippage_multiplier: float = Field(default=1.0, ge=0.1, description="Execution slippage expansion factor")
     correlation_breakdown: bool = Field(default=False, description="True if stress decouples historical correlations")
     is_hypothetical: bool = Field(default=True, description="Always True; stress tests are hypothetical")
+
+    # Shock timing contract
+    shock_timing: str = Field(
+        default="after_entry",
+        description="Shock timing: 'pre_entry', 'after_entry', 'at_step', 'persistent'",
+    )
+    shock_step: int = Field(
+        default=5,
+        ge=0,
+        description="Step index at which instantaneous or persistent shock takes effect",
+    )
+    is_persistent: bool = Field(
+        default=True,
+        description="True if shock persistently shifts subsequent path price levels",
+    )
+    reversal_step: int | None = Field(
+        default=None,
+        description="Optional step index at which the shock recovers to baseline",
+    )
 
 
 # =============================================================================
@@ -317,6 +359,11 @@ class ConvergenceCheckpoint(BaseModel):
     var_95: float
     cvar_95: float
     std_return: float
+    max_drawdown_median: float = 0.0
+    prob_drawdown_10pct: float = 0.0
+    tail_sample_size: int = 0
+    var_95_se: float = 0.0
+    cvar_95_se: float = 0.0
 
 
 class ConvergenceReport(BaseModel):
@@ -326,6 +373,49 @@ class ConvergenceReport(BaseModel):
     is_converged: bool = True
     final_standard_error: float
     convergence_notes: str = ""
+    is_converged_mean: bool = True
+    is_converged_median: bool = True
+    is_converged_prob_loss: bool = True
+    is_converged_var_95: bool = True
+    is_converged_cvar_95: bool = True
+    is_converged_drawdown: bool = True
+    tail_sample_size_final: int = 0
+
+
+class CalibrationAvailabilitySummary(BaseModel):
+    """Audited breakdown of historical calibration availability."""
+
+    total_genuine_observations: int = 0
+    exact_timestamp_verified_count: int = 0
+    estimated_availability_count: int = 0
+    retrospective_count: int = 0
+    missing_evidence_count: int = 0
+    excluded_synthetic_count: int = 0
+    complete_aligned_factor_days: int = 0
+    data_classification_label: str = "SIMULATED_RESEARCH_PROXY"
+
+
+class HoldoutDiagnosticReport(BaseModel):
+    """Out-of-sample diagnostic validation against untouched holdout dataset."""
+
+    holdout_year: int = 2024
+    holdout_start: date
+    holdout_end: date
+    holdout_days: int
+    realized_fx_volatility_annualized: float
+    calibration_fx_volatility_annualized: float
+    volatility_ratio: float
+    volatility_regime_classification: str
+    realized_cumulative_return: float
+    predictive_quantile_return: float
+    realized_max_drawdown: float
+    predictive_quantile_drawdown: float
+    rate_change_ks_stat: float | None = None
+    rate_change_ks_pvalue: float | None = None
+    correlation_shifts: dict[str, float] = Field(default_factory=dict)
+    is_within_normal_distribution_bounds: bool = True
+    diagnostic_summary: str = ""
+    limitations_notes: list[str] = Field(default_factory=list)
 
 
 class ModelComparisonEntry(BaseModel):

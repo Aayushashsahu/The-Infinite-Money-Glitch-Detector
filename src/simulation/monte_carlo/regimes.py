@@ -1,8 +1,8 @@
 """Observable volatility and market-regime modeling.
 
 Identifies empirical volatility regimes (low, high, stress), estimates the
-discrete Markov transition probability matrix, and executes regime-conditioned
-scenario resampling.
+discrete Markov transition probability matrix without warm-up contamination,
+and executes regime-conditioned scenario resampling.
 """
 
 from __future__ import annotations
@@ -42,13 +42,19 @@ class RegimeModelReport(BaseModel):
 
 
 class VolatilityRegimeClassifier:
-    """Classifies historical observations into discrete volatility regimes."""
+    """Classifies historical observations into discrete volatility regimes.
+
+    Enforces strict warm-up exclusion:
+    - Observations in the initial rolling window (t < rolling_window) are excluded
+      from transition count estimation, state frequency calculation, and regime statistics.
+    - Percentiles are computed exclusively on valid rolling standard deviations.
+    """
 
     def __init__(
         self,
         panel: FactorPanel,
         rolling_window: int = 63,
-        low_vol_percentile: float = 35.0,
+        low_vol_percentile: float = 20.0,
         high_vol_percentile: float = 80.0,
     ) -> None:
         self.panel = panel
@@ -63,33 +69,58 @@ class VolatilityRegimeClassifier:
         # Compute rolling annualized volatility
         s = pd.Series(fx_returns)
         rolling_vol = s.rolling(window=rolling_window).std() * math.sqrt(252)
+        self.rolling_vol_series = rolling_vol
 
-        # Drop warmup NaNs
-        valid_vols = rolling_vol.dropna()
+        # Identify valid non-NaN indices
+        self.valid_indices: list[int] = [i for i, v in enumerate(rolling_vol) if not math.isnan(v)]
+        if len(self.valid_indices) < 20:
+            raise ValueError(f"Insufficient valid volatility observations: {len(self.valid_indices)}")
+
+        valid_vols = [float(rolling_vol[i]) for i in self.valid_indices]
         self.threshold_low = float(np.percentile(valid_vols, self.low_pct))
         self.threshold_high = float(np.percentile(valid_vols, self.high_pct))
 
-        # Classify all valid observations
-        self.regimes: list[RegimeState] = []
-        for v in rolling_vol:
-            if math.isnan(v):
-                self.regimes.append(RegimeState.LOW_VOLATILITY)
-            elif v < self.threshold_low:
-                self.regimes.append(RegimeState.LOW_VOLATILITY)
+        # Map each valid observation to a RegimeState
+        self.regime_by_index: dict[int, RegimeState] = {}
+        for i in self.valid_indices:
+            v = float(rolling_vol[i])
+            if v < self.threshold_low:
+                self.regime_by_index[i] = RegimeState.LOW_VOLATILITY
             elif v < self.threshold_high:
-                self.regimes.append(RegimeState.HIGH_VOLATILITY)
+                self.regime_by_index[i] = RegimeState.HIGH_VOLATILITY
             else:
-                self.regimes.append(RegimeState.STRESS)
+                self.regime_by_index[i] = RegimeState.STRESS
+
+        # Full regimes array matching panel length (warm-up entries set to None)
+        self.regimes: list[RegimeState | None] = [
+            self.regime_by_index.get(i) for i in range(len(fx_returns))
+        ]
+
+        # Valid counts
+        self.regime_counts: dict[str, int] = {
+            RegimeState.LOW_VOLATILITY.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.LOW_VOLATILITY),
+            RegimeState.HIGH_VOLATILITY.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.HIGH_VOLATILITY),
+            RegimeState.STRESS.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.STRESS),
+        }
+        self.total_valid_obs = len(self.valid_indices)
 
     def compute_transition_matrix(self) -> dict[str, dict[str, float]]:
-        """Estimate Markov transition probabilities P(regime_t | regime_{t-1})."""
+        """Estimate Markov transition probabilities P(regime_t | regime_{t-1}).
+
+        Excludes warm-up observations strictly: transitions are counted only across
+        consecutive valid trading days where both t-1 and t have calculated volatility.
+        """
         states = [RegimeState.LOW_VOLATILITY.value, RegimeState.HIGH_VOLATILITY.value, RegimeState.STRESS.value]
         counts: dict[str, dict[str, int]] = {s1: {s2: 0 for s2 in states} for s1 in states}
 
-        for i in range(1, len(self.regimes)):
-            r_prev = self.regimes[i - 1].value
-            r_curr = self.regimes[i].value
-            counts[r_prev][r_curr] += 1
+        for idx in range(1, len(self.valid_indices)):
+            prev_idx = self.valid_indices[idx - 1]
+            curr_idx = self.valid_indices[idx]
+            # Ensure consecutive sequence
+            if curr_idx == prev_idx + 1:
+                r_prev = self.regime_by_index[prev_idx].value
+                r_curr = self.regime_by_index[curr_idx].value
+                counts[r_prev][r_curr] += 1
 
         probs: dict[str, dict[str, float]] = {}
         for s1 in states:
@@ -100,34 +131,45 @@ class VolatilityRegimeClassifier:
         return probs
 
     def build_report(self) -> RegimeModelReport:
-        """Construct full regime diagnostic report."""
+        """Construct full regime diagnostic report with genuine per-regime summary statistics."""
         probs = self.compute_transition_matrix()
-        counts: dict[str, int] = {}
-        for r in self.regimes:
-            counts[r.value] = counts.get(r.value, 0) + 1
+        notes: list[str] = [
+            f"Excluded {self.rolling_window - 1} warm-up observations from regime classification and transition estimation.",
+            f"Calibrated on {self.total_valid_obs} valid rolling-window observations.",
+        ]
 
-        notes = []
         is_sufficient = True
-        for s, c in counts.items():
+        for s, c in self.regime_counts.items():
             if c < 20:
                 is_sufficient = False
                 notes.append(f"Regime {s} has fewer than 20 observations ({c}); model may have high parameter uncertainty.")
 
-        summaries = {
-            s: RegimeSummary(
-                regime=RegimeState(s),
-                observation_count=counts.get(s, 0),
-                mean_annualized_volatility=0.0,
-                min_annualized_volatility=0.0,
-                max_annualized_volatility=0.0,
+        summaries: dict[str, RegimeSummary] = {}
+        for s_val in [RegimeState.LOW_VOLATILITY.value, RegimeState.HIGH_VOLATILITY.value, RegimeState.STRESS.value]:
+            vols_s = [
+                float(self.rolling_vol_series[i])
+                for i in self.valid_indices
+                if self.regime_by_index[i].value == s_val
+            ]
+            c = len(vols_s)
+            mean_v = float(np.mean(vols_s)) if c > 0 else 0.0
+            min_v = float(np.min(vols_s)) if c > 0 else 0.0
+            max_v = float(np.max(vols_s)) if c > 0 else 0.0
+            stat_prob = c / self.total_valid_obs if self.total_valid_obs > 0 else 0.0
+
+            summaries[s_val] = RegimeSummary(
+                regime=RegimeState(s_val),
+                observation_count=c,
+                mean_annualized_volatility=mean_v,
+                min_annualized_volatility=min_v,
+                max_annualized_volatility=max_v,
+                stationary_probability=stat_prob,
             )
-            for s in counts
-        }
 
         return RegimeModelReport(
             rolling_window_days=self.rolling_window,
             regimes=[RegimeState.LOW_VOLATILITY, RegimeState.HIGH_VOLATILITY, RegimeState.STRESS],
-            regime_counts=counts,
+            regime_counts=self.regime_counts,
             transition_matrix=probs,
             thresholds={"low": self.threshold_low, "high": self.threshold_high},
             regime_summaries=summaries,
@@ -137,7 +179,10 @@ class VolatilityRegimeClassifier:
 
 
 class RegimeConditionedSampler:
-    """Simulates market factors conditioned on the prevailing volatility regime."""
+    """Simulates market factors conditioned on the prevailing volatility regime.
+
+    Rejects empty regime pools and samples initial states from empirical distribution.
+    """
 
     def __init__(
         self,
@@ -154,30 +199,45 @@ class RegimeConditionedSampler:
         self.data_matrix = np.column_stack(matrix_cols)  # (T, K)
         self.n_obs, self.n_factors = self.data_matrix.shape
 
-        # Partition observation indices by regime
+        # Partition valid observation indices by regime
         self.regime_indices: dict[str, list[int]] = {
             RegimeState.LOW_VOLATILITY.value: [],
             RegimeState.HIGH_VOLATILITY.value: [],
             RegimeState.STRESS.value: [],
         }
-        for i, r in enumerate(classifier.regimes):
+        for i in classifier.valid_indices:
+            r = classifier.regime_by_index[i]
             self.regime_indices[r.value].append(i)
+
+        # Ensure no regime pool is empty
+        for s, pool in self.regime_indices.items():
+            if not pool:
+                raise ValueError(
+                    f"Regime pool for '{s}' has 0 valid observations. Data support is inadequate."
+                )
 
         self.transition_matrix = classifier.compute_transition_matrix()
         self.states = [RegimeState.LOW_VOLATILITY.value, RegimeState.HIGH_VOLATILITY.value, RegimeState.STRESS.value]
 
     def sample_regime_sequence(self, horizon: int, initial_regime: str | None = None) -> list[str]:
-        """Simulate a Markov chain of regime states."""
+        """Simulate a Markov chain of regime states.
+
+        If initial_regime is None, samples from the empirical stationary distribution.
+        """
         if initial_regime is None:
-            # Start at low volatility or sample from initial distribution
-            initial_regime = RegimeState.LOW_VOLATILITY.value
+            # Sample from historical regime frequencies
+            init_probs = [
+                self.classifier.regime_counts[s] / self.classifier.total_valid_obs
+                for s in self.states
+            ]
+            current = str(self.rng.choice(self.states, p=init_probs))
+        else:
+            current = initial_regime
 
-        current = initial_regime
         sequence = [current]
-
         for _ in range(horizon - 1):
             next_probs = [self.transition_matrix[current][s] for s in self.states]
-            current = self.rng.choice(self.states, p=next_probs)
+            current = str(self.rng.choice(self.states, p=next_probs))
             sequence.append(current)
 
         return sequence
@@ -198,11 +258,7 @@ class RegimeConditionedSampler:
         sampled_rows: list[np.ndarray] = []
         for r_state in regime_seq:
             pool = self.regime_indices[r_state]
-            if not pool:
-                # Fallback to random draw from entire matrix if regime pool is empty
-                idx = int(self.rng.integers(0, self.n_obs))
-            else:
-                idx = int(self.rng.choice(pool))
+            idx = int(self.rng.choice(pool))
             sampled_rows.append(self.data_matrix[idx, :])
 
         sampled_factors = np.vstack(sampled_rows)

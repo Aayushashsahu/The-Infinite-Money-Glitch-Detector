@@ -385,17 +385,32 @@ def test_deterministic_stress_shocks():
     )
 
     stress = StressScenario(
-        name="Test Shock",
+        name="Test Shock After Entry",
         description="FX -10%, Borrowing +200 bps, Yield -100 bps",
         fx_shock_pct=-0.10,
         borrowing_rate_shock_bps=200.0,
         investment_rate_shock_bps=-100.0,
+        shock_timing="after_entry",
+        shock_step=1,
     )
 
     stressed = apply_stress_scenario(base, stress)
-    assert stressed.fx_rates[0] == pytest.approx(1.10 * 0.90, rel=1e-12)
-    assert stressed.borrowing_rates[0] == pytest.approx(0.03 + 0.02, rel=1e-12)
-    assert stressed.investment_rates[0] == pytest.approx(0.05 - 0.01, rel=1e-12)
+    assert stressed.fx_rates[0] == pytest.approx(1.10, rel=1e-12)
+    # In provider quote terms (USD per EUR), adverse USD shock of -10% divides provider quote by 0.90
+    assert stressed.fx_rates[1] == pytest.approx(1.10 / 0.90, rel=1e-12)
+    # In canonical terms (EUR per USD), canonical rate depreciates by exactly 10%
+    assert (1.0 / stressed.fx_rates[1]) == pytest.approx((1.0 / 1.10) * 0.90, rel=1e-12)
+    assert stressed.borrowing_rates[1] == pytest.approx(0.03 + 0.02, rel=1e-12)
+    assert stressed.investment_rates[1] == pytest.approx(0.05 - 0.01, rel=1e-12)
+
+    stress_pre = StressScenario(
+        name="Test Shock Pre Entry",
+        description="FX -10% pre-entry",
+        fx_shock_pct=-0.10,
+        shock_timing="pre_entry",
+    )
+    stressed_pre = apply_stress_scenario(base, stress_pre)
+    assert stressed_pre.fx_rates[0] == pytest.approx(1.10 / 0.90, rel=1e-12)
 
 
 def test_standard_stress_scenarios_suite():

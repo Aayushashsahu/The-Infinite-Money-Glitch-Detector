@@ -14,7 +14,11 @@ import numpy as np
 import scipy.stats as stats
 from pydantic import BaseModel, Field
 
-from simulation.monte_carlo.schemas import DistributionQuantiles, FactorPanel
+from simulation.monte_carlo.schemas import (
+    CalibrationAvailabilitySummary,
+    DistributionQuantiles,
+    FactorPanel,
+)
 
 
 class FactorSummary(BaseModel):
@@ -46,6 +50,8 @@ class CalibrationReport(BaseModel):
     covariance_matrix: list[list[float]]
     is_sufficient: bool = True
     sufficiency_notes: list[str] = Field(default_factory=list)
+    availability_summary: CalibrationAvailabilitySummary | None = None
+
 
 
 def split_calibration_holdout(
@@ -125,6 +131,7 @@ def compute_quantiles(arr: np.ndarray) -> DistributionQuantiles:
 def calibrate_factor_panel(
     panel: FactorPanel,
     holdout_panel: FactorPanel | None = None,
+    raw_observations: list[Any] | None = None,
     min_observations: int = 250,
 ) -> CalibrationReport:
     """Calibrate empirical distribution and covariance models on historical factor panel."""
@@ -180,6 +187,49 @@ def calibrate_factor_panel(
     h_end = max(holdout_panel.dates) if holdout_panel and holdout_panel.dates else None
     h_count = holdout_panel.effective_sample_size if holdout_panel else 0
 
+    # Availability breakdown audit
+    avail_summary: CalibrationAvailabilitySummary | None = None
+    if raw_observations is not None:
+        total_gen = sum(1 for o in raw_observations if not getattr(o, "is_synthetic", False))
+        def _ev_matches(val: Any, key: str) -> bool:
+            if val is None:
+                return False
+            s = str(getattr(val, "value", val)).lower()
+            return key.lower() in s
+
+        exact_ver = sum(
+            1 for o in raw_observations
+            if not getattr(o, "is_synthetic", False)
+            and _ev_matches(getattr(o, "availability_evidence", None), "exact_timestamp_verified")
+        )
+        estimated = sum(
+            1 for o in raw_observations
+            if not getattr(o, "is_synthetic", False)
+            and _ev_matches(getattr(o, "availability_evidence", None), "estimated_schedule")
+        )
+        retrospective = sum(
+            1 for o in raw_observations
+            if not getattr(o, "is_synthetic", False)
+            and str(getattr(o, "classification", "")).endswith("retrospective")
+        )
+        missing_ev = sum(
+            1 for o in raw_observations
+            if not getattr(o, "is_synthetic", False)
+            and getattr(o, "availability_evidence", None) is None
+        )
+        excl_synth = sum(1 for o in raw_observations if getattr(o, "is_synthetic", False))
+
+        avail_summary = CalibrationAvailabilitySummary(
+            total_genuine_observations=total_gen,
+            exact_timestamp_verified_count=exact_ver,
+            estimated_availability_count=estimated,
+            retrospective_count=retrospective,
+            missing_evidence_count=missing_ev,
+            excluded_synthetic_count=excl_synth,
+            complete_aligned_factor_days=n_obs,
+            data_classification_label="SIMULATED_RESEARCH_PROXY",
+        )
+
     return CalibrationReport(
         calibration_start=calib_start,
         calibration_end=calib_end,
@@ -193,4 +243,5 @@ def calibrate_factor_panel(
         covariance_matrix=cov_mat.tolist(),
         is_sufficient=is_sufficient,
         sufficiency_notes=notes,
+        availability_summary=avail_summary,
     )
