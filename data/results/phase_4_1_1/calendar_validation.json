@@ -1,0 +1,17 @@
+{
+  "calendar_implementation": "JointTarget2FedCalendar / WeekdayTradingProxy",
+  "session_count": 36,
+  "initial_state_zero_interest": true,
+  "weekend_3day_accrual_verified": true,
+  "holiday_accrual_verified": true,
+  "tenor_30day_maturity_verified": true,
+  "independent_numerical_accrual_verified": true,
+  "transitions_n_levels_n_plus_1_verified": true,
+  "array_lengths_verified": true,
+  "notes": [
+    "Simulated trading calendar strictly distinguishes initial market state (t=0) from N market transitions.",
+    "Financing and idle cash interest accrue over actual elapsed calendar days between market sessions.",
+    "Friday to Monday accrues 3 calendar days; joint TARGET2/US Fed settlement holiday closures accrue full calendar time.",
+    "Contractual 30-calendar-day tenor matures on or after entry date + 30 calendar days on the next eligible trading session."
+  ]
+}

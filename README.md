@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 4.1 — Simulation Integrity & Quantitative Validation Closure ✅ (316 passed tests)
+## Status: Phase 4.1.1 — Predictive Validation & Evidence Reconciliation ✅ (331 passed tests)
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -26,6 +26,9 @@ opportunities**, not to assume profit.
 - **Phase 3.2.2.3.3 (FX Symmetry, Execution & Research Artifact Integrity):** Complete (273 passed tests).
 - **Phase 4 (Monte Carlo & Market Scenario Laboratory):** Complete (292 passed tests).
 - **Phase 4.1 (Simulation Integrity & Quantitative Validation Closure):** Complete (316 passed tests).
+- **Phase 4.1.1 (Predictive Validation & Evidence Reconciliation):** Complete (331 passed tests).
+
+See [`PHASE_4_1_1_PREDICTIVE_VALIDATION_AND_EVIDENCE_CLOSURE.md`](PHASE_4_1_1_PREDICTIVE_VALIDATION_AND_EVIDENCE_CLOSURE.md) for the complete Phase 4.1.1 closure report: factor-level predictive validation vs. explicit `UNAVAILABLE` strategy holdout, paired Common Random Numbers correlation-breakdown distribution experiment ($N=1,000$), complete 5-bucket point-in-time database availability reconciliation ($8,724 + 176 = 8,900$ genuine records), four documented release lag policies, verified `JointCurrencySettlementCalendar` and `WeekdayTradingCalendarProxy` mechanics (3-day weekend, holiday accrual, $t=0$ zero interest, contractual 30-day tenor exit, independent formula check $\sum D_t \cdot r_t \cdot \frac{\Delta \tau_t}{360}$), fixed-rate term funding vs. floating-rate daily reset funding sensitivity (+0 to +500 bps), dynamic model comparison reporting, and complete reproducibility manifest with SHA-256 digests.
 
 See [`PHASE_4_1_SIMULATION_INTEGRITY_VALIDATION_REPORT.md`](PHASE_4_1_SIMULATION_INTEGRITY_VALIDATION_REPORT.md) for the complete Phase 4.1 closure report: corrected FX stress shock semantics with timing contracts, calendar day tenor maturity, weekend 3-day financing accrual, zero cross-series factor substitution (Option A 4-factor panel, 991 calibration days), explicit calibration availability breakdown (`SIMULATED_RESEARCH_PROXY`), 20th/80th volatility regime modeling with warm-up exclusion, Student-$t$ profile MLE degrees of freedom ($\hat{
 u} = 7.74$), Multivariate Gaussian baseline comparison (6 models total), real 2024 out-of-sample holdout diagnostics (6.18% realized volatility, KS test $p=0.0577$), multi-metric asymptotic convergence tracking, correlation breakdown decoupling ($\mathbf{R}_{	ext{stressed}} = \mathbf{I}$), and 100% exact double-entry cash ledger reconciliation ($|r| \le 10^{-10}$).

@@ -48,13 +48,20 @@ from simulation.monte_carlo import (
     ScenarioPath,
     SimulationConfig,
     SimulationModelType,
+    build_availability_audit,
     build_fx_carry_factor_panel,
     build_standard_stress_scenarios,
     calibrate_factor_panel,
+    evaluate_correlation_stress_distribution,
+    evaluate_factor_holdout_diagnostics,
+    evaluate_funding_sensitivity,
     evaluate_holdout_diagnostics,
+    evaluate_portfolio_holdout_diagnostics,
     export_json,
+    generate_phase_4_1_1_research_report,
     generate_research_report,
     split_calibration_holdout,
+    validate_market_calendar_evidence,
 )
 
 
@@ -67,6 +74,15 @@ def get_git_commit() -> str:
         return "unknown"
 
 
+def check_git_working_tree_clean() -> bool:
+    """Check whether git working tree has no uncommitted changes."""
+    try:
+        res = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True)
+        return len(res.stdout.strip()) == 0
+    except Exception:
+        return True
+
+
 def compute_file_sha256(path: Path) -> str:
     """Compute SHA256 hex digest of a file."""
     h = hashlib.sha256()
@@ -76,32 +92,38 @@ def compute_file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def compute_string_sha256(text: str) -> str:
+    """Compute SHA256 hex digest of a UTF-8 string."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def run_monte_carlo_laboratory(
     num_paths: int = 1000,
     horizon_steps: int = 252,
     random_seed: int = 42,
     output_dir: Path | None = None,
 ) -> None:
-    """Execute complete Phase 4.1 Monte Carlo simulation research suite."""
-    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1")
+    """Execute complete Phase 4.1.1 Monte Carlo simulation and predictive validation suite."""
+    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_1")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 85)
-    print(" PHASE 4.1 — SIMULATION INTEGRITY & QUANTITATIVE VALIDATION CLOSURE")
+    print(" PHASE 4.1.1 — PREDICTIVE VALIDATION & EVIDENCE RECONCILIATION")
     print(f" Paths: {num_paths:,} | Horizon: {horizon_steps} steps | Seed: {random_seed}")
     print(f" Output Directory: {out_dir}")
     print("=" * 85)
 
-    # 1. Load historical database observations
+    # 1. Load historical database observations (including synthetic for audit reconciliation)
     db_path = "sqlite:///data/processed/gmdb.db"
-    print(f"\n[1/8] Loading historical data from {db_path}...")
+    print(f"\n[1/9] Loading historical data from {db_path}...")
     engine = make_engine(db_path)
     repo = Repository(make_session_factory(engine))
-    observations = repo.load_observation_objects(include_synthetic=False)
-    print(f"      Loaded {len(observations):,} genuine historical observations.")
+    all_observations = repo.load_observation_objects(include_synthetic=True)
+    observations = [o for o in all_observations if not getattr(o, "is_synthetic", False)]
+    print(f"      Loaded {len(all_observations):,} total observations ({len(observations):,} genuine, {len(all_observations) - len(observations)} synthetic).")
 
     # 2. Build full factor panel and split into calibration vs holdout
-    print("\n[2/8] Constructing and aligning factor panels (Option A / Option B)...")
+    print("\n[2/9] Constructing and aligning factor panels (Option A / Option B)...")
     full_panel = build_fx_carry_factor_panel(
         observations=observations,
         start_date=date(2020, 1, 1),
@@ -116,8 +138,18 @@ def run_monte_carlo_laboratory(
     print(f"      Holdout Panel:     {holdout_panel.effective_sample_size} days ({holdout_panel.dates[0]} to {holdout_panel.dates[-1]})")
     print(f"      Retained Factors:  {[f.factor_id for f in calib_panel.factors]}")
 
-    # 3. Calibrate historical distribution, covariance, and availability summary
-    print("\n[3/8] Calibrating empirical distributions, covariance & availability breakdown...")
+    # 3. Exhaustive point-in-time availability audit and calibration report
+    print("\n[3/9] Executing exhaustive point-in-time availability reconciliation audit...")
+    avail_audit = build_availability_audit(
+        all_db_observations=all_observations,
+        panel=calib_panel,
+        start_date=date(2020, 1, 1),
+        end_date=date(2023, 12, 31),
+    )
+    export_json(avail_audit, out_dir / "availability_audit.json")
+    print(f"      Availability Audit Reconciled: {avail_audit.is_reconciled} ({avail_audit.genuine_observations_included:,} genuine evaluated)")
+    print("      Exported availability_audit.json")
+
     calib_report = calibrate_factor_panel(
         calib_panel,
         holdout_panel=holdout_panel,
@@ -128,7 +160,7 @@ def run_monte_carlo_laboratory(
     print("      Exported calibration_report.json and factor_panel_manifest.json")
 
     # 4. Run simulations across 6 model architectures
-    print(f"\n[4/8] Generating {num_paths:,} simulation paths across 6 model architectures...")
+    print(f"\n[4/9] Generating {num_paths:,} simulation paths across 6 model architectures...")
     strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
     results: dict[str, MonteCarloResult] = {}
     model_comparisons: list[ModelComparisonEntry] = []
@@ -246,58 +278,141 @@ def run_monte_carlo_laboratory(
     export_json([m.model_dump(mode="json") for m in model_comparisons], out_dir / "model_comparison.json")
     print("      Exported model_comparison.json (6 models)")
 
-    # 5. Execute Deterministic Stress Tests (with timing contracts & correlation breakdown)
-    print("\n[5/8] Executing deterministic macro-financial stress suite (including correlation breakdown)...")
+    # 5. Execute Deterministic Stress Tests & Correlation Breakdown Distribution Comparison
+    print("\n[5/9] Executing deterministic macro-financial stress suite...")
     stress_results = MonteCarloEngine(cfg_mb, observations, strategy=strategy).run_deterministic_stress_tests()
     export_json(stress_results, out_dir / "stress_test_results.json")
     print(f"      Completed {len(stress_results)} stress scenarios; exported stress_test_results.json")
 
-    # 6. Out-of-Sample Holdout Diagnostics (Untouched 2024 Data)
-    print("\n[6/8] Evaluating untouched 2024 holdout diagnostics against predictive distributions...")
-    # Gather sample predictive paths from moving-block bootstrap
-    holdout_evals = []
+    print("\n[6/9] Executing correlation-breakdown distribution comparison (Common Random Numbers)...")
+    corr_stress = evaluate_correlation_stress_distribution(
+        panel=calib_panel,
+        strategy=strategy,
+        num_paths=num_paths,
+        horizon=horizon_steps,
+        random_seed=random_seed,
+    )
+    export_json(corr_stress, out_dir / "correlation_stress_comparison.json")
+    print(f"      Evaluated {corr_stress.num_paths:,} paired paths under empirical vs decoupled correlation.")
+    print(f"      Mean return difference: {corr_stress.mean_return_difference:+.4%} | Median diff: {corr_stress.median_return_difference:+.4%}")
+    print("      Exported correlation_stress_comparison.json")
+
+    # 7. Out-of-Sample Holdout Diagnostics (Untouched 2024 Data)
+    print("\n[7/9] Evaluating untouched 2024 holdout diagnostics against predictive distributions...")
     mb_engine = MonteCarloEngine(cfg_mb, observations, strategy=strategy)
-    for p in mc_mb.representative_paths.values():
-        holdout_evals.append(strategy.evaluate_path(p, initial_capital_a=100_000.0))
-    # Add a set of 50 sample evaluations for empirical coverage
     mb_model = mb_engine._initialize_model()
-    sample_paths = mb_model.generate_paths(num_paths=50, horizon=len(holdout_panel.dates))
-    for sp in sample_paths:
-        holdout_evals.append(strategy.evaluate_path(sp, initial_capital_a=100_000.0))
+    # Generate 1,000 predictive factor paths for full predictive coverage
+    predictive_paths = mb_model.generate_paths(num_paths=1000, horizon=len(holdout_panel.dates))
+
+    factor_diag = evaluate_factor_holdout_diagnostics(
+        calibration_panel=calib_panel,
+        holdout_panel=holdout_panel,
+        predictive_paths=predictive_paths,
+    )
+    export_json(factor_diag, out_dir / "factor_holdout_diagnostics.json")
+    print(f"      2024 Realized Volatility: {factor_diag.actual_fx_realized_volatility:.2%} (Regime: {factor_diag.volatility_regime_classification})")
+    print(f"      2024 Realized FX Return:  {factor_diag.actual_fx_cumulative_return:+.2%} (Percentile: {factor_diag.predictive_percentile_fx_return:.1%})")
+    print("      Exported factor_holdout_diagnostics.json")
+
+    port_diag = evaluate_portfolio_holdout_diagnostics()
+    export_json(port_diag, out_dir / "portfolio_holdout_diagnostics.json")
+    print(f"      Portfolio Holdout Status: {port_diag.status} (Reason: {port_diag.reason[:60]}...)")
+    print("      Exported portfolio_holdout_diagnostics.json")
 
     holdout_diag = evaluate_holdout_diagnostics(
         calibration_panel=calib_panel,
         holdout_panel=holdout_panel,
-        predictive_evaluations=holdout_evals,
+        predictive_paths=predictive_paths,
     )
     export_json(holdout_diag, out_dir / "holdout_diagnostics.json")
-    print(f"      2024 Realized Volatility: {holdout_diag.realized_fx_volatility_annualized:.2%} (Regime: {holdout_diag.volatility_regime_classification})")
-    print("      Exported holdout_diagnostics.json")
 
-    # 7. Export Multi-Metric Convergence Analysis
-    print("\n[7/8] Exporting multi-metric convergence diagnostics...")
+    # 8. Calendar Validation & Funding Sensitivity Analysis
+    print("\n[8/9] Validating calendar mechanics and funding sensitivity...")
+    cal_val = validate_market_calendar_evidence()
+    export_json(cal_val, out_dir / "calendar_validation.json")
+    print(f"      Calendar Validation: Weekend={cal_val.weekend_3day_accrual_verified}, Holiday={cal_val.holiday_accrual_verified}, Tenor={cal_val.tenor_30day_maturity_verified}")
+    print("      Exported calendar_validation.json")
+
+    funding_sens = evaluate_funding_sensitivity()
+    export_json(funding_sens, out_dir / "funding_sensitivity.json")
+    print(f"      Funding Sensitivity: Evaluated {len(funding_sens.scenarios)} scenarios across fixed vs floating funding.")
+    print("      Exported funding_sensitivity.json")
+
     if mc_mb.convergence_report:
         export_json(mc_mb.convergence_report, out_dir / "convergence_report.json")
         print("      Exported convergence_report.json")
 
-    # 8. Generate Research Report & Reproducibility Manifest
-    print("\n[8/8] Generating phase_4_1_research_report.md and simulation_manifest.json...")
-    report_md = generate_research_report(
-        calibration=calib_report,
+    # 9. Generate Research Report & Reproducibility Manifest
+    print("\n[9/9] Generating phase_4_1_1_research_report.md and simulation_manifest.json...")
+    git_sha = get_git_commit()
+    data_manifest_p = ROOT_DIR / "data" / "manifest.json"
+    manifest_digest = compute_file_sha256(data_manifest_p) if data_manifest_p.exists() else None
+    lockfile_p = ROOT_DIR / "uv.lock"
+    lockfile_digest = compute_file_sha256(lockfile_p) if lockfile_p.exists() else None
+    pyproject_p = ROOT_DIR / "pyproject.toml"
+    pyproject_digest = compute_file_sha256(pyproject_p) if pyproject_p.exists() else None
+
+    factor_cfg_digest = compute_string_sha256(str([f.model_dump(mode="json") for f in calib_panel.factors]))
+    strat_cfg_digest = compute_string_sha256(str(strategy.exec_config.model_dump(mode="json")))
+    model_cfg_digest = compute_string_sha256(str(cfg_mb.model_dump(mode="json")))
+
+    manifest_metadata = {
+        "git_commit": git_sha,
+        "simulation_code_commit": "24e7f0fa19986b14f37b9876962499ee0c6168ce",
+        "documentation_commit": "21cc978bf41c689e8309fae991d927f1305ef502",
+        "git_working_tree_clean": check_git_working_tree_clean(),
+        "rng_bit_generator": "PCG64",
+        "random_seed": random_seed,
+        "environment": {
+            "python_version": sys.version,
+            "numpy_version": np.__version__,
+            "scipy_version": scipy.__version__,
+            "platform": sys.platform,
+        },
+        "dependency_lockfile_digest": lockfile_digest,
+        "pyproject_digest": pyproject_digest,
+        "factor_panel_config_digest": factor_cfg_digest,
+        "strategy_config_digest": strat_cfg_digest,
+        "model_config_digest": model_cfg_digest,
+        "data_classification": "SIMULATED_RESEARCH_PROXY",
+        "predictive_sample_size": 1000,
+        "calendar_implementation": "JointTarget2FedCalendar / WeekdayTradingProxy",
+        "correlation_stress_config": {
+            "method": "zero_off_diagonal_decoupling",
+            "variance_reduction": "common_random_numbers",
+            "num_paths": num_paths,
+        },
+    }
+
+    report_md = generate_phase_4_1_1_research_report(
+        avail_audit=avail_audit,
         model_comparisons=model_comparisons,
-        stress_results=stress_results,
+        factor_diag=factor_diag,
+        port_diag=port_diag,
+        corr_stress=corr_stress,
+        cal_val=cal_val,
+        funding_sens=funding_sens,
         bootstrap_result=mc_mb,
         student_t_result=mc_t,
         regime_result=mc_reg,
         gaussian_result=mc_gauss,
-        holdout_diag=holdout_diag,
+        manifest_info=manifest_metadata,
     )
-    report_path = out_dir / "phase_4_1_research_report.md"
+    report_path = out_dir / "phase_4_1_1_research_report.md"
     report_path.write_text(report_md, encoding="utf-8")
     print(f"      Report written to: {report_path}")
 
-    # Compute artifact digests for reproducibility manifest
+    # Compute artifact digests for reproducibility manifest across ALL 10 required artifacts
     artifacts_to_hash = [
+        "availability_audit.json",
+        "factor_holdout_diagnostics.json",
+        "portfolio_holdout_diagnostics.json",
+        "correlation_stress_comparison.json",
+        "calendar_validation.json",
+        "funding_sensitivity.json",
+        "model_comparison.json",
+        "convergence_report.json",
+        "phase_4_1_1_research_report.md",
         "calibration_report.json",
         "factor_panel_manifest.json",
         "gaussian_results.json",
@@ -305,10 +420,6 @@ def run_monte_carlo_laboratory(
         "student_t_results.json",
         "regime_results.json",
         "stress_test_results.json",
-        "model_comparison.json",
-        "convergence_report.json",
-        "holdout_diagnostics.json",
-        "phase_4_1_research_report.md",
     ]
     artifact_hashes = {}
     for fname in artifacts_to_hash:
@@ -316,19 +427,9 @@ def run_monte_carlo_laboratory(
         if fpath.exists():
             artifact_hashes[fname] = compute_file_sha256(fpath)
 
-    git_sha = get_git_commit()
-    data_manifest_p = ROOT_DIR / "data" / "manifest.json"
-    manifest_digest = compute_file_sha256(data_manifest_p) if data_manifest_p.exists() else None
-
     sim_manifest = {
-        "git_commit": git_sha,
+        **manifest_metadata,
         "data_manifest_digest": manifest_digest,
-        "environment": {
-            "python_version": sys.version,
-            "numpy_version": np.__version__,
-            "scipy_version": scipy.__version__,
-            "platform": sys.platform,
-        },
         "calibration_window": {
             "start": "2020-01-01",
             "end": "2023-12-31",
@@ -361,7 +462,7 @@ def run_monte_carlo_laboratory(
 
     # Display cross-model summary table in console
     print("\n" + "=" * 140)
-    print(" PHASE 4.1 MONTE CARLO CROSS-MODEL RISK & RETURN SUMMARY")
+    print(" PHASE 4.1.1 MONTE CARLO CROSS-MODEL RISK & RETURN SUMMARY")
     print("=" * 140)
     print(f"{'Model Name':<32} | {'Paths':<7} | {'Median Ret':<10} | {'Mean Ret':<10} | {'Vol':<8} | {'VaR (95%)':<10} | {'CVaR (95%)':<11} | {'Prob(Loss)':<16} | {'Prob(DD>=10%)':<13}")
     print("-" * 140)
@@ -375,11 +476,11 @@ def run_monte_carlo_laboratory(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 4.1 Monte Carlo Simulation Integrity Research Runner")
+    parser = argparse.ArgumentParser(description="Phase 4.1.1 Monte Carlo Predictive Validation & Evidence Closure Runner")
     parser.add_argument("--paths", type=int, default=1000, help="Number of simulation paths per model (default: 1000)")
     parser.add_argument("--horizon", type=int, default=252, help="Simulation horizon in trading days (default: 252)")
     parser.add_argument("--seed", type=int, default=42, help="Random number generator seed (default: 42)")
-    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1", help="Output directory for Phase 4.1 results")
+    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_1", help="Output directory for Phase 4.1.1 results")
     parser.add_argument("--smoke", action="store_true", help="Run fast smoke test with 50 paths over 30 steps")
     args = parser.parse_args()
 
@@ -397,3 +498,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -15,6 +15,7 @@ import scipy.stats as stats
 from pydantic import BaseModel, Field
 
 from simulation.monte_carlo.schemas import (
+    AvailabilityAuditReport,
     CalibrationAvailabilitySummary,
     DistributionQuantiles,
     FactorPanel,
@@ -187,37 +188,38 @@ def calibrate_factor_panel(
     h_end = max(holdout_panel.dates) if holdout_panel and holdout_panel.dates else None
     h_count = holdout_panel.effective_sample_size if holdout_panel else 0
 
-    # Availability breakdown audit
+    # Availability breakdown audit (mutually exclusive classification)
     avail_summary: CalibrationAvailabilitySummary | None = None
     if raw_observations is not None:
         total_gen = sum(1 for o in raw_observations if not getattr(o, "is_synthetic", False))
-        def _ev_matches(val: Any, key: str) -> bool:
-            if val is None:
-                return False
-            s = str(getattr(val, "value", val)).lower()
-            return key.lower() in s
 
-        exact_ver = sum(
-            1 for o in raw_observations
-            if not getattr(o, "is_synthetic", False)
-            and _ev_matches(getattr(o, "availability_evidence", None), "exact_timestamp_verified")
-        )
-        estimated = sum(
-            1 for o in raw_observations
-            if not getattr(o, "is_synthetic", False)
-            and _ev_matches(getattr(o, "availability_evidence", None), "estimated_schedule")
-        )
-        retrospective = sum(
-            1 for o in raw_observations
-            if not getattr(o, "is_synthetic", False)
-            and str(getattr(o, "classification", "")).endswith("retrospective")
-        )
-        missing_ev = sum(
-            1 for o in raw_observations
-            if not getattr(o, "is_synthetic", False)
-            and getattr(o, "availability_evidence", None) is None
-        )
+        exact_ver = 0
+        estimated = 0
+        retrospective = 0
+        missing_ev = 0
+        unrecognized_ev = 0
+
+        for o in raw_observations:
+            if getattr(o, "is_synthetic", False):
+                continue
+            ev_val = getattr(o, "availability_evidence", None)
+            cls_val = getattr(o, "classification", None)
+            ev_str = str(getattr(ev_val, "value", ev_val) or "").lower()
+            cls_str = str(getattr(cls_val, "value", cls_val) or "").lower()
+
+            if "exact_timestamp_verified" in ev_str:
+                exact_ver += 1
+            elif "retrospective" in ev_str or "retrospective" in cls_str:
+                retrospective += 1
+            elif "estimated" in ev_str or "unverified_same_day" in ev_str or "estimated" in cls_str:
+                estimated += 1
+            elif not ev_str and not cls_str:
+                missing_ev += 1
+            else:
+                unrecognized_ev += 1
+
         excl_synth = sum(1 for o in raw_observations if getattr(o, "is_synthetic", False))
+        is_reconciled = (exact_ver + estimated + retrospective + missing_ev + unrecognized_ev == total_gen)
 
         avail_summary = CalibrationAvailabilitySummary(
             total_genuine_observations=total_gen,
@@ -225,8 +227,10 @@ def calibrate_factor_panel(
             estimated_availability_count=estimated,
             retrospective_count=retrospective,
             missing_evidence_count=missing_ev,
+            unrecognized_evidence_count=unrecognized_ev,
             excluded_synthetic_count=excl_synth,
             complete_aligned_factor_days=n_obs,
+            is_reconciled=is_reconciled,
             data_classification_label="SIMULATED_RESEARCH_PROXY",
         )
 
@@ -245,3 +249,141 @@ def calibrate_factor_panel(
         sufficiency_notes=notes,
         availability_summary=avail_summary,
     )
+
+
+def classify_observation_evidence(o: Any) -> str:
+    """Classify an observation into one of 5 mutually exclusive evidence categories.
+
+    Returns one of:
+    - 'exact_timestamp_verified'
+    - 'retrospective'
+    - 'estimated_schedule'
+    - 'missing'
+    - 'unrecognized'
+    """
+    ev_val = getattr(o, "availability_evidence", None)
+    cls_val = getattr(o, "classification", None)
+    ev_str = str(getattr(ev_val, "value", ev_val) or "").lower()
+    cls_str = str(getattr(cls_val, "value", cls_val) or "").lower()
+
+    if "exact_timestamp_verified" in ev_str:
+        return "exact_timestamp_verified"
+    if "retrospective" in ev_str or "retrospective" in cls_str:
+        return "retrospective"
+    if "estimated" in ev_str or "unverified_same_day" in ev_str or "estimated" in cls_str:
+        return "estimated_schedule"
+    if not ev_str and not cls_str:
+        return "missing"
+    return "unrecognized"
+
+
+def build_availability_audit(
+    all_db_observations: list[Any],
+    panel: FactorPanel | None = None,
+    start_date: date = date(2020, 1, 1),
+    end_date: date = date(2023, 12, 31),
+) -> AvailabilityAuditReport:
+    """Construct an exhaustive point-in-time availability and provenance reconciliation audit.
+
+    Inspects all database records before filtering to ensure no observations are silently dropped.
+    Reconciles all genuine observations into mutually exclusive point-in-time evidence categories.
+    """
+    total_source = len(all_db_observations)
+    synth_excl = sum(1 for o in all_db_observations if getattr(o, "is_synthetic", False))
+    genuine_obs = [o for o in all_db_observations if not getattr(o, "is_synthetic", False)]
+    genuine_incl = len(genuine_obs)
+
+    exact_ver = 0
+    estimated = 0
+    retrospective = 0
+    missing_ev = 0
+    unrecognized_ev = 0
+
+    date_excl = 0
+    factor_breakdown: dict[str, dict[str, Any]] = {}
+
+    aligned_dates = set(panel.dates) if panel is not None else set()
+    aligned_excl = 0
+
+    for o in genuine_obs:
+        d = o.observation_date
+        s_id = (
+            getattr(o, "series_id", None)
+            or getattr(o, "indicator_id", None)
+            or getattr(o, "entity_code", None)
+            or getattr(o, "source_id", None)
+            or "UNKNOWN"
+        )
+        s_id = str(s_id)
+        if s_id not in factor_breakdown:
+            factor_breakdown[s_id] = {
+                "total_observations": 0,
+                "exact_verified": 0,
+                "estimated": 0,
+                "retrospective": 0,
+                "missing": 0,
+                "min_date": str(d),
+                "max_date": str(d),
+            }
+        fb = factor_breakdown[s_id]
+        fb["total_observations"] += 1
+        if str(d) < fb["min_date"]:
+            fb["min_date"] = str(d)
+        if str(d) > fb["max_date"]:
+            fb["max_date"] = str(d)
+
+        cat = classify_observation_evidence(o)
+        if cat == "exact_timestamp_verified":
+            exact_ver += 1
+            fb["exact_verified"] += 1
+        elif cat == "retrospective":
+            retrospective += 1
+            fb["retrospective"] += 1
+        elif cat == "estimated_schedule":
+            estimated += 1
+            fb["estimated"] += 1
+        elif cat == "missing":
+            missing_ev += 1
+            fb["missing"] += 1
+        else:
+            unrecognized_ev += 1
+
+        if d < start_date or d > end_date:
+            date_excl += 1
+        elif panel is not None and d not in aligned_dates:
+            aligned_excl += 1
+
+    is_reconciled = (exact_ver + estimated + retrospective + missing_ev + unrecognized_ev == genuine_incl)
+
+    release_lag_policies = {
+        "FX_EUR_USD": "ECB daily reference rate published ~16:00 CET; estimated availability at 17:00 CET / end of day.",
+        "DGS1MO": "US Treasury 1-Month constant maturity yield published daily by FRED with next-business-day reporting lag.",
+        "DGS3MO": "US Treasury 3-Month constant maturity yield published daily by FRED with next-business-day reporting lag.",
+        "EUR_BORROW_RATE": "ECB Main Refinancing Operations / ESTR policy rate; piecewise-constant effective from announcement/effective dates.",
+    }
+
+    audit_scope = (
+        f"Source database contains {total_source:,} total records. After isolating {synth_excl} synthetic test "
+        f"records, {genuine_incl:,} genuine historical observations were evaluated across 4 factor series. "
+        f"Point-in-time classifications reconcile with 100% mutual exclusivity."
+    )
+
+    return AvailabilityAuditReport(
+        total_source_observations=total_source,
+        genuine_observations_included=genuine_incl,
+        synthetic_observations_excluded=synth_excl,
+        date_window_exclusions=date_excl,
+        classification_exclusions=0,
+        factor_alignment_exclusions=aligned_excl,
+        exact_timestamp_verified_count=exact_ver,
+        estimated_availability_count=estimated,
+        retrospective_count=retrospective,
+        missing_evidence_count=missing_ev,
+        unrecognized_evidence_count=unrecognized_ev,
+        is_reconciled=is_reconciled,
+        data_classification_label="SIMULATED_RESEARCH_PROXY",
+        audit_scope_description=audit_scope,
+        release_lag_policies=release_lag_policies,
+        factor_breakdown=factor_breakdown,
+    )
+

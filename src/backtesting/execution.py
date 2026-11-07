@@ -28,7 +28,12 @@ from schemas.backtest import (
     TradeStatus,
 )
 from schemas.strategy import CurrencyPair, InterestConvention
-from backtesting.financing import calculate_fixed_financing, days_to_years
+from backtesting.financing import (
+    RatePeriod,
+    calculate_fixed_financing,
+    calculate_variable_financing,
+    days_to_years,
+)
 
 
 @dataclass(frozen=True)
@@ -373,6 +378,7 @@ class ExecutionEngine:
         exit_price_source: str | None = None,
         exit_quote_timestamp: datetime | None = None,
         exit_price_type: PriceType | None = None,
+        rate_periods: Sequence[RatePeriod] | None = None,
     ) -> TradeRecord:
         """Close an open trade at maturity or rebalance.
 
@@ -450,12 +456,19 @@ class ExecutionEngine:
         converted_back_a = convert_to_a(investment_value_b, exec_exit_rate)
 
         # 3. Calculate loan repayment in A
-        financing = calculate_fixed_financing(
-            principal=trade.principal_borrowed_a,
-            annual_rate=trade.borrowing_rate,
-            days=actual_days,
-            interest_convention=self.config.interest_convention,
-        )
+        if rate_periods and len(rate_periods) > 0:
+            financing = calculate_variable_financing(
+                principal=trade.principal_borrowed_a,
+                rate_periods=rate_periods,
+                interest_convention=self.config.interest_convention,
+            )
+        else:
+            financing = calculate_fixed_financing(
+                principal=trade.principal_borrowed_a,
+                annual_rate=trade.borrowing_rate,
+                days=actual_days,
+                interest_convention=self.config.interest_convention,
+            )
         repayment_a = financing.total_repayment
         interest_a = financing.interest_paid
 

@@ -390,9 +390,145 @@ class CalibrationAvailabilitySummary(BaseModel):
     estimated_availability_count: int = 0
     retrospective_count: int = 0
     missing_evidence_count: int = 0
+    unrecognized_evidence_count: int = 0
     excluded_synthetic_count: int = 0
     complete_aligned_factor_days: int = 0
+    is_reconciled: bool = True
     data_classification_label: str = "SIMULATED_RESEARCH_PROXY"
+
+
+class AvailabilityAuditReport(BaseModel):
+    """Exhaustive point-in-time availability and data provenance reconciliation audit."""
+
+    total_source_observations: int = 0
+    genuine_observations_included: int = 0
+    synthetic_observations_excluded: int = 0
+    date_window_exclusions: int = 0
+    classification_exclusions: int = 0
+    factor_alignment_exclusions: int = 0
+    exact_timestamp_verified_count: int = 0
+    estimated_availability_count: int = 0
+    retrospective_count: int = 0
+    missing_evidence_count: int = 0
+    unrecognized_evidence_count: int = 0
+    is_reconciled: bool = True
+    data_classification_label: str = "SIMULATED_RESEARCH_PROXY"
+    audit_scope_description: str = ""
+    release_lag_policies: dict[str, str] = Field(default_factory=dict)
+    factor_breakdown: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class FactorHoldoutDiagnostics(BaseModel):
+    """Factor-level predictive validation against untouched 2024 holdout dataset."""
+
+    holdout_year: int = 2024
+    holdout_start: date
+    holdout_end: date
+    holdout_days: int
+    num_predictive_paths: int
+    actual_fx_cumulative_return: float
+    actual_fx_realized_volatility: float
+    actual_fx_max_drawdown: float
+    simulated_fx_return_median: float
+    simulated_fx_return_p025: float
+    simulated_fx_return_p975: float
+    simulated_fx_volatility_median: float
+    simulated_fx_drawdown_median: float
+    predictive_percentile_fx_return: float
+    predictive_percentile_fx_return_mc_se: float
+    predictive_percentile_fx_volatility: float
+    predictive_percentile_fx_drawdown: float
+    volatility_regime_classification: str
+    fx_log_return_ks_stat: float
+    fx_log_return_ks_pvalue: float
+    fx_log_return_ks_caveat: str = ""
+    correlation_shifts: dict[str, float] = Field(default_factory=dict)
+    model_assumptions: list[str] = Field(default_factory=list)
+    limitations_notes: list[str] = Field(default_factory=list)
+
+
+class PortfolioHoldoutDiagnostics(BaseModel):
+    """Strategy portfolio holdout comparison diagnostics (explicitly unavailable if unobserved)."""
+
+    status: str = "UNAVAILABLE"
+    is_available: bool = False
+    reason: str = (
+        "No genuine historical executable portfolio series exists for 2024 holdout; "
+        "strategy remains SIMULATED_RESEARCH_PROXY without live execution evidence."
+    )
+    simulated_portfolio_median_return: float | None = None
+    simulated_portfolio_median_drawdown: float | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class CorrelationStressComparison(BaseModel):
+    """Comparative distribution analysis between baseline and decorrelated stress structures."""
+
+    baseline_model: str
+    stressed_model: str
+    num_paths: int
+    method: str = "zero_off_diagonal_decoupling_with_common_random_numbers"
+    baseline_mean_return: float
+    stressed_mean_return: float
+    mean_return_difference: float
+    baseline_median_return: float
+    stressed_median_return: float
+    median_return_difference: float
+    baseline_prob_loss: float
+    stressed_prob_loss: float
+    prob_loss_difference: float
+    baseline_var_95: float
+    stressed_var_95: float
+    var_95_difference: float
+    baseline_cvar_95: float
+    stressed_cvar_95: float
+    cvar_95_difference: float
+    baseline_median_drawdown: float
+    stressed_median_drawdown: float
+    median_drawdown_difference: float
+    baseline_mean_financing_cost_a: float
+    stressed_mean_financing_cost_a: float
+    financing_cost_difference_a: float
+    baseline_mean_fx_translation_a: float
+    stressed_mean_fx_translation_a: float
+    fx_translation_difference_a: float
+    paired_return_difference_mean: float
+    paired_return_difference_std: float
+    paired_return_difference_p05: float
+    paired_return_difference_p50: float
+    paired_return_difference_p95: float
+    marginal_means_preserved: bool = True
+    marginal_variances_preserved: bool = True
+    is_psd_repaired: bool = False
+    psd_repair_frobenius_norm: float = 0.0
+    empirical_correlation_matrix: list[list[float]] = Field(default_factory=list)
+    stressed_correlation_matrix: list[list[float]] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class CalendarValidationReport(BaseModel):
+    """Validation report verifying simulated trading calendar and financing accrual mechanics."""
+
+    calendar_implementation: str
+    session_count: int
+    initial_state_zero_interest: bool
+    weekend_3day_accrual_verified: bool
+    holiday_accrual_verified: bool
+    tenor_30day_maturity_verified: bool
+    independent_numerical_accrual_verified: bool
+    transitions_n_levels_n_plus_1_verified: bool
+    array_lengths_verified: bool
+    notes: list[str] = Field(default_factory=list)
+
+
+class FundingSensitivityReport(BaseModel):
+    """Sensitivity study contrasting fixed-rate borrowing vs floating-rate reset funding."""
+
+    baseline_borrowing_rate: float
+    funding_conventions: list[str]
+    shocks_bps: list[int]
+    scenarios: list[dict[str, Any]]
+    notes: list[str] = Field(default_factory=list)
 
 
 class HoldoutDiagnosticReport(BaseModel):
@@ -412,6 +548,8 @@ class HoldoutDiagnosticReport(BaseModel):
     predictive_quantile_drawdown: float
     rate_change_ks_stat: float | None = None
     rate_change_ks_pvalue: float | None = None
+    fx_log_return_ks_stat: float | None = None
+    fx_log_return_ks_pvalue: float | None = None
     correlation_shifts: dict[str, float] = Field(default_factory=dict)
     is_within_normal_distribution_bounds: bool = True
     diagnostic_summary: str = ""

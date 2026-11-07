@@ -1,0 +1,71 @@
+{
+  "git_commit": "21cc978bf41c689e8309fae991d927f1305ef502",
+  "simulation_code_commit": "24e7f0fa19986b14f37b9876962499ee0c6168ce",
+  "documentation_commit": "21cc978bf41c689e8309fae991d927f1305ef502",
+  "git_working_tree_clean": false,
+  "rng_bit_generator": "PCG64",
+  "random_seed": 42,
+  "environment": {
+    "python_version": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+    "numpy_version": "2.4.6",
+    "scipy_version": "1.17.1",
+    "platform": "win32"
+  },
+  "dependency_lockfile_digest": "712b52916ac8521328a92412c9f4c1a2c059d50e2fb472477fa52e28f569ebe5",
+  "pyproject_digest": "8eade58de9f7c1b1f3b30dad625dc8fa28bf0faf4815cc6dda0644527d09cc2c",
+  "factor_panel_config_digest": "d957943e9dae0629b2b9a85ee01472d2e4d2d920fbbd48897381b4c44ec18364",
+  "strategy_config_digest": "40abdc27b3aad412b9a353cdca8338dbe7ad5d82c6a9d5e194f7ec7c86ffa676",
+  "model_config_digest": "e8102e1d6d6c31d81889d892b66d5f6d9ebc6fd86268d0c02e05ba9b6cea7f43",
+  "data_classification": "SIMULATED_RESEARCH_PROXY",
+  "predictive_sample_size": 1000,
+  "calendar_implementation": "JointTarget2FedCalendar / WeekdayTradingProxy",
+  "correlation_stress_config": {
+    "method": "zero_off_diagonal_decoupling",
+    "variance_reduction": "common_random_numbers",
+    "num_paths": 1000
+  },
+  "data_manifest_digest": "d444a80b2168c89f0217b2ea9eb3496173a5d30851984bd3cd56083254bec00a",
+  "calibration_window": {
+    "start": "2020-01-01",
+    "end": "2023-12-31",
+    "trading_days": 991
+  },
+  "holdout_window": {
+    "start": "2024-01-01",
+    "end": "2024-12-31",
+    "trading_days": 247
+  },
+  "simulation_parameters": {
+    "num_paths": 1000,
+    "horizon_steps": 252,
+    "random_seed": 42,
+    "output_directory": "D:\\Project The Infinite Money Glitch Detector\\data\\results\\phase_4_1_1"
+  },
+  "models_evaluated": [
+    "multivariate_gaussian",
+    "moving_block_bootstrap",
+    "iid_bootstrap",
+    "stationary_bootstrap",
+    "multivariate_student_t",
+    "regime_conditioned_bootstrap"
+  ],
+  "artifact_hashes": {
+    "availability_audit.json": "bfb82f111f0c07b4798e91d92f46e255c56bea42ed5a6750c8fda042e35f9b32",
+    "factor_holdout_diagnostics.json": "d3c9cdb1fcf4f90925844183edee75b9cf27552fa625f280337127cc30aeb4e9",
+    "portfolio_holdout_diagnostics.json": "3390f8e8a837132036af87e01e404bfc0f2bdffef23012ef95b1a6c5d2fc9647",
+    "correlation_stress_comparison.json": "fa1d1dc4c024b2da6b94e59652f34037f25e0e3463c840d5766fb9d5b2f88f9d",
+    "calendar_validation.json": "b4a7028764752ddd8ae0af890dd3779091ea003883c93a247d2dd770c94a5df6",
+    "funding_sensitivity.json": "718c63d1df01c86f5c19ca059718680b14fb32f032b979e25251c82af22fdc0f",
+    "model_comparison.json": "80cfbcff768ca44c33f233fa00d52b827f9838346aa4020bc5426169a72bc7bf",
+    "convergence_report.json": "3741f9644b91b5f94186655514bc3d0f6537fdd4af5e0eaf3c4eaed5d5e5a179",
+    "phase_4_1_1_research_report.md": "1ed44d5c8c1ebe93d95659070c879eb8f351cc0001a6202b6ccfd5dd8fdbe9d3",
+    "calibration_report.json": "7d762ae9a40f71a0f2aa5c53726653b4d867faf31faf6d3439452dc8d93eba3d",
+    "factor_panel_manifest.json": "c9d82ac7c3d289115c21fb9e1e3733986c6a729f15881fe3925db797c0e82650",
+    "gaussian_results.json": "75cb18922e986e6eea442d571ac72dfa25e54716f135747481bfe318c02469f9",
+    "bootstrap_results.json": "4eecc5001719be586a860a31acd32ef62bccf4571b357b8d3eb64a6a7f0aab69",
+    "student_t_results.json": "a1575395d136487da2b96e870d759e943618e0242e784743bc1239e11266fc3f",
+    "regime_results.json": "9348246ccfd35b116c5d70ea75f3c6b0166d2c244c09d741cb36ea35d8986855",
+    "stress_test_results.json": "0a550ecc5f24ae08c5d790cd470acc44f73a0361fca04ec1fda20c551b5f8d04"
+  },
+  "created_at": "2026-11-07T08:17:39.486528+00:00"
+}

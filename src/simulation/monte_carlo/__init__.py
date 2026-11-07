@@ -11,6 +11,7 @@ from simulation.monte_carlo.bootstrap import HistoricalBootstrapSampler
 from simulation.monte_carlo.calibration import (
     CalibrationReport,
     FactorSummary,
+    build_availability_audit,
     calibrate_factor_panel,
     split_calibration_holdout,
 )
@@ -29,7 +30,11 @@ from simulation.monte_carlo.factors import (
     reconstruct_price_levels,
     reconstruct_rate_levels,
 )
-from simulation.monte_carlo.holdout import evaluate_holdout_diagnostics
+from simulation.monte_carlo.holdout import (
+    evaluate_factor_holdout_diagnostics,
+    evaluate_holdout_diagnostics,
+    evaluate_portfolio_holdout_diagnostics,
+)
 from simulation.monte_carlo.metrics import calculate_distribution_metrics
 from simulation.monte_carlo.regimes import (
     RegimeConditionedSampler,
@@ -37,23 +42,33 @@ from simulation.monte_carlo.regimes import (
     RegimeSummary,
     VolatilityRegimeClassifier,
 )
-from simulation.monte_carlo.reporting import export_json, generate_research_report
+from simulation.monte_carlo.reporting import (
+    export_json,
+    generate_phase_4_1_1_research_report,
+    generate_research_report,
+)
 from simulation.monte_carlo.schemas import (
+    AvailabilityAuditReport,
     BootstrapMethod,
+    CalendarValidationReport,
     CalibrationAvailabilitySummary,
     ConvergenceCheckpoint,
     ConvergenceReport,
+    CorrelationStressComparison,
     DistributionMetrics,
     DistributionQuantiles,
     FactorCategory,
+    FactorHoldoutDiagnostics,
     FactorObservation,
     FactorPanel,
     FactorRowProvenance,
+    FundingSensitivityReport,
     HoldoutDiagnosticReport,
     MarketFactor,
     ModelComparisonEntry,
     MonteCarloResult,
     PathEvaluationResult,
+    PortfolioHoldoutDiagnostics,
     RegimeState,
     ScenarioPath,
     SimulationConfig,
@@ -64,29 +79,37 @@ from simulation.monte_carlo.schemas import (
 from simulation.monte_carlo.shocks import (
     apply_stress_scenario,
     build_standard_stress_scenarios,
+    evaluate_correlation_stress_distribution,
     generate_correlation_breakdown_path,
 )
 from simulation.monte_carlo.strategy_adapter import (
     CarryTradeScenarioStrategy,
     ScenarioStrategy,
+    evaluate_funding_sensitivity,
     generate_simulated_trading_sessions,
+    validate_market_calendar_evidence,
 )
 
 __all__ = [
+    "AvailabilityAuditReport",
     "BootstrapMethod",
+    "CalendarValidationReport",
     "CalibrationAvailabilitySummary",
     "CalibrationReport",
     "CarryTradeScenarioStrategy",
     "ConvergenceCheckpoint",
     "ConvergenceReport",
+    "CorrelationStressComparison",
     "DistributionFitReport",
     "DistributionMetrics",
     "DistributionQuantiles",
     "FactorCategory",
+    "FactorHoldoutDiagnostics",
     "FactorObservation",
     "FactorPanel",
     "FactorRowProvenance",
     "FactorSummary",
+    "FundingSensitivityReport",
     "HistoricalBootstrapSampler",
     "HoldoutDiagnosticReport",
     "MarketFactor",
@@ -96,6 +119,7 @@ __all__ = [
     "MultivariateGaussianModel",
     "MultivariateStudentTModel",
     "PathEvaluationResult",
+    "PortfolioHoldoutDiagnostics",
     "RegimeConditionedSampler",
     "RegimeModelReport",
     "RegimeState",
@@ -108,6 +132,7 @@ __all__ = [
     "TransformationMethod",
     "VolatilityRegimeClassifier",
     "apply_stress_scenario",
+    "build_availability_audit",
     "build_fx_carry_factor_panel",
     "build_standard_stress_scenarios",
     "calibrate_factor_panel",
@@ -116,12 +141,18 @@ __all__ = [
     "compute_log_returns",
     "ensure_positive_semidefinite",
     "evaluate_convergence",
+    "evaluate_correlation_stress_distribution",
+    "evaluate_factor_holdout_diagnostics",
+    "evaluate_funding_sensitivity",
     "evaluate_holdout_diagnostics",
+    "evaluate_portfolio_holdout_diagnostics",
     "export_json",
     "generate_correlation_breakdown_path",
+    "generate_phase_4_1_1_research_report",
     "generate_research_report",
     "generate_simulated_trading_sessions",
     "reconstruct_price_levels",
     "reconstruct_rate_levels",
     "split_calibration_holdout",
+    "validate_market_calendar_evidence",
 ]
