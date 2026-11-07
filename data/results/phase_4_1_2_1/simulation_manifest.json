@@ -1,0 +1,77 @@
+{
+  "git_commit": "3c73ba09602cc5c660622089d16fbeb691035db9",
+  "simulation_code_commit": "3c73ba09602cc5c660622089d16fbeb691035db9",
+  "simulation_source_commit": "3c73ba09602cc5c660622089d16fbeb691035db9",
+  "documentation_commit": "UNCOMMITTED_AT_EXECUTION",
+  "source_tree_digest": "aa39b01586448042a92b9dc81d17a3184b048e99",
+  "database_sha256": "7913ae5ced269d476a07cec3e477bfe4799743ee779203a93a4b9ef008e87ffa",
+  "git_working_tree_clean": false,
+  "rng_bit_generator": "PCG64",
+  "random_seed": 42,
+  "environment": {
+    "python_version": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+    "numpy_version": "2.4.6",
+    "scipy_version": "1.17.1",
+    "platform": "win32"
+  },
+  "dependency_lockfile_digest": "712b52916ac8521328a92412c9f4c1a2c059d50e2fb472477fa52e28f569ebe5",
+  "pyproject_digest": "8eade58de9f7c1b1f3b30dad625dc8fa28bf0faf4815cc6dda0644527d09cc2c",
+  "factor_panel_config_digest": "d957943e9dae0629b2b9a85ee01472d2e4d2d920fbbd48897381b4c44ec18364",
+  "strategy_config_digest": "40abdc27b3aad412b9a353cdca8338dbe7ad5d82c6a9d5e194f7ec7c86ffa676",
+  "model_config_digest": "3367190f5ca1c4598ff646c5e4e8fcb8423cd3eb05697c0f38d790964590b9cb",
+  "data_classification": "SIMULATED_RESEARCH_PROXY",
+  "pit_policy": "ESTIMATED_LAG",
+  "predictive_sample_size": 1000,
+  "calendar_implementation": "JointTarget2FedCalendar (TARGET2 + Federal Reserve holiday settlement calendar)",
+  "correlation_stress_config": {
+    "method": "zero_off_diagonal_decoupling",
+    "variance_reduction": "common_random_numbers",
+    "num_paths": 1000
+  },
+  "data_manifest_digest": "d444a80b2168c89f0217b2ea9eb3496173a5d30851984bd3cd56083254bec00a",
+  "calibration_window": {
+    "start": "2020-01-01",
+    "end": "2023-12-31",
+    "trading_days": 990
+  },
+  "holdout_window": {
+    "start": "2024-01-01",
+    "end": "2024-12-31",
+    "trading_days": 247
+  },
+  "simulation_parameters": {
+    "num_paths": 1000,
+    "horizon_steps": 252,
+    "random_seed": 42,
+    "output_directory": "data/results/phase_4_1_2_1",
+    "pit_mode": "ESTIMATED_LAG"
+  },
+  "models_evaluated": [
+    "multivariate_gaussian",
+    "moving_block_bootstrap",
+    "iid_bootstrap",
+    "stationary_bootstrap",
+    "multivariate_student_t",
+    "regime_conditioned_bootstrap"
+  ],
+  "artifact_hashes": {
+    "availability_audit.json": "70e413518e76798ae06b279868e3c6b36eafc34081850b0c536f56b50a15de61",
+    "factor_holdout_diagnostics.json": "c441f0104b73c93804cdff94099d077565e6ba7aeed074e7d32b93afb3fa369b",
+    "portfolio_holdout_diagnostics.json": "0082f477222570c9ab5402f94e5d3f8c6d11bd04502106350e82d5378060be2d",
+    "correlation_stress_comparison.json": "64361a42e406aac4329a96f834e3e34b9768d87f7c4e39d689f2c84599c7af42",
+    "calendar_validation.json": "bf3c68d8f64c98aa6363ba7b176d891f99e18d21cab8e58af3067b982a8b4ff0",
+    "funding_sensitivity.json": "c85e8812a1bb0939ff187b49e7e063f49d0e19d22833ce3030e1ec4f0563d9d1",
+    "model_comparison.json": "da96fb04d7a75299aecee99590c64bc5c1dd13ca4a9e87c8ea692d0b98f3eb36",
+    "convergence_report.json": "d74519d0511f766713581efd60c87278a290b23579358b89cfcb8ee4c040d754",
+    "phase_4_1_2_1_research_report.md": "bb3a61c7171173e7670ee91814af95d173889bdf05246dea06fbb12ee3f79207",
+    "calibration_report.json": "e989ca5ce4a4a0086e7d621ea686e0e1eedc9399a6206efb1297e780c544a51c",
+    "factor_panel_manifest.json": "a32c818a56c00e13ba81ce2d66098026f981137ae6ac7b04b9b7bd06916b3685",
+    "gaussian_results.json": "672025aa4c8d0ea0b87a34854087020145f80e022d3354610cfcccad1898c37f",
+    "bootstrap_results.json": "88dc7ca5c979883ced8430791b937cb3b59998ef093766bdda0957e188d839e3",
+    "student_t_results.json": "314ed64000be76acf05786583c64b8c18330dfa7e6ab9ebb4c707b022dd26be1",
+    "regime_results.json": "9977d5549243f9abc2f596e35e067725e99bb85eaed5e4366df626ca32b83f68",
+    "stress_test_results.json": "928a16d97057c198802e35b34dfde5804f5d5beeb48e5da54147d24ba33f2666",
+    "holdout_diagnostics.json": "95158b204b0f5527b55f4d19f46c8fbcd50af9e692dd506dd76fa5a9397a4b3b"
+  },
+  "created_at": "2026-11-07T12:34:16.436057+00:00"
+}

@@ -1,0 +1,13 @@
+{
+  "status": "UNAVAILABLE",
+  "is_available": false,
+  "reason": "No genuine historical executable portfolio series exists for 2024 holdout; strategy remains SIMULATED_RESEARCH_PROXY without live execution evidence.",
+  "simulated_portfolio_median_return": null,
+  "simulated_portfolio_median_drawdown": null,
+  "notes": [
+    "No live execution, order-book execution, or broker accounts operated during the 2024 holdout window.",
+    "The carry trade strategy remains classified as SIMULATED_RESEARCH_PROXY without live execution evidence.",
+    "Historical strategy portfolio series cannot be fabricated or imputed from raw factor data without order-book records.",
+    "Portfolio predictive coverage is therefore strictly reported as UNAVAILABLE."
+  ]
+}

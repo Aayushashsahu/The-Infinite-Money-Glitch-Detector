@@ -1,0 +1,33 @@
+{
+  "holdout_year": 2024,
+  "holdout_start": "2024-01-02",
+  "holdout_end": "2024-12-31",
+  "holdout_days": 247,
+  "realized_fx_volatility_annualized": 0.061818831004954486,
+  "calibration_fx_volatility_annualized": 0.07993630097900421,
+  "volatility_ratio": 0.7733511589583261,
+  "volatility_regime_classification": "HIGH_VOLATILITY",
+  "realized_cumulative_return": 0.06362571548542362,
+  "predictive_quantile_return": 0.762,
+  "realized_max_drawdown": -0.050374245130561074,
+  "predictive_quantile_drawdown": 0.852,
+  "rate_change_ks_stat": 0.09383306751727805,
+  "rate_change_ks_pvalue": 0.057050420969030055,
+  "fx_log_return_ks_stat": 0.09383306751727805,
+  "fx_log_return_ks_pvalue": 0.057050420969030055,
+  "correlation_shifts": {
+    "FX_EUR_USD_LOGRET__vs__RATE_DIFF_EUR_BORROW_BPS": -0.06954977641185567,
+    "FX_EUR_USD_LOGRET__vs__YIELD_DIFF_USD_1M_BPS": 0.06545309037201466,
+    "FX_EUR_USD_LOGRET__vs__YIELD_DIFF_USD_3M_BPS": 0.11298897857747187,
+    "RATE_DIFF_EUR_BORROW_BPS__vs__YIELD_DIFF_USD_1M_BPS": 0.17070976450012426,
+    "RATE_DIFF_EUR_BORROW_BPS__vs__YIELD_DIFF_USD_3M_BPS": -0.006974920683049492,
+    "YIELD_DIFF_USD_1M_BPS__vs__YIELD_DIFF_USD_3M_BPS": 0.1825826162837852
+  },
+  "is_within_normal_distribution_bounds": true,
+  "diagnostic_summary": "2024 realized FX volatility was 6.18%, classified as HIGH_VOLATILITY. Realized return percentile in predictive simulation: 76.2%. KS test p-value between calibration and holdout FX distributions: 0.0571.",
+  "limitations_notes": [
+    "Single-year holdout window (247 trading days in 2024) does not represent a full macroeconomic credit cycle.",
+    "2024 realized volatility was 6.18%, lying in the HIGH_VOLATILITY regime (5.92% to 8.71%).",
+    "Out-of-sample diagnostics demonstrate model coverage over 2024 but do NOT establish permanent predictive reliability."
+  ]
+}
