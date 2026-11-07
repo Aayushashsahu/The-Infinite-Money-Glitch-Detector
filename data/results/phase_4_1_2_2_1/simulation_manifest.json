@@ -1,0 +1,106 @@
+{
+  "git_commit": "0e14137705753615d83f883be0dc4d056818b7b2",
+  "simulation_code_commit": "0e14137705753615d83f883be0dc4d056818b7b2",
+  "simulation_source_commit": "0e14137705753615d83f883be0dc4d056818b7b2",
+  "documentation_commit": "UNCOMMITTED_AT_EXECUTION",
+  "source_tree_digest": "eae53c487c9efe312d785035569cc354bcb1a1b8",
+  "database_sha256": "7913ae5ced269d476a07cec3e477bfe4799743ee779203a93a4b9ef008e87ffa",
+  "git_working_tree_clean": false,
+  "rng_bit_generator": "PCG64",
+  "random_seed": 42,
+  "environment": {
+    "python_version": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+    "numpy_version": "2.4.6",
+    "scipy_version": "1.17.1",
+    "platform": "win32"
+  },
+  "dependency_lockfile_digest": "0115083cd3f42b18b24cae5a28722d0b7dc31276e2344e5539c1417207b9e3db",
+  "pyproject_digest": "c376af19edc59634f3258023850ba7575279e1c86d55c5cb11f44287de389435",
+  "factor_panel_config_digest": "d957943e9dae0629b2b9a85ee01472d2e4d2d920fbbd48897381b4c44ec18364",
+  "strategy_config_digest": "40abdc27b3aad412b9a353cdca8338dbe7ad5d82c6a9d5e194f7ec7c86ffa676",
+  "model_config_digest": "37103437973215b9d00a71bc298801e120618228bec0e2062abd05e8662e7af1",
+  "data_classification": "SIMULATED_RESEARCH_PROXY",
+  "pit_policy": "ESTIMATED_LAG",
+  "predictive_sample_size": 1000,
+  "calendar_implementation": "JointTarget2FedCalendar (TARGET2 + Federal Reserve holiday settlement calendar; Federal Reserve H.15 release calendar at 4:15 PM Eastern Time)",
+  "h15_release_schedule": "4:15 PM Eastern Time on next Federal Reserve business day (ZoneInfo('America/New_York'))",
+  "correlation_stress_config": {
+    "method": "zero_off_diagonal_decoupling",
+    "variance_reduction": "common_random_numbers",
+    "num_paths": 1000
+  },
+  "initial_market_levels": {
+    "as_of_decision_timestamp": "2024-01-02T16:00:00Z",
+    "pit_mode": "ESTIMATED_LAG",
+    "initial_fx_rate": 1.0956022525582312,
+    "initial_borrowing_rate": 0.045,
+    "initial_investment_rate": 0.0557,
+    "fx_observation_date": "2024-01-02",
+    "fx_availability_timestamp": "2024-01-02T16:00:00Z",
+    "fx_source_id": "frankfurter",
+    "fx_entity_code": "EUR/USD",
+    "fx_raw_value": 0.91274,
+    "borrowing_observation_date": "2024-01-02",
+    "borrowing_availability_timestamp": "2024-01-02T00:00:00Z",
+    "borrowing_source_id": "ecb",
+    "borrowing_indicator_id": "KR.MRR_FR.LEV",
+    "borrowing_raw_value": 4.5,
+    "investment_observation_date": "2023-12-28",
+    "investment_availability_timestamp": "2023-12-29T21:15:00Z",
+    "investment_source_id": "us_treasury",
+    "investment_indicator_id": "DGS1MO",
+    "investment_raw_value": 5.57,
+    "grounding_notes": [
+      "Grounded initial FX rate: 1.095602 USD/EUR from frankfurter EUR/USD on 2024-01-02 (raw=0.91274, unit=EUR_per_USD).",
+      "Grounded initial borrowing rate: 0.0450 (4.50%) from ecb KR.MRR_FR.LEV on 2024-01-02 (unit=percent).",
+      "Grounded initial investment rate: 0.0557 (5.57%) from us_treasury DGS1MO on 2023-12-28 (unit=percent).",
+      "Resolved strictly point-in-time as of 2024-01-02T16:00:00+00:00 under policy ESTIMATED_LAG."
+    ]
+  },
+  "data_manifest_digest": "d444a80b2168c89f0217b2ea9eb3496173a5d30851984bd3cd56083254bec00a",
+  "calibration_window": {
+    "start": "2020-01-01",
+    "end": "2023-12-31",
+    "trading_days": 989
+  },
+  "holdout_window": {
+    "start": "2024-01-01",
+    "end": "2024-12-31",
+    "trading_days": 247
+  },
+  "simulation_parameters": {
+    "num_paths": 1000,
+    "horizon_steps": 252,
+    "random_seed": 42,
+    "output_directory": "data/results/phase_4_1_2_2_1",
+    "pit_mode": "ESTIMATED_LAG"
+  },
+  "models_evaluated": [
+    "multivariate_gaussian",
+    "moving_block_bootstrap",
+    "iid_bootstrap",
+    "stationary_bootstrap",
+    "multivariate_student_t",
+    "regime_conditioned_bootstrap"
+  ],
+  "artifact_hashes": {
+    "availability_audit.json": "5a0dd15ec775666c0b77e42ae919d4894ff1bd52d091fc7d08b473110b731547",
+    "factor_holdout_diagnostics.json": "26f0995ede856a6bd07eb72531425ec848823f5ed724a8b5d62e36b7f273cbff",
+    "portfolio_holdout_diagnostics.json": "0082f477222570c9ab5402f94e5d3f8c6d11bd04502106350e82d5378060be2d",
+    "correlation_stress_comparison.json": "fce2009a27ec9971b6fd754c7f9af0882d2bf4dd1e3d2f54274b25e6d1825894",
+    "calendar_validation.json": "bf3c68d8f64c98aa6363ba7b176d891f99e18d21cab8e58af3067b982a8b4ff0",
+    "funding_sensitivity.json": "c85e8812a1bb0939ff187b49e7e063f49d0e19d22833ce3030e1ec4f0563d9d1",
+    "model_comparison.json": "74110e339991bbde9ebbf4cdaec93cd2a153fe154f11f329c5bac74e574bce31",
+    "convergence_report.json": "2ac750c1b9b880ac86e680ea6e3c8eb38ebb8d38059a87833e97cce5c144088c",
+    "phase_4_1_2_2_1_research_report.md": "f3d87d75a32c92a68522d2acc2e56c4365b79e40d2c299e4890b15ddd3ffd97a",
+    "calibration_report.json": "10b94dd811039069357176252093c7d380b445397e3ef8c27b6136508795529b",
+    "factor_panel_manifest.json": "44ca8164bb03cff69c4084b558f27c7062927ee4c78671332671f53f2ba49636",
+    "gaussian_results.json": "1a7ec61588c1f407a19de1b032bab76e9f8a3783890178165d8adeb0fd1b449b",
+    "bootstrap_results.json": "c8ed38968852f3152c3e114e42af15d06ed4310f31848ed18b59d1198502c1f5",
+    "student_t_results.json": "d74d7854dc1997b46fa5f1437e8c36fe3aeb2e9ef85df199d6021f1b806df93c",
+    "regime_results.json": "4051124de694299688a569d53d69d459b0aacd6b500fea82417a5d7a27c9e5c1",
+    "stress_test_results.json": "371aeb85cd595f817057f8989d92cf91345bc70f3c8b6009018f294a8c9a05f6",
+    "holdout_diagnostics.json": "1d0317d0b447afd5a1509635388fd5be480d69a78bb1c3802fe5596ae8436de7"
+  },
+  "created_at": "2026-11-07T17:55:14.659475+00:00"
+}
