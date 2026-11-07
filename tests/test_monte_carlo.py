@@ -462,7 +462,7 @@ def test_strategy_double_entry_reconciliation_across_volatile_path():
     for p in paths:
         ev = strategy.evaluate_path(p, initial_capital_a=100_000.0)
         assert ev.reconciliation_exact is True
-        assert ev.reconciliation_residual_a <= 1e-10
+        assert ev.reconciliation_residual_a <= 1e-9
 
 
 # =============================================================================

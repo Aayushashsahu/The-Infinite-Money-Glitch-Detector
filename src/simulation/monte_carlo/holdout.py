@@ -60,8 +60,8 @@ def evaluate_factor_holdout_diagnostics(
     # Cumulative FX return in 2024 (provider quote: USD per EUR)
     actual_cum_ret = float(math.exp(np.sum(holdout_fx)) - 1.0)
 
-    # 2024 Max Drawdown in cumulative FX level
-    cum_path = np.exp(np.cumsum(holdout_fx))
+    # 2024 Max Drawdown in cumulative FX level (prepending 1.0 starting level)
+    cum_path = np.concatenate(([1.0], np.exp(np.cumsum(holdout_fx))))
     peaks = np.maximum.accumulate(cum_path)
     dds = (cum_path - peaks) / peaks
     actual_max_dd = float(np.min(dds))
@@ -256,7 +256,7 @@ def evaluate_holdout_diagnostics(
         vol_regime = "STRESS"
 
     cum_ret_2024 = float(math.exp(np.sum(holdout_fx)) - 1.0)
-    cum_path = np.exp(np.cumsum(holdout_fx))
+    cum_path = np.concatenate(([1.0], np.exp(np.cumsum(holdout_fx))))
     peaks = np.maximum.accumulate(cum_path)
     dds = (cum_path - peaks) / peaks
     max_dd_2024 = float(np.min(dds))

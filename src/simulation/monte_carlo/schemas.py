@@ -477,6 +477,7 @@ class CorrelationStressComparison(BaseModel):
     baseline_prob_loss: float
     stressed_prob_loss: float
     prob_loss_difference: float
+    prob_loss_difference_se: float = 0.0
     baseline_var_95: float
     stressed_var_95: float
     var_95_difference: float

@@ -452,6 +452,10 @@ def evaluate_correlation_stress_distribution(
     loss_base = float(np.mean(ret_base < 0.0))
     loss_stressed = float(np.mean(ret_stressed < 0.0))
 
+    # Uncertainty on paired loss probability difference under CRN
+    diff_loss = (ret_stressed < 0.0).astype(float) - (ret_base < 0.0).astype(float)
+    prob_loss_diff_se = float(np.std(diff_loss, ddof=1) / math.sqrt(num_paths)) if num_paths > 1 else 0.0
+
     var95_base = float(-np.percentile(ret_base, 5.0))
     var95_stressed = float(-np.percentile(ret_stressed, 5.0))
 
@@ -477,7 +481,9 @@ def evaluate_correlation_stress_distribution(
 
     notes = [
         f"Evaluated across {num_paths:,} paired simulation paths using Common Random Numbers (CRN).",
+        "Paired return differences are defined as Stressed_i minus Baseline_i (Delta = Stressed - Baseline).",
         "Zero off-diagonal correlation (R_stressed = Identity) is a hypothetical stress condition, not an empirically observed historical state.",
+        "Small observed sensitivity under this one historical calibration must not be interpreted as evidence that correlation risk is generally unimportant.",
         "Marginal factor means and marginal variances are strictly identical between baseline and stressed models.",
         "Positive semi-definiteness of the stressed covariance matrix is formally verified and preserved.",
     ]
@@ -496,6 +502,7 @@ def evaluate_correlation_stress_distribution(
         baseline_prob_loss=loss_base,
         stressed_prob_loss=loss_stressed,
         prob_loss_difference=loss_stressed - loss_base,
+        prob_loss_difference_se=prob_loss_diff_se,
         baseline_var_95=var95_base,
         stressed_var_95=var95_stressed,
         var_95_difference=var95_stressed - var95_base,

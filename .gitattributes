@@ -1,5 +1,10 @@
-# Auto-detect text files and normalize line endings to LF on commit
-* text=auto eol=lf
+# Normalize all text and artifact files to LF on checkout and commit across all OSes
+* text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
+data/results/** text eol=lf
 
 # Explicitly treat raw data files, archives, and databases as immutable binary blobs
 data/raw/** -text

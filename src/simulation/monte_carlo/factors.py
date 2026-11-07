@@ -9,12 +9,18 @@ or cross-series substitutions.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
 import math
 
 import numpy as np
 
-from data.schemas import DataClassification, DataObservation, Frequency, ObservationKind
+from data.schemas import (
+    AvailabilityEvidence,
+    DataClassification,
+    DataObservation,
+    Frequency,
+    ObservationKind,
+)
 from simulation.monte_carlo.schemas import (
     FactorCategory,
     FactorObservation,
@@ -91,6 +97,167 @@ def reconstruct_rate_levels(initial_rate: float, diffs: list[float], in_bps: boo
     return levels
 
 
+def get_session_decision_timestamp(
+    session_date: date,
+    decision_time_utc: time = time(16, 0),
+) -> datetime:
+    """Return explicit strategy decision timestamp for a given session date.
+
+    Default is 16:00 UTC (17:00 CET), corresponding to daily European market close/rebalance.
+    """
+    return datetime(
+        session_date.year,
+        session_date.month,
+        session_date.day,
+        decision_time_utc.hour,
+        decision_time_utc.minute,
+        decision_time_utc.second,
+        tzinfo=timezone.utc,
+    )
+
+
+def get_effective_availability_timestamp(obs: DataObservation) -> datetime | None:
+    """Compute effective point-in-time availability timestamp for an observation.
+
+    Applies documented release schedules:
+    - Verified exact timestamp: uses verified publication_timestamp.
+    - Retrospective: returns None (no forward availability evidence).
+    - EUR/USD exchange rate (ECB reference): published ~16:00 CET, available 17:00 CET (16:00 UTC) on observation date.
+    - US Treasury yields (DGS1MO, DGS3MO): published daily by FRED on NEXT business day at ~15:00 UTC (~09:00 ET).
+    - ECB policy rate (KR.MRR_FR.LEV): effective on effective_timestamp or 00:00 UTC on observation date.
+    - Fallback: 23:59:59 UTC on observation date.
+    """
+    if obs.publication_timestamp is not None:
+        ts = obs.publication_timestamp
+        return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
+
+    if (
+        obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE
+        or obs.classification == DataClassification.REAL_RETROSPECTIVE
+    ):
+        return None
+
+    obs_d = obs.observation_date
+
+    # 1. Exchange Rate (EUR/USD ECB reference rate)
+    if obs.kind == ObservationKind.EXCHANGE_RATE or obs.entity_code == "EUR/USD" or obs.source_id in ("frankfurter", "ecb"):
+        return datetime(obs_d.year, obs_d.month, obs_d.day, 16, 0, 0, tzinfo=timezone.utc)
+
+    # 2. US Treasury yields: published next business day at 15:00 UTC
+    if (
+        obs.indicator_id in ("DGS1MO", "DGS3MO")
+        or obs.entity_code in ("DGS1MO", "DGS3MO", "USD")
+        or obs.source_id == "us_treasury"
+    ):
+        weekday = obs_d.weekday()
+        # Friday (4) -> Monday (+3), Saturday (5) -> Monday (+2), Sunday (6) -> Monday (+1), Weekday -> +1
+        delta_days = 3 if weekday == 4 else (2 if weekday == 5 else 1)
+        next_bday = obs_d + timedelta(days=delta_days)
+        return datetime(next_bday.year, next_bday.month, next_bday.day, 15, 0, 0, tzinfo=timezone.utc)
+
+    # 3. ECB Policy rate: effective date/time
+    if (
+        obs.indicator_id in ("KR.MRR_FR.LEV", "DFR")
+        or obs.entity_code in ("ECB_EA", "EUR", "DFR")
+        or obs.source_id == "policy_rates"
+    ):
+        if obs.effective_timestamp is not None:
+            ts = obs.effective_timestamp
+            return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
+        return datetime(obs_d.year, obs_d.month, obs_d.day, 0, 0, 0, tzinfo=timezone.utc)
+
+    # Default end of observation day
+    return datetime(obs_d.year, obs_d.month, obs_d.day, 23, 59, 59, tzinfo=timezone.utc)
+
+
+def is_observation_available_as_of(
+    obs: DataObservation,
+    as_of: datetime,
+    strict_executable: bool = False,
+) -> tuple[bool, str]:
+    """Check whether observation is genuinely available at decision timestamp as_of.
+
+    Guarantees:
+    - Blocks future observation dates and observation timestamps.
+    - Blocks observations whose publication or estimated release is after as_of.
+    - In strict executable mode, rejects retrospective data and missing availability evidence.
+    - Respects effective timestamp for policy rates.
+    """
+    if as_of.tzinfo is None:
+        as_of = as_of.replace(tzinfo=timezone.utc)
+    else:
+        as_of = as_of.astimezone(timezone.utc)
+
+    as_of_date = as_of.date()
+
+    # 1. Look-ahead check on observation date and observation timestamp
+    if obs.observation_date > as_of_date:
+        return False, "future_observation_date_leakage_blocked"
+    if obs.observation_timestamp is not None:
+        obs_ts = obs.observation_timestamp
+        obs_ts_utc = obs_ts.replace(tzinfo=timezone.utc) if obs_ts.tzinfo is None else obs_ts.astimezone(timezone.utc)
+        if obs_ts_utc > as_of:
+            return False, "future_observation_timestamp_leakage_blocked"
+
+    # 2. Strict executable mode checks
+    if strict_executable:
+        if (
+            obs.classification == DataClassification.REAL_RETROSPECTIVE
+            or obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE
+        ):
+            return False, "retrospective_evidence_rejected_in_strict_executable_mode"
+        if obs.availability_evidence is None:
+            return False, "missing_availability_evidence_rejected_in_strict_executable_mode"
+
+    # 3. Effective timestamp check (e.g. policy rate effective date)
+    if obs.effective_timestamp is not None:
+        eff_ts = obs.effective_timestamp
+        eff_ts_utc = eff_ts.replace(tzinfo=timezone.utc) if eff_ts.tzinfo is None else eff_ts.astimezone(timezone.utc)
+        if eff_ts_utc > as_of:
+            return False, "policy_rate_not_yet_effective_at_as_of"
+
+    # 4. Availability timestamp check
+    avail_ts = get_effective_availability_timestamp(obs)
+    if avail_ts is None:
+        if strict_executable:
+            return False, "no_valid_availability_timestamp_in_strict_executable_mode"
+        return True, "retrospective_research_proxy_admitted"
+
+    if avail_ts > as_of:
+        return False, f"release_timestamp_{avail_ts.isoformat()}_after_as_of_{as_of.isoformat()}_blocked"
+
+    return True, "available"
+
+
+def resolve_observation_as_of(
+    observations: list[DataObservation],
+    as_of: datetime,
+    strict_executable: bool = False,
+) -> DataObservation | None:
+    """Deterministically resolve the authoritative observation as of a decision timestamp.
+
+    - Filters candidate observations by point-in-time availability as of timestamp as_of.
+    - Excludes future leakage, late revisions, and future effective dates.
+    - Selects the candidate with the highest revision number.
+    - Breaks ties by latest publication timestamp or retrieved_at.
+    """
+    available_obs = [
+        o for o in observations
+        if is_observation_available_as_of(o, as_of, strict_executable=strict_executable)[0]
+    ]
+    if not available_obs:
+        return None
+
+    def _sort_key(o: DataObservation):
+        rev = o.revision if o.revision is not None else 0
+        ts = o.publication_timestamp or o.retrieved_at or datetime.min
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return (rev, ts)
+
+    return max(available_obs, key=_sort_key)
+
+
 def _resolve_observation(existing: DataObservation, candidate: DataObservation) -> DataObservation:
     """Deterministically resolve duplicate observations for the same date and series.
 
@@ -118,6 +285,8 @@ def build_fx_carry_factor_panel(
     borrowing_series_id: str = "KR.MRR_FR.LEV",
     investment_series_id: str = "DGS1MO",
     sovereign_yield_series_id: str | None = "DGS3MO",
+    strict_pit: bool = False,
+    decision_time_utc: time = time(16, 0),
 ) -> FactorPanel:
     """Build a synchronized, multi-factor panel for FX carry simulation.
 
@@ -130,6 +299,7 @@ def build_fx_carry_factor_panel(
     Rules:
     - Filters strictly genuine historical observations (is_synthetic=False).
     - Preserves observation availability and timestamps with row-level provenance.
+    - If strict_pit=True, excludes retrospective data and enforces availability <= decision timestamp.
     - Uses joint trading days where FX rates and all required Treasury rates are genuinely observed (Option A: Common Complete Panel).
     - Never uses cross-series substitution (e.g. NEVER substitutes DGS1MO for missing DGS3MO).
     - Represents ECB policy rate as prevailing rate on joint trading days (piecewise-constant without future look-ahead).
@@ -138,13 +308,22 @@ def build_fx_carry_factor_panel(
     audit_log: list[str] = []
 
     # 1. Filter observations by date window and valid classifications
+    allowed_classifications = (
+        (DataClassification.REAL_VERIFIED,)
+        if strict_pit
+        else (DataClassification.REAL_VERIFIED, DataClassification.REAL_RETROSPECTIVE)
+    )
+
     valid_obs = [
         o for o in observations
         if start_date <= o.observation_date <= end_date
         and not o.is_synthetic
-        and o.classification in (DataClassification.REAL_VERIFIED, DataClassification.REAL_RETROSPECTIVE)
+        and o.classification in allowed_classifications
+        and (not strict_pit or o.availability_evidence != AvailabilityEvidence.RETROSPECTIVE)
     ]
-    audit_log.append(f"Filtered {len(valid_obs)} valid real observations between {start_date} and {end_date}.")
+    audit_log.append(
+        f"Filtered {len(valid_obs)} valid real observations between {start_date} and {end_date} (strict_pit={strict_pit})."
+    )
 
     # 2. Extract series dictionaries: date -> DataObservation with deterministic revision resolution
     fx_obs_by_date: dict[date, DataObservation] = {}
@@ -154,6 +333,12 @@ def build_fx_carry_factor_panel(
 
     for o in valid_obs:
         d = o.observation_date
+        if strict_pit:
+            as_of_dt = get_session_decision_timestamp(d, decision_time_utc)
+            is_avail, _ = is_observation_available_as_of(o, as_of_dt, strict_executable=True)
+            if not is_avail:
+                continue
+
         if o.kind == ObservationKind.EXCHANGE_RATE and o.entity_code == fx_entity:
             fx_obs_by_date[d] = _resolve_observation(fx_obs_by_date[d], o) if d in fx_obs_by_date else o
         elif o.kind == ObservationKind.INTEREST_RATE:

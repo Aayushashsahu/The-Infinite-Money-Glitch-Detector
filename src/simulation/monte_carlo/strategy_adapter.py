@@ -107,7 +107,7 @@ class CarryTradeScenarioStrategy:
         position_sizing: PositionSizingConfig | None = None,
         cash_deposit_rate_annual: float = 0.015,
         funding_mode: str = "fixed",
-        calendar_type: str = "WEEKDAY_TRADING_PROXY",
+        calendar_type: str = "JOINT_TARGET2_FED",
     ) -> None:
         self.pair = currency_pair or CurrencyPair(
             base_currency="EUR",
@@ -372,29 +372,81 @@ def validate_market_calendar_evidence() -> CalendarValidationReport:
     """Validate calendar mechanics, weekend/holiday financing accrual, and 30-day tenor exit.
 
     Numerical verifications:
-    1. Friday-to-Monday financing accrues exactly 3 calendar days.
-    2. Joint TARGET2/Fed holiday gap (e.g. Easter 2024: Thursday Mar 28 to Tuesday Apr 02) accrues exactly 5 calendar days.
-    3. Initial state at t=0 accrues zero interest.
+    1. Initial state at t=0 has strictly zero cash interest and zero financing accrual.
+    2. Friday-to-Monday financing accrues exactly 3 calendar days of interest.
+    3. Joint TARGET2/Fed holiday gap (e.g. Easter 2024: Thursday Mar 28 to Tuesday Apr 02) accrues exactly 5 calendar days.
     4. Contractual 30-calendar-day trade exits on or after entry + 30 calendar days on the next eligible session.
-    5. Financing accrual verified against independent numerical formula.
+    5. Financing accrual verified against independent numerical formula sum(D_t * r_t * delta_tau_t / 360).
     6. Exactly N return transitions and N+1 price levels.
     7. Matching array lengths.
     """
-    # 1. Weekend 3-day accrual
-    fri = date(2024, 1, 5)  # Friday
-    sessions_weekday = generate_simulated_trading_sessions(fri, 2, calendar_type="WEEKDAY_TRADING_PROXY")
-    weekend_days = (sessions_weekday[1] - sessions_weekday[0]).days
-    weekend_3day = (weekend_days == 3)
+    strategy = CarryTradeScenarioStrategy(
+        tenor_days=30,
+        rebalance_days=35,
+        calendar_type="JOINT_TARGET2_FED",
+    )
 
-    # 2. Holiday accrual with JointCurrencySettlementCalendar
-    thurs_before_easter = date(2024, 3, 28)
-    sessions_joint = generate_simulated_trading_sessions(thurs_before_easter, 2, calendar_type="JOINT_TARGET2_FED")
-    holiday_days = (sessions_joint[1] - sessions_joint[0]).days
-    holiday_accrual = (holiday_days == 5)
+    # 1. Measured evidence: Initial state at t=0 has strictly zero interest
+    pair_key = f"{strategy.pair.borrowing_currency}/{strategy.pair.investment_currency}"
+    test_port = Portfolio(
+        initial_capital_a=100_000.0,
+        sizing_config=strategy.sizing,
+        execution_config=strategy.exec_config,
+        cash_deposit_rate_annual=strategy.cash_deposit_rate,
+    )
+    snap_0 = test_port.snapshot(as_of=date(2024, 1, 2), current_spot_rates={pair_key: 1.0 / 1.10})
+    init_state_zero = bool(
+        test_port.total_cash_interest_earned == 0.0
+        and snap_0.realized_pnl_a == 0.0
+        and snap_0.unrealized_pnl_a == 0.0
+        and len(test_port.closed_trades) == 0
+    )
 
-    # 3. Strategy evaluation test with synthetic path
+    # 2. Measured evidence: Weekend Friday-to-Monday 3-day accrual
+    fri = date(2024, 1, 5)
+    fri_mon_sessions = generate_simulated_trading_sessions(fri, 2, calendar_type="JOINT_TARGET2_FED")
+    elapsed_fri_mon = (fri_mon_sessions[1] - fri_mon_sessions[0]).days
+    path_fri_mon = ScenarioPath(
+        path_id=101,
+        steps=1,
+        dates=fri_mon_sessions,
+        fx_rates=[1.10, 1.10],
+        borrowing_rates=[0.02, 0.02],
+        investment_rates=[0.05, 0.05],
+        is_synthetic=True,
+    )
+    res_fri_mon = strategy.evaluate_path(path_fri_mon, initial_capital_a=100_000.0)
+    fin_expected_3d = 50000.0 * ((1.0 + 0.02) ** (3.0 / 365.0) - 1.0)
+    weekend_3day = bool(
+        elapsed_fri_mon == 3
+        and res_fri_mon.total_financing_costs_a > 0.0
+        and math.isclose(res_fri_mon.total_financing_costs_a, fin_expected_3d, abs_tol=1e-5)
+    )
+
+    # 3. Measured evidence: Joint TARGET2/Fed holiday accrual (Easter 2024: Thursday Mar 28 to Tuesday Apr 02)
+    thurs_easter = date(2024, 3, 28)
+    easter_sessions = generate_simulated_trading_sessions(thurs_easter, 2, calendar_type="JOINT_TARGET2_FED")
+    elapsed_easter = (easter_sessions[1] - easter_sessions[0]).days
+    path_easter = ScenarioPath(
+        path_id=102,
+        steps=1,
+        dates=easter_sessions,
+        fx_rates=[1.10, 1.10],
+        borrowing_rates=[0.02, 0.02],
+        investment_rates=[0.05, 0.05],
+        is_synthetic=True,
+    )
+    res_easter = strategy.evaluate_path(path_easter, initial_capital_a=100_000.0)
+    fin_expected_5d = 50000.0 * ((1.0 + 0.02) ** (5.0 / 365.0) - 1.0)
+    holiday_accrual = bool(
+        elapsed_easter == 5
+        and res_easter.total_financing_costs_a > 0.0
+        and math.isclose(res_easter.total_financing_costs_a, fin_expected_5d, abs_tol=1e-5)
+    )
+
+    # 4. Measured evidence: Full path simulation for tenor maturity and independent numerical financing
     horizon = 35
-    sessions = generate_simulated_trading_sessions(date(2024, 1, 2), horizon + 1)
+    sessions = generate_simulated_trading_sessions(date(2024, 1, 2), horizon + 1, calendar_type="JOINT_TARGET2_FED")
     base_path = ScenarioPath(
         path_id=1,
         steps=horizon,
@@ -404,36 +456,52 @@ def validate_market_calendar_evidence() -> CalendarValidationReport:
         investment_rates=[0.05] * (horizon + 1),
         is_synthetic=True,
     )
-
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=35)
     res = strategy.evaluate_path(base_path, initial_capital_a=100_000.0)
 
-    # Verify initial state zero interest (checked via snapshot at t=0)
-    init_state_zero = True
+    # Contractual 30-day tenor exit verification:
+    entry_date = sessions[0]
+    contractual_maturity = entry_date + timedelta(days=strategy.tenor_days)
+    exit_step = next(t for t in range(1, len(sessions)) if sessions[t] >= contractual_maturity)
+    actual_exit_date = sessions[exit_step]
+    tenor_maturity_ok = bool(
+        actual_exit_date >= contractual_maturity
+        and sessions[exit_step - 1] < contractual_maturity
+    )
 
-    # Verify 30-day tenor maturity:
-    # Entry date: 2024-01-02. 30 calendar days: 2024-02-01 (Thursday).
-    # In sessions list, 2024-02-01 is reached at index 22.
-    tenor_maturity_ok = (date(2024, 1, 2) + timedelta(days=30) <= sessions[22])
+    # 5. Independent numerical accrual calculation
+    # For trade open from step 0 to exit_step, principal P = 50,000, rate = 0.02, compounding ACT/365
+    principal_borrowed_a = 50000.0
+    borrowing_rate = 0.02
+    elapsed_trade_days = sum((sessions[t] - sessions[t - 1]).days for t in range(1, exit_step + 1))
+    independent_financing = principal_borrowed_a * ((1.0 + borrowing_rate) ** (elapsed_trade_days / 365.0) - 1.0)
+    indep_ok = bool(
+        math.isclose(res.total_financing_costs_a, independent_financing, abs_tol=1e-5)
+        and res.reconciliation_exact
+    )
 
-    # Numerical verification of cash interest and financing
-    indep_ok = res.reconciliation_exact
+    # 6. Transitions vs levels
+    transitions_ok = bool(
+        len(base_path.fx_rates) == horizon + 1
+        and len(sessions) == horizon + 1
+        and base_path.steps == horizon
+        and res.annualized_return is not None
+    )
 
-    # Transitions vs levels
-    transitions_ok = (len(base_path.fx_rates) == horizon + 1 and res.annualized_return is not None)
-
-    # Array lengths
-    array_ok = (len(base_path.fx_rates) == len(base_path.borrowing_rates) == len(base_path.investment_rates))
+    # 7. Array lengths
+    array_ok = bool(
+        len(base_path.fx_rates) == len(base_path.borrowing_rates) == len(base_path.investment_rates) == len(sessions) == horizon + 1
+    )
 
     notes = [
         "Simulated trading calendar strictly distinguishes initial market state (t=0) from N market transitions.",
         "Financing and idle cash interest accrue over actual elapsed calendar days between market sessions.",
         "Friday to Monday accrues 3 calendar days; joint TARGET2/US Fed settlement holiday closures accrue full calendar time.",
         "Contractual 30-calendar-day tenor matures on or after entry date + 30 calendar days on the next eligible trading session.",
+        f"Independent numerical financing accrual: {independent_financing:.2f} EUR matches execution engine ({res.total_financing_costs_a:.2f} EUR).",
     ]
 
     return CalendarValidationReport(
-        calendar_implementation="JointTarget2FedCalendar / WeekdayTradingProxy",
+        calendar_implementation="JointTarget2FedCalendar",
         session_count=horizon + 1,
         initial_state_zero_interest=init_state_zero,
         weekend_3day_accrual_verified=weekend_3day,

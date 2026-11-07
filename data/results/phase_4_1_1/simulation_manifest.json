@@ -50,22 +50,22 @@
     "regime_conditioned_bootstrap"
   ],
   "artifact_hashes": {
-    "availability_audit.json": "bfb82f111f0c07b4798e91d92f46e255c56bea42ed5a6750c8fda042e35f9b32",
-    "factor_holdout_diagnostics.json": "d3c9cdb1fcf4f90925844183edee75b9cf27552fa625f280337127cc30aeb4e9",
-    "portfolio_holdout_diagnostics.json": "3390f8e8a837132036af87e01e404bfc0f2bdffef23012ef95b1a6c5d2fc9647",
-    "correlation_stress_comparison.json": "fa1d1dc4c024b2da6b94e59652f34037f25e0e3463c840d5766fb9d5b2f88f9d",
-    "calendar_validation.json": "b4a7028764752ddd8ae0af890dd3779091ea003883c93a247d2dd770c94a5df6",
-    "funding_sensitivity.json": "718c63d1df01c86f5c19ca059718680b14fb32f032b979e25251c82af22fdc0f",
-    "model_comparison.json": "80cfbcff768ca44c33f233fa00d52b827f9838346aa4020bc5426169a72bc7bf",
-    "convergence_report.json": "3741f9644b91b5f94186655514bc3d0f6537fdd4af5e0eaf3c4eaed5d5e5a179",
-    "phase_4_1_1_research_report.md": "1ed44d5c8c1ebe93d95659070c879eb8f351cc0001a6202b6ccfd5dd8fdbe9d3",
-    "calibration_report.json": "7d762ae9a40f71a0f2aa5c53726653b4d867faf31faf6d3439452dc8d93eba3d",
-    "factor_panel_manifest.json": "c9d82ac7c3d289115c21fb9e1e3733986c6a729f15881fe3925db797c0e82650",
-    "gaussian_results.json": "75cb18922e986e6eea442d571ac72dfa25e54716f135747481bfe318c02469f9",
-    "bootstrap_results.json": "4eecc5001719be586a860a31acd32ef62bccf4571b357b8d3eb64a6a7f0aab69",
-    "student_t_results.json": "a1575395d136487da2b96e870d759e943618e0242e784743bc1239e11266fc3f",
-    "regime_results.json": "9348246ccfd35b116c5d70ea75f3c6b0166d2c244c09d741cb36ea35d8986855",
-    "stress_test_results.json": "0a550ecc5f24ae08c5d790cd470acc44f73a0361fca04ec1fda20c551b5f8d04"
+    "availability_audit.json": "2792c80211da2ebc3212b6d326de62ea49fdde2681375637d724984e1739812c",
+    "factor_holdout_diagnostics.json": "a58c38b9132fbd9679bb2e30ad856f3a4907c6072e5fef6d93dd30bbd9658ee2",
+    "portfolio_holdout_diagnostics.json": "b0489b5f8da30a686ec9c8169b4ceca34b157134d05f835663a11def440ebbb7",
+    "correlation_stress_comparison.json": "202fdcac73e4fb1eca2427d4c776bd34818ba5470ff08678fa960061a0370955",
+    "calendar_validation.json": "e02b531fb5bebd1f76ab0b78977361ede6d37aafe46fab51ccb75e1abc7f21b4",
+    "funding_sensitivity.json": "394795a442de1e4d933d3317e19f1c622c72c935e0851b752ff46de8f632e4c4",
+    "model_comparison.json": "73682648955a9827aef86092ebd99a11f1d58a9580c1b218857d46ddee90f0cb",
+    "convergence_report.json": "db9b397566ac674ae97f8ab16ecaad54e43e01db2aabaf9b766edade93bbf74c",
+    "phase_4_1_1_research_report.md": "c4e0f60a021fa0f2339bada90c94f95026dfd840c6092b16b6914edf74d3c448",
+    "calibration_report.json": "38cccb10a8015a9888e6090e617777f4455ba50b4209192f7fc289182862892b",
+    "factor_panel_manifest.json": "072518d1074a43f31fd1912c0e0a2665bcccd3ac9595edd2afbe9bfaa7616c75",
+    "gaussian_results.json": "cfcfc0c888219c173512f070504e8b3101f6b9aee58562a9e23a8712a6af8dcf",
+    "bootstrap_results.json": "061546b15c8cbf2c4deff826d835df15eaaa2c932b81d15946dbc68b96fefdc8",
+    "student_t_results.json": "527b5d14d4774569bc6c5f925bce7703ae362d40e6e9f9c53d516497fb026b6f",
+    "regime_results.json": "181bf711690083dd7e1a11f27b8615a38771c7f23332a59e5e0bff9e55d7b4b1",
+    "stress_test_results.json": "7e54cfc4ccac83058b2d8ff8f65ed9cfe737283cef8ba4367de2e8692ebb69a6"
   },
   "created_at": "2026-11-07T08:17:39.486528+00:00"
 }

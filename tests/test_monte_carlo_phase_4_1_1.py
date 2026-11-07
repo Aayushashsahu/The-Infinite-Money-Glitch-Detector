@@ -557,8 +557,7 @@ def test_funding_sensitivity_evaluation():
 def test_manifest_completeness_and_hashes():
     """Verify simulation_manifest.json contains required fields and valid hashes."""
     manifest_path = Path("data/results/phase_4_1_1/simulation_manifest.json")
-    if not manifest_path.exists():
-        pytest.skip("Manifest not yet generated on disk.")
+    assert manifest_path.exists(), f"Manifest not yet generated on disk: {manifest_path}"
 
     with open(manifest_path, "r", encoding="utf-8") as f:
         manifest = json.load(f)

@@ -27,8 +27,12 @@ from simulation.monte_carlo.factors import (
     build_fx_carry_factor_panel,
     compute_differences,
     compute_log_returns,
+    get_effective_availability_timestamp,
+    get_session_decision_timestamp,
+    is_observation_available_as_of,
     reconstruct_price_levels,
     reconstruct_rate_levels,
+    resolve_observation_as_of,
 )
 from simulation.monte_carlo.holdout import (
     evaluate_factor_holdout_diagnostics,
@@ -44,7 +48,9 @@ from simulation.monte_carlo.regimes import (
 )
 from simulation.monte_carlo.reporting import (
     export_json,
+    export_markdown,
     generate_phase_4_1_1_research_report,
+    generate_phase_4_1_2_research_report,
     generate_research_report,
 )
 from simulation.monte_carlo.schemas import (
@@ -147,12 +153,18 @@ __all__ = [
     "evaluate_holdout_diagnostics",
     "evaluate_portfolio_holdout_diagnostics",
     "export_json",
+    "export_markdown",
     "generate_correlation_breakdown_path",
     "generate_phase_4_1_1_research_report",
+    "generate_phase_4_1_2_research_report",
     "generate_research_report",
     "generate_simulated_trading_sessions",
+    "get_effective_availability_timestamp",
+    "get_session_decision_timestamp",
+    "is_observation_available_as_of",
     "reconstruct_price_levels",
     "reconstruct_rate_levels",
+    "resolve_observation_as_of",
     "split_calibration_holdout",
     "validate_market_calendar_evidence",
 ]

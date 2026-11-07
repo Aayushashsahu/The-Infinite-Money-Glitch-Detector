@@ -29,7 +29,7 @@ from simulation.monte_carlo.schemas import (
 
 
 def export_json(data: BaseModel | dict[str, Any] | list[Any], output_path: str | Path) -> None:
-    """Export Pydantic model or dictionary to formatted JSON with retry."""
+    """Export Pydantic model or dictionary to formatted JSON with strict LF line endings and retry."""
     p = Path(output_path).resolve()
     p.parent.mkdir(parents=True, exist_ok=True)
 
@@ -38,10 +38,27 @@ def export_json(data: BaseModel | dict[str, Any] | list[Any], output_path: str |
     else:
         content = data
 
+    serialized = json.dumps(content, indent=2) + "\n"
+    raw_bytes = serialized.replace("\r\n", "\n").encode("utf-8")
+
     for attempt in range(10):
         try:
-            with open(p, "w", encoding="utf-8") as f:
-                json.dump(content, f, indent=2)
+            with open(p, "wb") as f:
+                f.write(raw_bytes)
+            break
+        except OSError:
+            if attempt == 9:
+                raise
+def export_markdown(content: str, output_path: str | Path) -> None:
+    """Export markdown text to disk with strict LF line endings and retry."""
+    p = Path(output_path).resolve()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    raw_bytes = content.replace("\r\n", "\n").encode("utf-8")
+
+    for attempt in range(10):
+        try:
+            with open(p, "wb") as f:
+                f.write(raw_bytes)
             break
         except OSError:
             if attempt == 9:
@@ -197,7 +214,8 @@ def generate_research_report(
     return "\n".join(lines)
 
 
-def generate_phase_4_1_1_research_report(
+def _generate_monte_carlo_closure_report(
+    phase_title: str,
     avail_audit: AvailabilityAuditReport,
     model_comparisons: list[ModelComparisonEntry],
     factor_diag: FactorHoldoutDiagnostics,
@@ -211,9 +229,8 @@ def generate_phase_4_1_1_research_report(
     gaussian_result: MonteCarloResult | None = None,
     manifest_info: dict[str, Any] | None = None,
 ) -> str:
-    """Generate the authoritative Phase 4.1.1 research closure report."""
     lines: list[str] = []
-    lines.append("# Phase 4.1.1 — Predictive Validation & Evidence Reconciliation Report")
+    lines.append(f"# {phase_title}")
     lines.append("\n**Platform**: `The Infinite Money Glitch Detector`  ")
     lines.append("**Status**: Complete, Reconciled & Validated  ")
     lines.append("**Historical Calibration Window**: `2020-01-01` to `2023-12-31` (991 aligned trading days)  ")
@@ -289,18 +306,24 @@ def generate_phase_4_1_1_research_report(
     for series, policy in avail_audit.release_lag_policies.items():
         lines.append(f"- **`{series}`**: {policy}")
 
+    lines.append("\n> [!NOTE]")
+    lines.append("> **Data Source Accounting**: The historical database contains 8,900 genuine observations across all macroeconomic indicators (including annual World Bank inflation and GDP series). Out of these, 5,613 observations belong to the 4 evaluated daily financial factor series (EUR/USD, ECB policy rate, US Treasury 1M yield, and US Treasury 3M yield) that form the synchronized multi-factor panel.")
+
     # 3. Factor Holdout Diagnostics
     lines.append("\n## 3. Factor-Level Out-of-Sample Holdout Validation (2024 Data)\n")
     lines.append(f"- **Holdout Window**: `{factor_diag.holdout_start}` to `{factor_diag.holdout_end}` (`{factor_diag.holdout_days}` trading days).")
     lines.append(f"- **Predictive Sample Size**: Evaluated across `{factor_diag.num_predictive_paths:,}` simulated factor paths.")
     lines.append(f"- **Realized 2024 FX Volatility**: `{factor_diag.actual_fx_realized_volatility:.2%}` (Regime: `{factor_diag.volatility_regime_classification}`).")
     lines.append(f"- **Predictive Volatility Median**: `{factor_diag.simulated_fx_volatility_median:.2%}` (Realized Percentile: `{factor_diag.predictive_percentile_fx_volatility:.1%}`).")
-    lines.append(f"- **Realized 2024 Cumulative FX Return**: `{factor_diag.actual_fx_cumulative_return:+.2%}` (USD appreciated vs EUR).")
+    lines.append(f"- **Realized 2024 Cumulative FX Return**: `{factor_diag.actual_fx_cumulative_return:+.2%}` (EUR appreciated vs USD; provider quote EUR/USD rises when EUR strengthens against USD).")
     lines.append(f"- **Predictive Return Percentile**: `{factor_diag.predictive_percentile_fx_return:.1%}` (Monte Carlo SE: `±{factor_diag.predictive_percentile_fx_return_mc_se:.2%}`).")
     lines.append(f"- **95% Predictive Interval for FX Return**: `[{factor_diag.simulated_fx_return_p025:+.2%}, {factor_diag.simulated_fx_return_p975:+.2%}]`.")
     lines.append(f"- **Realized Max Drawdown**: `{factor_diag.actual_fx_max_drawdown:.2%}` (Predictive Drawdown Percentile: `{factor_diag.predictive_percentile_fx_drawdown:.1%}`).")
     lines.append(f"- **Two-Sample KS Test (FX Log Returns)**: Stat = `{factor_diag.fx_log_return_ks_stat:.4f}`, p-value = `{factor_diag.fx_log_return_ks_pvalue:.4f}`.")
     lines.append(f"> [!NOTE]\n> {factor_diag.fx_log_return_ks_caveat}")
+
+    lines.append("\n> [!NOTE]")
+    lines.append("> **Volatility Regime & Percentile Definitions**: Historical calibration sample partitions annualized FX volatility into Low Volatility (< 5.92%, lower 20th percentile), Normal/Middle Volatility (5.92% to 8.71%, central 20th–80th percentile band), and Stress Volatility (>= 8.71%, upper 20th percentile tail). Realized 2024 volatility (6.18%) lies in the Normal/Middle Volatility Regime. Predictive volatility percentile measures the empirical CDF position of realized 2024 volatility within the model's simulated out-of-sample distribution.")
 
     # 4. Strategy Portfolio Holdout Diagnostics
     lines.append("\n## 4. Strategy Portfolio Holdout Diagnostics\n")
@@ -310,19 +333,23 @@ def generate_phase_4_1_1_research_report(
     for n in port_diag.notes:
         lines.append(f"  - {n}")
 
-    # 5. Correlation Breakdown Distribution Comparison
+    lines.append("\n> [!NOTE]")
+    lines.append("> **Factor-Level vs Strategy-Level Holdout**: Factor holdout diagnostics evaluate whether simulated underlying market factors encompass realized 2024 economic moves. In contrast, strategy portfolio holdout requires genuine executable broker orders and fills, which did not operate in 2024. Therefore, strategy portfolio status is strictly UNAVAILABLE, and the strategy remains classified as SIMULATED_RESEARCH_PROXY.")
+
+    # 5. Correlation Breakdown Stress Distribution Analysis
     lines.append("\n## 5. Correlation-Breakdown Stress Distribution Analysis\n")
     lines.append(f"- **Methodology**: Stressed off-diagonal decoupling ($R_{{\\text{{stressed}}}} = I$) with Common Random Numbers (CRN) across `{corr_stress.num_paths:,}` paired paths.")
     lines.append("- **Marginal Means Preserved**: `" + str(corr_stress.marginal_means_preserved) + "`")
     lines.append("- **Marginal Variances Preserved**: `" + str(corr_stress.marginal_variances_preserved) + "`")
     lines.append("- **Covariance Positive Semi-Definiteness Verified**: `" + str(not corr_stress.is_psd_repaired or corr_stress.psd_repair_frobenius_norm < 1e-8) + "`")
 
+    se_loss_str = f" (SE: ±{corr_stress.prob_loss_difference_se:.2%})" if getattr(corr_stress, "prob_loss_difference_se", 0.0) > 0 else ""
     lines.append("\n### Baseline vs Decorrelated Distribution Metrics:\n")
     lines.append("| Metric | Baseline (Empirical Correlation) | Stressed (Decoupled Correlation) | Difference (Stressed - Base) |")
     lines.append("| :--- | :---: | :---: | :---: |")
     lines.append(f"| Mean Return | `{corr_stress.baseline_mean_return:+.2%}` | `{corr_stress.stressed_mean_return:+.2%}` | `{corr_stress.mean_return_difference:+.4%}` |")
     lines.append(f"| Median Return | `{corr_stress.baseline_median_return:+.2%}` | `{corr_stress.stressed_median_return:+.2%}` | `{corr_stress.median_return_difference:+.4%}` |")
-    lines.append(f"| Probability of Loss | `{corr_stress.baseline_prob_loss:.2%}` | `{corr_stress.stressed_prob_loss:.2%}` | `{corr_stress.prob_loss_difference:+.2%}` |")
+    lines.append(f"| Probability of Loss | `{corr_stress.baseline_prob_loss:.2%}` | `{corr_stress.stressed_prob_loss:.2%}` | `{corr_stress.prob_loss_difference:+.2%}{se_loss_str}` |")
     lines.append(f"| Value at Risk (95%) | `{corr_stress.baseline_var_95:+.2%}` | `{corr_stress.stressed_var_95:+.2%}` | `{corr_stress.var_95_difference:+.4%}` |")
     lines.append(f"| CVaR (95%) | `{corr_stress.baseline_cvar_95:+.2%}` | `{corr_stress.stressed_cvar_95:+.2%}` | `{corr_stress.cvar_95_difference:+.4%}` |")
     lines.append(f"| Median Max Drawdown | `{corr_stress.baseline_median_drawdown:.2%}` | `{corr_stress.stressed_median_drawdown:.2%}` | `{corr_stress.median_drawdown_difference:+.4%}` |")
@@ -332,6 +359,9 @@ def generate_phase_4_1_1_research_report(
     lines.append("\n### Paired Return Differences $(\\text{Stressed}_i - \\text{Baseline}_i)$:\n")
     lines.append(f"- Mean Difference: `{corr_stress.paired_return_difference_mean:+.4%}` (Std: `{corr_stress.paired_return_difference_std:.4%}`)")
     lines.append(f"- Quantiles: p05 = `{corr_stress.paired_return_difference_p05:+.4%}`, Median = `{corr_stress.paired_return_difference_p50:+.4%}`, p95 = `{corr_stress.paired_return_difference_p95:+.4%}`")
+
+    lines.append("\n> [!NOTE]")
+    lines.append("> **Correlation Stress Framework & VaR Convention**: Value at Risk (95%) and Conditional VaR (95%) are reported as **positive loss magnitudes** relative to initial equity (e.g. VaR 95% of +2.50% represents a loss of 2.50% of capital at 95% confidence, corresponding to a return quantile of -2.50%). Paired return differences are defined as $\\Delta_i = \\text{Stressed}_i - \\text{Baseline}_i$. Zero off-diagonal correlation ($R = I$) is a hypothetical stress condition, not an empirically observed historical state. Small observed sensitivity under this specific calibration must not be generalized to claim that correlation risk is unimportant in other market regimes.")
 
     # 6. Calendar Validation
     lines.append("\n## 6. Simulated Trading Calendar & Tenor Validation\n")
@@ -378,4 +408,68 @@ def generate_phase_4_1_1_research_report(
         lines.append(f"- **Environment**: Python `{manifest_info.get('environment', {}).get('python_version', '').split()[0]}`, NumPy `{manifest_info.get('environment', {}).get('numpy_version')}`, SciPy `{manifest_info.get('environment', {}).get('scipy_version')}`")
 
     return "\n".join(lines)
+
+
+def generate_phase_4_1_1_research_report(
+    avail_audit: AvailabilityAuditReport,
+    model_comparisons: list[ModelComparisonEntry],
+    factor_diag: FactorHoldoutDiagnostics,
+    port_diag: PortfolioHoldoutDiagnostics,
+    corr_stress: CorrelationStressComparison,
+    cal_val: CalendarValidationReport,
+    funding_sens: FundingSensitivityReport,
+    bootstrap_result: MonteCarloResult,
+    student_t_result: MonteCarloResult,
+    regime_result: MonteCarloResult,
+    gaussian_result: MonteCarloResult | None = None,
+    manifest_info: dict[str, Any] | None = None,
+) -> str:
+    """Generate the authoritative Phase 4.1.1 research closure report."""
+    return _generate_monte_carlo_closure_report(
+        phase_title="Phase 4.1.1 — Predictive Validation & Evidence Reconciliation Report",
+        avail_audit=avail_audit,
+        model_comparisons=model_comparisons,
+        factor_diag=factor_diag,
+        port_diag=port_diag,
+        corr_stress=corr_stress,
+        cal_val=cal_val,
+        funding_sens=funding_sens,
+        bootstrap_result=bootstrap_result,
+        student_t_result=student_t_result,
+        regime_result=regime_result,
+        gaussian_result=gaussian_result,
+        manifest_info=manifest_info,
+    )
+
+
+def generate_phase_4_1_2_research_report(
+    avail_audit: AvailabilityAuditReport,
+    model_comparisons: list[ModelComparisonEntry],
+    factor_diag: FactorHoldoutDiagnostics,
+    port_diag: PortfolioHoldoutDiagnostics,
+    corr_stress: CorrelationStressComparison,
+    cal_val: CalendarValidationReport,
+    funding_sens: FundingSensitivityReport,
+    bootstrap_result: MonteCarloResult,
+    student_t_result: MonteCarloResult,
+    regime_result: MonteCarloResult,
+    gaussian_result: MonteCarloResult | None = None,
+    manifest_info: dict[str, Any] | None = None,
+) -> str:
+    """Generate the authoritative Phase 4.1.2 final research integrity & reproducibility report."""
+    return _generate_monte_carlo_closure_report(
+        phase_title="Phase 4.1.2 — Final Research Integrity & Reproducibility Closure Report",
+        avail_audit=avail_audit,
+        model_comparisons=model_comparisons,
+        factor_diag=factor_diag,
+        port_diag=port_diag,
+        corr_stress=corr_stress,
+        cal_val=cal_val,
+        funding_sens=funding_sens,
+        bootstrap_result=bootstrap_result,
+        student_t_result=student_t_result,
+        regime_result=regime_result,
+        gaussian_result=gaussian_result,
+        manifest_info=manifest_info,
+    )
 

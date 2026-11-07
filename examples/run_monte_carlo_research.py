@@ -1,4 +1,4 @@
-"""Phase 4.1 — Simulation Integrity & Quantitative Validation Research Runner.
+"""Phase 4.1.2 — Final Research Integrity & Reproducibility Closure Research Runner.
 
 Executes probabilistic market simulation across 6 models:
 0. Multivariate Gaussian (Parametric Baseline)
@@ -12,7 +12,7 @@ Executes probabilistic market simulation across 6 models:
 Evaluates the unhedged FX carry strategy through audited core financial modules,
 computes distributional risk metrics with Monte Carlo standard errors, evaluates 2024 holdout
 diagnostics, tracks multi-metric convergence stability, and exports all machine-readable
-artifacts to data/results/phase_4_1/ (leaving data/results/phase_4/ untouched).
+artifacts to data/results/phase_4_1_2/ (leaving data/results/phase_4/, phase_4_1/, phase_4_1_1/ untouched).
 """
 
 from __future__ import annotations
@@ -58,7 +58,9 @@ from simulation.monte_carlo import (
     evaluate_holdout_diagnostics,
     evaluate_portfolio_holdout_diagnostics,
     export_json,
+    export_markdown,
     generate_phase_4_1_1_research_report,
+    generate_phase_4_1_2_research_report,
     generate_research_report,
     split_calibration_holdout,
     validate_market_calendar_evidence,
@@ -69,6 +71,15 @@ def get_git_commit() -> str:
     """Retrieve current git commit SHA."""
     try:
         res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
+        return res.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+def get_git_tree_digest() -> str:
+    """Retrieve current git tree SHA."""
+    try:
+        res = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], capture_output=True, text=True, check=True)
         return res.stdout.strip()
     except Exception:
         return "unknown"
@@ -103,12 +114,12 @@ def run_monte_carlo_laboratory(
     random_seed: int = 42,
     output_dir: Path | None = None,
 ) -> None:
-    """Execute complete Phase 4.1.1 Monte Carlo simulation and predictive validation suite."""
-    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_1")
+    """Execute complete Phase 4.1.2 Monte Carlo simulation and reproducibility closure suite."""
+    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 85)
-    print(" PHASE 4.1.1 — PREDICTIVE VALIDATION & EVIDENCE RECONCILIATION")
+    print(" PHASE 4.1.2 — FINAL RESEARCH INTEGRITY & REPRODUCIBILITY CLOSURE")
     print(f" Paths: {num_paths:,} | Horizon: {horizon_steps} steps | Seed: {random_seed}")
     print(f" Output Directory: {out_dir}")
     print("=" * 85)
@@ -343,7 +354,8 @@ def run_monte_carlo_laboratory(
         print("      Exported convergence_report.json")
 
     # 9. Generate Research Report & Reproducibility Manifest
-    print("\n[9/9] Generating phase_4_1_1_research_report.md and simulation_manifest.json...")
+    report_filename = f"{out_dir.name}_research_report.md"
+    print(f"\n[9/9] Generating {report_filename} and simulation_manifest.json...")
     git_sha = get_git_commit()
     data_manifest_p = ROOT_DIR / "data" / "manifest.json"
     manifest_digest = compute_file_sha256(data_manifest_p) if data_manifest_p.exists() else None
@@ -351,6 +363,8 @@ def run_monte_carlo_laboratory(
     lockfile_digest = compute_file_sha256(lockfile_p) if lockfile_p.exists() else None
     pyproject_p = ROOT_DIR / "pyproject.toml"
     pyproject_digest = compute_file_sha256(pyproject_p) if pyproject_p.exists() else None
+    db_p = ROOT_DIR / "data" / "processed" / "gmdb.db"
+    db_digest = compute_file_sha256(db_p) if db_p.exists() else None
 
     factor_cfg_digest = compute_string_sha256(str([f.model_dump(mode="json") for f in calib_panel.factors]))
     strat_cfg_digest = compute_string_sha256(str(strategy.exec_config.model_dump(mode="json")))
@@ -358,8 +372,11 @@ def run_monte_carlo_laboratory(
 
     manifest_metadata = {
         "git_commit": git_sha,
-        "simulation_code_commit": "24e7f0fa19986b14f37b9876962499ee0c6168ce",
-        "documentation_commit": "21cc978bf41c689e8309fae991d927f1305ef502",
+        "simulation_code_commit": git_sha,
+        "simulation_source_commit": git_sha,
+        "documentation_commit": git_sha,
+        "source_tree_digest": get_git_tree_digest(),
+        "database_sha256": db_digest,
         "git_working_tree_clean": check_git_working_tree_clean(),
         "rng_bit_generator": "PCG64",
         "random_seed": random_seed,
@@ -384,25 +401,42 @@ def run_monte_carlo_laboratory(
         },
     }
 
-    report_md = generate_phase_4_1_1_research_report(
-        avail_audit=avail_audit,
-        model_comparisons=model_comparisons,
-        factor_diag=factor_diag,
-        port_diag=port_diag,
-        corr_stress=corr_stress,
-        cal_val=cal_val,
-        funding_sens=funding_sens,
-        bootstrap_result=mc_mb,
-        student_t_result=mc_t,
-        regime_result=mc_reg,
-        gaussian_result=mc_gauss,
-        manifest_info=manifest_metadata,
-    )
-    report_path = out_dir / "phase_4_1_1_research_report.md"
-    report_path.write_text(report_md, encoding="utf-8")
+    if "4_1_2" in out_dir.name:
+        report_md = generate_phase_4_1_2_research_report(
+            avail_audit=avail_audit,
+            model_comparisons=model_comparisons,
+            factor_diag=factor_diag,
+            port_diag=port_diag,
+            corr_stress=corr_stress,
+            cal_val=cal_val,
+            funding_sens=funding_sens,
+            bootstrap_result=mc_mb,
+            student_t_result=mc_t,
+            regime_result=mc_reg,
+            gaussian_result=mc_gauss,
+            manifest_info=manifest_metadata,
+        )
+    else:
+        report_md = generate_phase_4_1_1_research_report(
+            avail_audit=avail_audit,
+            model_comparisons=model_comparisons,
+            factor_diag=factor_diag,
+            port_diag=port_diag,
+            corr_stress=corr_stress,
+            cal_val=cal_val,
+            funding_sens=funding_sens,
+            bootstrap_result=mc_mb,
+            student_t_result=mc_t,
+            regime_result=mc_reg,
+            gaussian_result=mc_gauss,
+            manifest_info=manifest_metadata,
+        )
+
+    report_path = out_dir / report_filename
+    export_markdown(report_md, report_path)
     print(f"      Report written to: {report_path}")
 
-    # Compute artifact digests for reproducibility manifest across ALL 10 required artifacts
+    # Compute artifact digests for reproducibility manifest across ALL required artifacts
     artifacts_to_hash = [
         "availability_audit.json",
         "factor_holdout_diagnostics.json",
@@ -412,7 +446,7 @@ def run_monte_carlo_laboratory(
         "funding_sensitivity.json",
         "model_comparison.json",
         "convergence_report.json",
-        "phase_4_1_1_research_report.md",
+        report_filename,
         "calibration_report.json",
         "factor_panel_manifest.json",
         "gaussian_results.json",
@@ -420,6 +454,7 @@ def run_monte_carlo_laboratory(
         "student_t_results.json",
         "regime_results.json",
         "stress_test_results.json",
+        "holdout_diagnostics.json",
     ]
     artifact_hashes = {}
     for fname in artifacts_to_hash:
@@ -462,7 +497,7 @@ def run_monte_carlo_laboratory(
 
     # Display cross-model summary table in console
     print("\n" + "=" * 140)
-    print(" PHASE 4.1.1 MONTE CARLO CROSS-MODEL RISK & RETURN SUMMARY")
+    print(f" {out_dir.name.upper()} MONTE CARLO CROSS-MODEL RISK & RETURN SUMMARY")
     print("=" * 140)
     print(f"{'Model Name':<32} | {'Paths':<7} | {'Median Ret':<10} | {'Mean Ret':<10} | {'Vol':<8} | {'VaR (95%)':<10} | {'CVaR (95%)':<11} | {'Prob(Loss)':<16} | {'Prob(DD>=10%)':<13}")
     print("-" * 140)
@@ -476,11 +511,11 @@ def run_monte_carlo_laboratory(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 4.1.1 Monte Carlo Predictive Validation & Evidence Closure Runner")
+    parser = argparse.ArgumentParser(description="Phase 4.1.2 Monte Carlo Research Integrity & Reproducibility Closure Runner")
     parser.add_argument("--paths", type=int, default=1000, help="Number of simulation paths per model (default: 1000)")
     parser.add_argument("--horizon", type=int, default=252, help="Simulation horizon in trading days (default: 252)")
     parser.add_argument("--seed", type=int, default=42, help="Random number generator seed (default: 42)")
-    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_1", help="Output directory for Phase 4.1.1 results")
+    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2", help="Output directory for simulation results")
     parser.add_argument("--smoke", action="store_true", help="Run fast smoke test with 50 paths over 30 steps")
     args = parser.parse_args()
 
