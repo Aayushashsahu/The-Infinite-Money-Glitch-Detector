@@ -1,0 +1,48 @@
+{
+  "git_commit": "24e7f0fa19986b14f37b9876962499ee0c6168ce",
+  "data_manifest_digest": "d444a80b2168c89f0217b2ea9eb3496173a5d30851984bd3cd56083254bec00a",
+  "environment": {
+    "python_version": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+    "numpy_version": "2.4.6",
+    "scipy_version": "1.17.1",
+    "platform": "win32"
+  },
+  "calibration_window": {
+    "start": "2020-01-01",
+    "end": "2023-12-31",
+    "trading_days": 991
+  },
+  "holdout_window": {
+    "start": "2024-01-01",
+    "end": "2024-12-31",
+    "trading_days": 247
+  },
+  "simulation_parameters": {
+    "num_paths": 1000,
+    "horizon_steps": 252,
+    "random_seed": 42,
+    "output_directory": "D:\\Project The Infinite Money Glitch Detector\\data\\results\\phase_4_1"
+  },
+  "models_evaluated": [
+    "multivariate_gaussian",
+    "moving_block_bootstrap",
+    "iid_bootstrap",
+    "stationary_bootstrap",
+    "multivariate_student_t",
+    "regime_conditioned_bootstrap"
+  ],
+  "artifact_hashes": {
+    "calibration_report.json": "d84f68d3d0d78b1e95280f827ae790965ca850d3ddbf4bbb5b0fce2f69b2cb8d",
+    "factor_panel_manifest.json": "c9d82ac7c3d289115c21fb9e1e3733986c6a729f15881fe3925db797c0e82650",
+    "gaussian_results.json": "899b94892f88eb23c7296a2395aa66acb27c5b5a146158f8270526f99bd6c742",
+    "bootstrap_results.json": "05d476ddf3f0c6bf3126e9efc0cc75919d14aac92e0a12bd8f4084466bb87692",
+    "student_t_results.json": "f2f668e5ef694580690b3ca2f572b3db89235ee78ec344ab8d53eee934164662",
+    "regime_results.json": "ed011f24e04c7c1816a2c10d108b4e69418af1354d1a92a51bda03377dbbe5dc",
+    "stress_test_results.json": "0a550ecc5f24ae08c5d790cd470acc44f73a0361fca04ec1fda20c551b5f8d04",
+    "model_comparison.json": "80cfbcff768ca44c33f233fa00d52b827f9838346aa4020bc5426169a72bc7bf",
+    "convergence_report.json": "3741f9644b91b5f94186655514bc3d0f6537fdd4af5e0eaf3c4eaed5d5e5a179",
+    "holdout_diagnostics.json": "b0bf72c7af4fba6b78c514f39f36be7658521857209ed080548e61a3a2d4ae04",
+    "phase_4_1_research_report.md": "7973b7d93a5b04d2a3af9d49bfe92f87d1267e4e4a0ad94eac6abeb8c4c97730"
+  },
+  "created_at": "2026-11-07T07:08:15.675901+00:00"
+}

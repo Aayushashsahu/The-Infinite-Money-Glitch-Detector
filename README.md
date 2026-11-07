@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 4 — Monte Carlo & Market Scenario Laboratory ✅ (292 passed tests)
+## Status: Phase 4.1 — Simulation Integrity & Quantitative Validation Closure ✅ (316 passed tests)
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -25,8 +25,11 @@ opportunities**, not to assume profit.
 - **Phase 3.2.2.3.2 (End-to-End FX Quote Pipeline Validation):** Complete (256 passed tests).
 - **Phase 3.2.2.3.3 (FX Symmetry, Execution & Research Artifact Integrity):** Complete (273 passed tests).
 - **Phase 4 (Monte Carlo & Market Scenario Laboratory):** Complete (292 passed tests).
+- **Phase 4.1 (Simulation Integrity & Quantitative Validation Closure):** Complete (316 passed tests).
 
-See [`PHASE_4_MONTE_CARLO_SIMULATION_REPORT.md`](PHASE_4_MONTE_CARLO_SIMULATION_REPORT.md) for the multi-factor simulation engine (1,000 paths across 5 scenario models: IID bootstrap, Moving-Block bootstrap, Stationary bootstrap, Multivariate Student-$t$ with PSD repair, and 3-state observable volatility regime switching), 18 deterministic macro-financial stress tests, 252-day horizon risk and return distribution metrics (VaR 95%, CVaR 95%, loss probability with standard errors $\pm 1.54\%$), asymptotic convergence diagnostics, and 100% exact double-entry cash ledger reconciliation ($|r| \le 10^{-9}$).
+See [`PHASE_4_1_SIMULATION_INTEGRITY_VALIDATION_REPORT.md`](PHASE_4_1_SIMULATION_INTEGRITY_VALIDATION_REPORT.md) for the complete Phase 4.1 closure report: corrected FX stress shock semantics with timing contracts, calendar day tenor maturity, weekend 3-day financing accrual, zero cross-series factor substitution (Option A 4-factor panel, 991 calibration days), explicit calibration availability breakdown (`SIMULATED_RESEARCH_PROXY`), 20th/80th volatility regime modeling with warm-up exclusion, Student-$t$ profile MLE degrees of freedom ($\hat{
+u} = 7.74$), Multivariate Gaussian baseline comparison (6 models total), real 2024 out-of-sample holdout diagnostics (6.18% realized volatility, KS test $p=0.0577$), multi-metric asymptotic convergence tracking, correlation breakdown decoupling ($\mathbf{R}_{	ext{stressed}} = \mathbf{I}$), and 100% exact double-entry cash ledger reconciliation ($|r| \le 10^{-10}$).
+See [`PHASE_4_MONTE_CARLO_SIMULATION_REPORT.md`](PHASE_4_MONTE_CARLO_SIMULATION_REPORT.md) for the preserved Phase 4 baseline report.
 See [`PHASE_3_2_2_3_3_FINAL_FX_FOUNDATION_CLOSURE.md`](PHASE_3_2_2_3_3_FINAL_FX_FOUNDATION_CLOSURE.md) for the authoritative historical report and JSON reconciliation (29 trades, +2.89% return, €2,890.22 profit), raw provider quote preservation contract (`provider_bid`, `provider_ask`, `canonical_bid`, `canonical_ask`), elimination of reciprocal double-inversion in PointInTimeDataStore, exact direct vs. reciprocal symmetry with Jensen's inequality proof, test fixture provenance isolation (`MOCK` vs `REAL_VERIFIED`), and zero-trade alpha suppression (`alpha = None` / `"N/A"`).
 See [`PHASE_3_2_2_3_2_END_TO_END_FX_PIPELINE_VALIDATION.md`](PHASE_3_2_2_3_2_END_TO_END_FX_PIPELINE_VALIDATION.md) for the complete end-to-end quote pipeline integration audit, explicit quote-side provenance (`provider_price_type`, `provider_side`, `canonical_side`, `canonical_price`), direct & reciprocal pair symmetry proofs, quoting convention invariants, 14 adversarial integration tests, independent 10-decimal cash flow ledger reconciliation ($\text{residual} \le 10^{-10}$), and periodic risk-free date alignment.
 See [`PHASE_3_2_2_3_1_DIRECTIONAL_QUOTE_AND_EVIDENCE_CLOSURE.md`](PHASE_3_2_2_3_1_DIRECTIONAL_QUOTE_AND_EVIDENCE_CLOSURE.md) for directional one-sided quote inversion mathematics, standalone quote execution restrictions, PIT credibility and availability classification, non-fallback benchmark Sharpe/Sortino ratios, and full 2020-2024 reproduction results.
