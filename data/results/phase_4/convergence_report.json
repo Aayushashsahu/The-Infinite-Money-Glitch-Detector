@@ -1,0 +1,67 @@
+{
+  "checkpoints": [
+    {
+      "sample_size": 25,
+      "mean_return": 0.007482295441899425,
+      "median_return": 0.010716862863509013,
+      "prob_loss": 0.44,
+      "prob_loss_se": 0.09927738916792686,
+      "var_95": -0.05737307526006972,
+      "cvar_95": -0.05931129147657775,
+      "std_return": 0.0426252921321937
+    },
+    {
+      "sample_size": 50,
+      "mean_return": 0.010633854941738439,
+      "median_return": 0.018384017563336456,
+      "prob_loss": 0.36,
+      "prob_loss_se": 0.06788225099390856,
+      "var_95": -0.05945183053840633,
+      "cvar_95": -0.06483218434249356,
+      "std_return": 0.042637081453264836
+    },
+    {
+      "sample_size": 100,
+      "mean_return": 0.0103131162291424,
+      "median_return": 0.014943298660272268,
+      "prob_loss": 0.35,
+      "prob_loss_se": 0.047696960070847276,
+      "var_95": -0.0577456243879177,
+      "cvar_95": -0.06214086913139068,
+      "std_return": 0.03908435803408836
+    },
+    {
+      "sample_size": 250,
+      "mean_return": 0.011034821345865743,
+      "median_return": 0.013026879372741386,
+      "prob_loss": 0.384,
+      "prob_loss_se": 0.030759973992186666,
+      "var_95": -0.05661425162154883,
+      "cvar_95": -0.06690583065017632,
+      "std_return": 0.04104434453476358
+    },
+    {
+      "sample_size": 500,
+      "mean_return": 0.011880659817998452,
+      "median_return": 0.012756161837839172,
+      "prob_loss": 0.382,
+      "prob_loss_se": 0.02172905888436036,
+      "var_95": -0.05340066518194594,
+      "cvar_95": -0.06443608141054964,
+      "std_return": 0.039783088858739796
+    },
+    {
+      "sample_size": 1000,
+      "mean_return": 0.011348846002982292,
+      "median_return": 0.011480408899766117,
+      "prob_loss": 0.386,
+      "prob_loss_se": 0.015394934231752989,
+      "var_95": -0.054291579128235616,
+      "cvar_95": -0.06701859452551973,
+      "std_return": 0.040168424688370355
+    }
+  ],
+  "is_converged": true,
+  "final_standard_error": 0.015394934231752989,
+  "convergence_notes": "Estimates demonstrated stable asymptotic convergence."
+}

@@ -1,0 +1,30 @@
+{
+  "git_commit": "86e893fe7de499fd67912f10a0e5c441ea56ae26",
+  "data_manifest_digest": "d444a80b2168c89f0217b2ea9eb3496173a5d30851984bd3cd56083254bec00a",
+  "calibration_start": "2020-01-01",
+  "calibration_end": "2023-12-31",
+  "holdout_start": "2024-01-01",
+  "holdout_end": "2024-12-31",
+  "num_paths": 1000,
+  "horizon_steps": 252,
+  "random_seed": 42,
+  "models_evaluated": [
+    "moving_block_bootstrap",
+    "iid_bootstrap",
+    "stationary_bootstrap",
+    "student_t",
+    "regimes"
+  ],
+  "output_files": [
+    "calibration_report.json",
+    "factor_panel_manifest.json",
+    "bootstrap_results.json",
+    "student_t_results.json",
+    "regime_results.json",
+    "stress_test_results.json",
+    "model_comparison.json",
+    "convergence_report.json",
+    "simulation_manifest.json",
+    "phase_4_research_report.md"
+  ]
+}

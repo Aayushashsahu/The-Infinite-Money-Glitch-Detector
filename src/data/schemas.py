@@ -68,6 +68,7 @@ class DataClassification(str, Enum):
     REAL_RETROSPECTIVE = "real_retrospective"
     SYNTHETIC = "synthetic"
     MOCK = "mock"
+    SIMULATED = "simulated"
 
 
 
@@ -359,7 +360,7 @@ class DataObservation(BaseModel):
                 self.classification = DataClassification.REAL_VERIFIED
             else:
                 self.classification = DataClassification.REAL_RETROSPECTIVE
-        elif self.classification in (DataClassification.SYNTHETIC, DataClassification.MOCK):
+        elif self.classification in (DataClassification.SYNTHETIC, DataClassification.MOCK, DataClassification.SIMULATED):
             self.is_synthetic = True
 
         if self.is_synthetic and self.classification != DataClassification.MOCK:

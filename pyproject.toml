@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=1.26",
     "pandas>=2.1",
     "pydantic>=2.6",
+    "scipy>=1.11",
     "SQLAlchemy>=2.0",
     "httpx>=0.27",
     "psycopg2-binary>=2.9",
@@ -24,7 +25,7 @@ dev = [
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-packages = ["core", "models", "simulation", "schemas", "data", "data.adapters", "data.db", "backtesting"]
+packages = ["core", "models", "simulation", "simulation.monte_carlo", "schemas", "data", "data.adapters", "data.db", "backtesting"]
 py-modules = ["main"]
 
 [tool.pytest.ini_options]
