@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 4.1.1 — Predictive Validation & Evidence Reconciliation ✅ (331 passed tests)
+## Status: Phase 4.1.2 — Final Research Integrity & Reproducibility Closure ✅ (344 passed tests)
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -27,6 +27,9 @@ opportunities**, not to assume profit.
 - **Phase 4 (Monte Carlo & Market Scenario Laboratory):** Complete (292 passed tests).
 - **Phase 4.1 (Simulation Integrity & Quantitative Validation Closure):** Complete (316 passed tests).
 - **Phase 4.1.1 (Predictive Validation & Evidence Reconciliation):** Complete (331 passed tests).
+- **Phase 4.1.2 (Final Research Integrity & Reproducibility Closure):** Complete (344 passed tests).
+
+See [`PHASE_4_1_2_FINAL_RESEARCH_CLOSURE.md`](PHASE_4_1_2_FINAL_RESEARCH_CLOSURE.md) for the complete Phase 4.1.2 closure report: LF line ending and SHA-256 manifest integrity closure (zero skips), explicit point-in-time (PIT) decision timestamps and publication cutoffs (same-day FX at 16:00 UTC, next-day US Treasury at 15:00 UTC, effective policy rate dates, late revision blocking, retrospective exclusion), genuinely measured calendar evidence ($t=0$ zero accrual, 3-day weekend, 5-day holiday, 30-day tenor maturity exit, compound financing matching engine within $10^{-5}$), holdout drawdown starting wealth consistency (initial wealth 1.0 prepended), EUR/USD quote-direction translation loss economics (EUR appreciation creates loan repayment loss), and paired Common Random Numbers correlation stress testing with Monte Carlo uncertainty estimation ($SE(\Delta \text{ProbLoss})$).
 
 See [`PHASE_4_1_1_PREDICTIVE_VALIDATION_AND_EVIDENCE_CLOSURE.md`](PHASE_4_1_1_PREDICTIVE_VALIDATION_AND_EVIDENCE_CLOSURE.md) for the complete Phase 4.1.1 closure report: factor-level predictive validation vs. explicit `UNAVAILABLE` strategy holdout, paired Common Random Numbers correlation-breakdown distribution experiment ($N=1,000$), complete 5-bucket point-in-time database availability reconciliation ($8,724 + 176 = 8,900$ genuine records), four documented release lag policies, verified `JointCurrencySettlementCalendar` and `WeekdayTradingCalendarProxy` mechanics (3-day weekend, holiday accrual, $t=0$ zero interest, contractual 30-day tenor exit, independent formula check $\sum D_t \cdot r_t \cdot \frac{\Delta \tau_t}{360}$), fixed-rate term funding vs. floating-rate daily reset funding sensitivity (+0 to +500 bps), dynamic model comparison reporting, and complete reproducibility manifest with SHA-256 digests.
 

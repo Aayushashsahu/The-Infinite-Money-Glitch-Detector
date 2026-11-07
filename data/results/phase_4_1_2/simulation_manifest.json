@@ -1,0 +1,75 @@
+{
+  "git_commit": "a498cfca8aa726630260fe948b0e6bb9e5d31e68",
+  "simulation_code_commit": "a498cfca8aa726630260fe948b0e6bb9e5d31e68",
+  "simulation_source_commit": "a498cfca8aa726630260fe948b0e6bb9e5d31e68",
+  "documentation_commit": "a498cfca8aa726630260fe948b0e6bb9e5d31e68",
+  "source_tree_digest": "d58b4b3fa3b76f184baf09d7872205dde5773829",
+  "database_sha256": "7913ae5ced269d476a07cec3e477bfe4799743ee779203a93a4b9ef008e87ffa",
+  "git_working_tree_clean": false,
+  "rng_bit_generator": "PCG64",
+  "random_seed": 42,
+  "environment": {
+    "python_version": "3.11.15 (main, Jun 11 2026, 04:59:07) [MSC v.1944 64 bit (AMD64)]",
+    "numpy_version": "2.4.6",
+    "scipy_version": "1.17.1",
+    "platform": "win32"
+  },
+  "dependency_lockfile_digest": "712b52916ac8521328a92412c9f4c1a2c059d50e2fb472477fa52e28f569ebe5",
+  "pyproject_digest": "8eade58de9f7c1b1f3b30dad625dc8fa28bf0faf4815cc6dda0644527d09cc2c",
+  "factor_panel_config_digest": "d957943e9dae0629b2b9a85ee01472d2e4d2d920fbbd48897381b4c44ec18364",
+  "strategy_config_digest": "40abdc27b3aad412b9a353cdca8338dbe7ad5d82c6a9d5e194f7ec7c86ffa676",
+  "model_config_digest": "e8102e1d6d6c31d81889d892b66d5f6d9ebc6fd86268d0c02e05ba9b6cea7f43",
+  "data_classification": "SIMULATED_RESEARCH_PROXY",
+  "predictive_sample_size": 1000,
+  "calendar_implementation": "JointTarget2FedCalendar / WeekdayTradingProxy",
+  "correlation_stress_config": {
+    "method": "zero_off_diagonal_decoupling",
+    "variance_reduction": "common_random_numbers",
+    "num_paths": 1000
+  },
+  "data_manifest_digest": "d444a80b2168c89f0217b2ea9eb3496173a5d30851984bd3cd56083254bec00a",
+  "calibration_window": {
+    "start": "2020-01-01",
+    "end": "2023-12-31",
+    "trading_days": 991
+  },
+  "holdout_window": {
+    "start": "2024-01-01",
+    "end": "2024-12-31",
+    "trading_days": 247
+  },
+  "simulation_parameters": {
+    "num_paths": 1000,
+    "horizon_steps": 252,
+    "random_seed": 42,
+    "output_directory": "D:\\Project The Infinite Money Glitch Detector\\data\\results\\phase_4_1_2"
+  },
+  "models_evaluated": [
+    "multivariate_gaussian",
+    "moving_block_bootstrap",
+    "iid_bootstrap",
+    "stationary_bootstrap",
+    "multivariate_student_t",
+    "regime_conditioned_bootstrap"
+  ],
+  "artifact_hashes": {
+    "availability_audit.json": "064e733962ce50f56a9cea70580494eca305501a1ab33296877c3f9a16e45dd9",
+    "factor_holdout_diagnostics.json": "2b9b889c22c5e85bfaabfba43b8b566b551fc5ebd4a1a74845980487695e6333",
+    "portfolio_holdout_diagnostics.json": "0082f477222570c9ab5402f94e5d3f8c6d11bd04502106350e82d5378060be2d",
+    "correlation_stress_comparison.json": "29c6524e42ee457267115e698fa94d02c7eab21079d21b97d56e23e4faede432",
+    "calendar_validation.json": "bf3c68d8f64c98aa6363ba7b176d891f99e18d21cab8e58af3067b982a8b4ff0",
+    "funding_sensitivity.json": "13a9f64c81b4dbd6d14001fb23ee6ebfa1b4d18f937b4caa9ddfbaee087f448b",
+    "model_comparison.json": "bdc59d41b148e3578c10e6ce6bb7d233f3ad828f05c77379bd7fff5890ee474d",
+    "convergence_report.json": "dc2ab51962a907c413378e586664c81ea6e565f83cfc04fafefa266533405be4",
+    "phase_4_1_2_research_report.md": "0f72b89d4efbe96884e16a5c82d637c8f8029e409a16deda69bc20907c2d2cee",
+    "calibration_report.json": "add06b4faa72ddd69ba99958f978417f9d52b23c17249a35f57e129027af3268",
+    "factor_panel_manifest.json": "8fe05106600ed35b2a23839307a81f4ccd62dccfcb9980817d363545fcc22b54",
+    "gaussian_results.json": "3b385ef78b2d08514073bed46df2e5e1e3feba3a6f07313e7409c96c0d8d0d85",
+    "bootstrap_results.json": "73c63d55eaf536ab7294cbe0e6c66158347bd041652f1335d2ac3d3229492ce4",
+    "student_t_results.json": "41a28930e60037868bf59609a13d9ff95ce0035dadf82c3afc91d0721bca0814",
+    "regime_results.json": "0fdf2d10485ee3fce5b9d2ad3ec2bdc77ab5116c212e387ed241fcf2489f6be2",
+    "stress_test_results.json": "97557bf9e6a61cccae4f56ddd7db2e68e96230117d50b0a72599fe9137491af4",
+    "holdout_diagnostics.json": "f142650635fcb7d1ce3e804b0013377159a41fcf18c5c97a23fc998f50cfede0"
+  },
+  "created_at": "2026-11-07T10:42:25.701153+00:00"
+}

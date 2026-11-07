@@ -1,0 +1,42 @@
+{
+  "holdout_year": 2024,
+  "holdout_start": "2024-01-02",
+  "holdout_end": "2024-12-31",
+  "holdout_days": 247,
+  "num_predictive_paths": 1000,
+  "actual_fx_cumulative_return": 0.06362571548542362,
+  "actual_fx_realized_volatility": 0.061818831004954486,
+  "actual_fx_max_drawdown": -0.050374245130561074,
+  "simulated_fx_return_median": 0.011138570617293397,
+  "simulated_fx_return_p025": -0.13294346096311474,
+  "simulated_fx_return_p975": 0.17819670922860156,
+  "simulated_fx_volatility_median": 0.07936888417090178,
+  "simulated_fx_drawdown_median": -0.07826898220661041,
+  "predictive_percentile_fx_return": 0.753,
+  "predictive_percentile_fx_return_mc_se": 0.013637851736985557,
+  "predictive_percentile_fx_volatility": 0.005,
+  "predictive_percentile_fx_drawdown": 0.85,
+  "volatility_regime_classification": "HIGH_VOLATILITY",
+  "fx_log_return_ks_stat": 0.09368527271761644,
+  "fx_log_return_ks_pvalue": 0.05767972535121125,
+  "fx_log_return_ks_caveat": "Standard two-sample Kolmogorov-Smirnov test assumes i.i.d. observations. Financial returns display significant serial correlation and serial dependence, volatility clustering, and heavy tails; consequently, the KS statistic is reported descriptively and the unadjusted p-value should not be interpreted as an exact calibrated hypothesis test.",
+  "correlation_shifts": {
+    "FX_EUR_USD_LOGRET__vs__RATE_DIFF_EUR_BORROW_BPS": -0.06945658303950028,
+    "FX_EUR_USD_LOGRET__vs__YIELD_DIFF_USD_1M_BPS": 0.03968995683410817,
+    "FX_EUR_USD_LOGRET__vs__YIELD_DIFF_USD_3M_BPS": -0.03283981290124704,
+    "RATE_DIFF_EUR_BORROW_BPS__vs__YIELD_DIFF_USD_1M_BPS": 0.28494696061840147,
+    "RATE_DIFF_EUR_BORROW_BPS__vs__YIELD_DIFF_USD_3M_BPS": 0.3171129566258136,
+    "YIELD_DIFF_USD_1M_BPS__vs__YIELD_DIFF_USD_3M_BPS": 0.1921811837001179
+  },
+  "model_assumptions": [
+    "Predictive factor distribution calibrated strictly on 2020-2023 complete-case trading days.",
+    "Holdout data (2024, 247 days) was completely isolated and never used during model estimation.",
+    "Predictive factor metrics evaluated across 1,000 simulated paths.",
+    "Factor paths generated under identical marginal variances and empirical correlation structure."
+  ],
+  "limitations_notes": [
+    "Single-year holdout window (247 trading days in 2024) does not span a complete credit or macroeconomic cycle.",
+    "2024 realized FX volatility (6.18%) lies between the 20th percentile (5.92%) and 80th percentile (8.71%) of the calibration window, classified as HIGH_VOLATILITY.",
+    "Factor-level predictive coverage demonstrates empirical distribution compatibility over 2024 but does NOT establish permanent forward-looking market predictability."
+  ]
+}

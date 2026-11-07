@@ -1,0 +1,100 @@
+{
+  "baseline_model": "Empirical Calibration Correlation",
+  "stressed_model": "Zero Off-Diagonal Decoupled Correlation",
+  "num_paths": 1000,
+  "method": "zero_off_diagonal_decoupling_with_common_random_numbers",
+  "baseline_mean_return": 0.017316802755836292,
+  "stressed_mean_return": 0.01731324307486394,
+  "mean_return_difference": -3.5596809723516254e-06,
+  "baseline_median_return": 0.015946092769121387,
+  "stressed_median_return": 0.015891395373572596,
+  "median_return_difference": -5.469739554879102e-05,
+  "baseline_prob_loss": 0.316,
+  "stressed_prob_loss": 0.316,
+  "prob_loss_difference": 0.0,
+  "prob_loss_difference_se": 0.0,
+  "baseline_var_95": 0.03937661813771887,
+  "stressed_var_95": 0.03930254629521179,
+  "var_95_difference": -7.407184250707993e-05,
+  "baseline_cvar_95": 0.05375498302424259,
+  "stressed_cvar_95": 0.05356177347084234,
+  "cvar_95_difference": -0.00019320955340025592,
+  "baseline_median_drawdown": -0.02866673313475987,
+  "stressed_median_drawdown": -0.028680770789008173,
+  "median_drawdown_difference": -1.4037654248302833e-05,
+  "baseline_mean_financing_cost_a": 1633.3047713585445,
+  "stressed_mean_financing_cost_a": 1633.5139175527609,
+  "financing_cost_difference_a": 0.20914619421637326,
+  "baseline_mean_fx_translation_a": 147.36476102019054,
+  "stressed_mean_fx_translation_a": 147.35421712655022,
+  "fx_translation_difference_a": -0.010543893640317492,
+  "paired_return_difference_mean": -3.5596809723485045e-06,
+  "paired_return_difference_std": 0.0001285888816845342,
+  "paired_return_difference_p05": -0.0002260742706727818,
+  "paired_return_difference_p50": 3.943318078382385e-06,
+  "paired_return_difference_p95": 0.00020141350931792416,
+  "marginal_means_preserved": true,
+  "marginal_variances_preserved": true,
+  "is_psd_repaired": false,
+  "psd_repair_frobenius_norm": 0.0,
+  "empirical_correlation_matrix": [
+    [
+      0.9999999999999999,
+      0.0487405712754174,
+      -0.025355478550026348,
+      0.03789098991836607
+    ],
+    [
+      0.04874057127541741,
+      1.0,
+      -0.004656414420883342,
+      -0.059054183692850926
+    ],
+    [
+      -0.025355478550026348,
+      -0.004656414420883343,
+      0.9999999999999999,
+      0.11080754486438861
+    ],
+    [
+      0.037890989918366064,
+      -0.059054183692850926,
+      0.11080754486438861,
+      1.0000000000000002
+    ]
+  ],
+  "stressed_correlation_matrix": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "notes": [
+    "Evaluated across 1,000 paired simulation paths using Common Random Numbers (CRN).",
+    "Paired return differences are defined as Stressed_i minus Baseline_i (Delta = Stressed - Baseline).",
+    "Zero off-diagonal correlation (R_stressed = Identity) is a hypothetical stress condition, not an empirically observed historical state.",
+    "Small observed sensitivity under this one historical calibration must not be interpreted as evidence that correlation risk is generally unimportant.",
+    "Marginal factor means and marginal variances are strictly identical between baseline and stressed models.",
+    "Positive semi-definiteness of the stressed covariance matrix is formally verified and preserved."
+  ]
+}
