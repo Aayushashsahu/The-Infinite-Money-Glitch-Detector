@@ -9,6 +9,7 @@ or cross-series substitutions.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta, timezone
 import math
 
@@ -23,9 +24,9 @@ from data.schemas import (
 )
 from simulation.monte_carlo.schemas import (
     FactorCategory,
-    FactorObservation,
     FactorPanel,
     FactorRowProvenance,
+    InitialMarketLevelsReport,
     MarketFactor,
     MissingDataTreatment,
     PITMode,
@@ -285,6 +286,9 @@ def resolve_observation_as_of(
     if not available_obs:
         return None
 
+    max_date = max(o.observation_date for o in available_obs)
+    date_obs = [o for o in available_obs if o.observation_date == max_date]
+
     def _sort_key(o: DataObservation):
         rev = o.revision if o.revision is not None else 0
         ts = o.publication_timestamp or o.retrieved_at or datetime.min
@@ -292,7 +296,7 @@ def resolve_observation_as_of(
             ts = ts.replace(tzinfo=timezone.utc)
         return (rev, ts)
 
-    return max(available_obs, key=_sort_key)
+    return max(date_obs, key=_sort_key)
 
 
 
@@ -395,38 +399,42 @@ def build_fx_carry_factor_panel(
         f"Filtered {len(valid_obs)} valid real observations between {start_date} and {end_date} (pit_mode={mode.value})."
     )
 
-    # 2. Extract series dictionaries: date -> DataObservation with deterministic revision resolution
-    fx_obs_by_date: dict[date, DataObservation] = {}
-    borrowing_obs_by_date: dict[date, DataObservation] = {}
-    invest_obs_by_date: dict[date, DataObservation] = {}
-    sov_obs_by_date: dict[date, DataObservation] = {}
+    # 2. Extract series candidate pools preserving all revisions
+    fx_candidates_by_date: dict[date, list[DataObservation]] = defaultdict(list)
+    borrowing_candidates: list[DataObservation] = []
+    invest_candidates_by_date: dict[date, list[DataObservation]] = defaultdict(list)
+    sov_candidates_by_date: dict[date, list[DataObservation]] = defaultdict(list)
+    all_invest_candidates: list[DataObservation] = []
+    all_sov_candidates: list[DataObservation] = []
 
     for o in valid_obs:
         d = o.observation_date
         if o.kind == ObservationKind.EXCHANGE_RATE and o.entity_code == fx_entity:
-            fx_obs_by_date[d] = _resolve_observation(fx_obs_by_date[d], o) if d in fx_obs_by_date else o
+            fx_candidates_by_date[d].append(o)
         elif o.kind == ObservationKind.INTEREST_RATE:
             if o.indicator_id == borrowing_series_id:
-                borrowing_obs_by_date[d] = _resolve_observation(borrowing_obs_by_date[d], o) if d in borrowing_obs_by_date else o
+                borrowing_candidates.append(o)
             elif o.indicator_id == investment_series_id:
-                invest_obs_by_date[d] = _resolve_observation(invest_obs_by_date[d], o) if d in invest_obs_by_date else o
+                invest_candidates_by_date[d].append(o)
+                all_invest_candidates.append(o)
             elif sovereign_yield_series_id is not None and o.indicator_id == sovereign_yield_series_id:
-                sov_obs_by_date[d] = _resolve_observation(sov_obs_by_date[d], o) if d in sov_obs_by_date else o
+                sov_candidates_by_date[d].append(o)
+                all_sov_candidates.append(o)
 
-    # 3. Complete common dates intersection across required series
+    # 3. Complete common dates intersection across candidate series
     # Option A: Common complete panel if sovereign yield series has sufficient observations (>= 50)
     # Option B: Reduced 3-factor panel if sovereign yield series has insufficient observations
     # Never substitute missing values across series
-    has_sovereign = sovereign_yield_series_id is not None and len(sov_obs_by_date) >= 50
-    common_set = set(fx_obs_by_date.keys()).intersection(set(invest_obs_by_date.keys()))
+    has_sovereign = sovereign_yield_series_id is not None and len(sov_candidates_by_date) >= 50
+    common_set = set(fx_candidates_by_date.keys()).intersection(set(invest_candidates_by_date.keys()))
     if has_sovereign:
-        common_set = common_set.intersection(set(sov_obs_by_date.keys()))
+        common_set = common_set.intersection(set(sov_candidates_by_date.keys()))
         audit_log.append(f"Option A: Complete common panel with 4 factors (including {sovereign_yield_series_id}).")
     else:
         if sovereign_yield_series_id is not None:
             audit_log.append(
                 f"Option B: Reduced research panel. Excluded optional factor '{sovereign_yield_series_id}' "
-                f"due to insufficient observations ({len(sov_obs_by_date)} < 50). Retaining 3-factor panel without cross-series substitution."
+                f"due to insufficient observations ({len(sov_candidates_by_date)} < 50). Retaining 3-factor panel without cross-series substitution."
             )
 
     common_dates = sorted(common_set)
@@ -434,9 +442,7 @@ def build_fx_carry_factor_panel(
         raise ValueError(f"Insufficient aligned trading days across complete factor panel: {len(common_dates)}")
     audit_log.append(f"Synchronized complete common trading calendar with {len(common_dates)} active days.")
 
-    # 4. Align raw level series across common trading dates with point-in-time availability
-    import bisect
-
+    # 4. Align raw level series across common trading dates with decision-time aware point-in-time availability
     aligned_dates: list[date] = []
     fx_raw: list[float] = []
     borrowing_raw: list[float] = []
@@ -449,66 +455,68 @@ def build_fx_carry_factor_panel(
     invest_aligned_obs: list[DataObservation] = []
     sov_aligned_obs: list[DataObservation] = []
 
-    all_borrowing_dates = sorted(borrowing_obs_by_date.keys())
-
-    # Build sorted availability index for fast O(log N) point-in-time resolution
-    invest_eff_list = sorted(
-        [(get_effective_availability_timestamp(o), o) for o in invest_obs_by_date.values() if get_effective_availability_timestamp(o) is not None],
-        key=lambda x: x[0],  # type: ignore[arg-type,return-value]
-    )
-    invest_eff_times = [x[0] for x in invest_eff_list]
-
-    sov_eff_list = sorted(
-        [(get_effective_availability_timestamp(o), o) for o in sov_obs_by_date.values() if get_effective_availability_timestamp(o) is not None],
-        key=lambda x: x[0],  # type: ignore[arg-type,return-value]
-    )
-    sov_eff_times = [x[0] for x in sov_eff_list]
-
-    borrowing_eff_list = sorted(
-        [(get_effective_availability_timestamp(o), o) for o in borrowing_obs_by_date.values() if get_effective_availability_timestamp(o) is not None],
-        key=lambda x: x[0],  # type: ignore[arg-type,return-value]
-    )
-    borrowing_eff_times = [x[0] for x in borrowing_eff_list]
-
     for d in common_dates:
         as_of_dt = get_session_decision_timestamp(d, decision_time_utc)
-        fx_o = fx_obs_by_date[d]
 
-        # FX availability check
-        is_fx_avail, _ = is_observation_available_as_of(fx_o, as_of_dt, strict_executable=(mode == PITMode.STRICT_VERIFIED), pit_mode=mode)
-        if not is_fx_avail:
+        # FX availability check with decision-time revision resolution
+        fx_o = resolve_observation_as_of(
+            fx_candidates_by_date[d],
+            as_of=as_of_dt,
+            strict_executable=(mode == PITMode.STRICT_VERIFIED),
+            pit_mode=mode,
+        )
+        if fx_o is None:
             continue
 
-        # Prevailing borrowing rate (ECB)
-        if mode == PITMode.RESEARCH_ONLY:
-            prior_dates = [bd for bd in all_borrowing_dates if bd <= d]
-            if not prior_dates:
-                continue
-            prevailing_borrowing_obs = borrowing_obs_by_date[prior_dates[-1]]
-        else:
-            b_idx = bisect.bisect_right(borrowing_eff_times, as_of_dt) - 1
-            if b_idx < 0:
-                continue
-            prevailing_borrowing_obs = borrowing_eff_list[b_idx][1]
+        # Prevailing borrowing rate (ECB) as of decision timestamp
+        borrow_subset = [o for o in borrowing_candidates if o.observation_date <= d]
+        prevailing_borrowing_obs = resolve_observation_as_of(
+            borrow_subset,
+            as_of=as_of_dt,
+            strict_executable=(mode == PITMode.STRICT_VERIFIED),
+            pit_mode=mode,
+        )
+        if prevailing_borrowing_obs is None:
+            continue
 
-        # Investment rate (DGS1MO)
+        # Investment rate (DGS1MO) as of decision timestamp
         if mode == PITMode.RESEARCH_ONLY:
-            invest_o = invest_obs_by_date[d]
+            invest_o = resolve_observation_as_of(
+                invest_candidates_by_date[d],
+                as_of=as_of_dt,
+                strict_executable=False,
+                pit_mode=mode,
+            )
         else:
-            i_idx = bisect.bisect_right(invest_eff_times, as_of_dt) - 1
-            if i_idx < 0:
-                continue
-            invest_o = invest_eff_list[i_idx][1]
+            invest_subset = [o for o in all_invest_candidates if o.observation_date <= d]
+            invest_o = resolve_observation_as_of(
+                invest_subset,
+                as_of=as_of_dt,
+                strict_executable=(mode == PITMode.STRICT_VERIFIED),
+                pit_mode=mode,
+            )
+        if invest_o is None:
+            continue
 
-        # Sovereign yield (DGS3MO)
+        # Sovereign yield (DGS3MO) as of decision timestamp
         if has_sovereign:
             if mode == PITMode.RESEARCH_ONLY:
-                sov_o = sov_obs_by_date[d]
+                sov_o = resolve_observation_as_of(
+                    sov_candidates_by_date[d],
+                    as_of=as_of_dt,
+                    strict_executable=False,
+                    pit_mode=mode,
+                )
             else:
-                s_idx = bisect.bisect_right(sov_eff_times, as_of_dt) - 1
-                if s_idx < 0:
-                    continue
-                sov_o = sov_eff_list[s_idx][1]
+                sov_subset = [o for o in all_sov_candidates if o.observation_date <= d]
+                sov_o = resolve_observation_as_of(
+                    sov_subset,
+                    as_of=as_of_dt,
+                    strict_executable=(mode == PITMode.STRICT_VERIFIED),
+                    pit_mode=mode,
+                )
+            if sov_o is None:
+                continue
         else:
             sov_o = None
 
@@ -705,3 +713,134 @@ def build_fx_carry_factor_panel(
         row_provenance=dict(row_provenance),
         pit_mode=mode.value,
     )
+
+
+def resolve_initial_market_levels(
+    observations: Sequence[DataObservation],
+    as_of_decision_timestamp: datetime = datetime(2024, 1, 2, 16, 0, 0, tzinfo=timezone.utc),
+    pit_mode: PITMode | str = PITMode.ESTIMATED_LAG,
+    fx_entity: str = "EUR/USD",
+    borrowing_series_id: str = "KR.MRR_FR.LEV",
+    investment_series_id: str = "DGS1MO",
+) -> InitialMarketLevelsReport:
+    """Ground simulation initial market conditions dynamically from latest valid historical observations.
+
+    Resolves:
+    1. Initial FX rate (provider quote currency per base, e.g. USD per EUR).
+    2. Initial borrowing rate (annual decimal rate, e.g. 0.045 for 4.5%).
+    3. Initial investment rate (annual decimal rate, e.g. 0.056 for 5.6%).
+
+    Enforces the specified point-in-time policy as of as_of_decision_timestamp.
+    """
+    mode = PITMode(pit_mode) if isinstance(pit_mode, str) else pit_mode
+
+    # 1. Resolve FX observation
+    fx_cands = [
+        o for o in observations
+        if not getattr(o, "is_synthetic", False)
+        and o.kind == ObservationKind.EXCHANGE_RATE
+        and o.entity_code == fx_entity
+        and is_observation_available_as_of(o, as_of=as_of_decision_timestamp, pit_mode=mode)[0]
+    ]
+    if not fx_cands:
+        raise ValueError(
+            f"No available FX observations for '{fx_entity}' as of {as_of_decision_timestamp} under pit_mode={mode.value}."
+        )
+    fx_max_date = max(o.observation_date for o in fx_cands)
+    fx_obs = resolve_observation_as_of(
+        [o for o in fx_cands if o.observation_date == fx_max_date],
+        as_of=as_of_decision_timestamp,
+        pit_mode=mode,
+    )
+    if fx_obs is None:
+        raise ValueError(f"Failed to resolve FX observation for '{fx_entity}' as of {as_of_decision_timestamp}.")
+
+    # Invert Frankfurter quote (EUR per USD) to canonical provider quote (USD per EUR) if raw_value < 1.0
+    if fx_obs.value > 0 and fx_obs.value < 1.0:
+        initial_fx = 1.0 / fx_obs.value
+    else:
+        initial_fx = fx_obs.value
+
+    # 2. Resolve borrowing rate observation
+    b_cands = [
+        o for o in observations
+        if not getattr(o, "is_synthetic", False)
+        and o.kind == ObservationKind.INTEREST_RATE
+        and o.indicator_id == borrowing_series_id
+        and is_observation_available_as_of(o, as_of=as_of_decision_timestamp, pit_mode=mode)[0]
+    ]
+    if not b_cands:
+        raise ValueError(
+            f"No available borrowing rate observations for '{borrowing_series_id}' as of {as_of_decision_timestamp} under pit_mode={mode.value}."
+        )
+    b_max_date = max(o.observation_date for o in b_cands)
+    b_obs = resolve_observation_as_of(
+        [o for o in b_cands if o.observation_date == b_max_date],
+        as_of=as_of_decision_timestamp,
+        pit_mode=mode,
+    )
+    if b_obs is None:
+        raise ValueError(
+            f"Failed to resolve borrowing rate observation for '{borrowing_series_id}' as of {as_of_decision_timestamp}."
+        )
+
+    # Convert percentage to decimal if > 0.5 (e.g. 4.5% -> 0.045)
+    initial_borrowing = b_obs.value / 100.0 if b_obs.value > 0.5 else b_obs.value
+
+    # 3. Resolve investment rate observation
+    inv_cands = [
+        o for o in observations
+        if not getattr(o, "is_synthetic", False)
+        and o.kind == ObservationKind.INTEREST_RATE
+        and o.indicator_id == investment_series_id
+        and is_observation_available_as_of(o, as_of=as_of_decision_timestamp, pit_mode=mode)[0]
+    ]
+    if not inv_cands:
+        raise ValueError(
+            f"No available investment yield observations for '{investment_series_id}' as of {as_of_decision_timestamp} under pit_mode={mode.value}."
+        )
+    inv_max_date = max(o.observation_date for o in inv_cands)
+    inv_obs = resolve_observation_as_of(
+        [o for o in inv_cands if o.observation_date == inv_max_date],
+        as_of=as_of_decision_timestamp,
+        pit_mode=mode,
+    )
+    if inv_obs is None:
+        raise ValueError(
+            f"Failed to resolve investment rate observation for '{investment_series_id}' as of {as_of_decision_timestamp}."
+        )
+
+    # Convert percentage to decimal if > 0.5 (e.g. 5.6% -> 0.056)
+    initial_investment = inv_obs.value / 100.0 if inv_obs.value > 0.5 else inv_obs.value
+
+    notes = [
+        f"Grounded initial FX rate: {initial_fx:.6f} USD/EUR from {fx_obs.source_id} {fx_obs.entity_code} on {fx_obs.observation_date} (raw={fx_obs.value}).",
+        f"Grounded initial borrowing rate: {initial_borrowing:.4f} ({initial_borrowing*100:.2f}%) from {b_obs.source_id} {b_obs.indicator_id} on {b_obs.observation_date}.",
+        f"Grounded initial investment rate: {initial_investment:.4f} ({initial_investment*100:.2f}%) from {inv_obs.source_id} {inv_obs.indicator_id} on {inv_obs.observation_date}.",
+        f"Resolved strictly point-in-time as of {as_of_decision_timestamp.isoformat()} under policy {mode.value}.",
+    ]
+
+    return InitialMarketLevelsReport(
+        as_of_decision_timestamp=as_of_decision_timestamp,
+        pit_mode=mode.value,
+        initial_fx_rate=initial_fx,
+        initial_borrowing_rate=initial_borrowing,
+        initial_investment_rate=initial_investment,
+        fx_observation_date=fx_obs.observation_date,
+        fx_availability_timestamp=get_effective_availability_timestamp(fx_obs),
+        fx_source_id=fx_obs.source_id,
+        fx_entity_code=fx_obs.entity_code,
+        fx_raw_value=fx_obs.value,
+        borrowing_observation_date=b_obs.observation_date,
+        borrowing_availability_timestamp=get_effective_availability_timestamp(b_obs),
+        borrowing_source_id=b_obs.source_id,
+        borrowing_indicator_id=b_obs.indicator_id or borrowing_series_id,
+        borrowing_raw_value=b_obs.value,
+        investment_observation_date=inv_obs.observation_date,
+        investment_availability_timestamp=get_effective_availability_timestamp(inv_obs),
+        investment_source_id=inv_obs.source_id,
+        investment_indicator_id=inv_obs.indicator_id or investment_series_id,
+        investment_raw_value=inv_obs.value,
+        grounding_notes=notes,
+    )
+

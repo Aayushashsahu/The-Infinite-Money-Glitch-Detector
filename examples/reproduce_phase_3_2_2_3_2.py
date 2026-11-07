@@ -14,7 +14,6 @@ the exact double-entry accounting reconciliation and attribution table.
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
 import sys

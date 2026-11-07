@@ -23,30 +23,21 @@ from data.schemas import (
 from simulation.monte_carlo import (
     BootstrapMethod,
     CarryTradeScenarioStrategy,
-    ConvergenceReport,
-    DistributionMetrics,
-    FactorCategory,
-    FactorPanel,
     HistoricalBootstrapSampler,
-    MarketFactor,
     MonteCarloEngine,
-    MonteCarloResult,
     MultivariateGaussianModel,
     MultivariateStudentTModel,
     PathEvaluationResult,
     RegimeConditionedSampler,
-    RegimeState,
     ScenarioPath,
     SimulationConfig,
     SimulationModelType,
     StressScenario,
-    TransformationMethod,
     VolatilityRegimeClassifier,
     apply_stress_scenario,
     build_fx_carry_factor_panel,
     build_standard_stress_scenarios,
     calibrate_factor_panel,
-    calculate_distribution_metrics,
     compute_differences,
     compute_log_returns,
     ensure_positive_semidefinite,
@@ -440,7 +431,7 @@ def test_deterministic_no_randomness_strategy_parity():
         is_synthetic=True,
     )
 
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     result = strategy.evaluate_path(flat_path, initial_capital_a=100_000.0)
 
     # Must reconcile exactly: Net Profit == Pure Gross - Financing - Frictions + Cash Yield
@@ -458,7 +449,7 @@ def test_strategy_double_entry_reconciliation_across_volatile_path():
     sampler = HistoricalBootstrapSampler(panel, method=BootstrapMethod.MOVING_BLOCK, random_seed=42)
     paths = sampler.generate_paths(num_paths=10, horizon=90)
 
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     for p in paths:
         ev = strategy.evaluate_path(p, initial_capital_a=100_000.0)
         assert ev.reconciliation_exact is True

@@ -31,10 +31,8 @@ if sys.path and Path(sys.path[0]).resolve() == (SRC_DIR / "data").resolve():
 
 from backtesting.engine import BacktestEngine
 from backtesting.provenance import build_data_provenance_report
-from backtesting.reporting import format_backtest_report
 from data.db.engine import make_engine, make_session_factory
 from data.repository import Repository
-from data.schemas import DataClassification, Frequency, ObservationKind
 from schemas.backtest import (
     AvailabilityPolicy,
     BacktestConfig,
@@ -74,7 +72,7 @@ def print_metrics_table(name: str, res) -> None:
     print(f"  - Financing Debt Costs: ${m.total_financing_costs_a:,.2f} ({m.financing_cost_drag:.2%})")
     print(f"  - Total Frictions Drag: ${m.total_frictions_a:,.2f} ({m.transaction_cost_drag:.2%})")
     print(f"  + Idle Cash Interest:   ${m.total_cash_interest_a:+,.2f} ({m.cash_yield_return:+.2%})")
-    print(f"  -------------------------------------------------------------")
+    print("  -------------------------------------------------------------")
     print(f"  = Cumulative Net PnL:   ${m.cumulative_net_profit:+,.2f} ({m.total_return:+.2%})")
     print(f"  Reconciliation Residual: {m.reconciliation_residual_a:.10f} (Exact: {m.reconciliation_exact})")
     bm_ret_str = f"{m.benchmark_total_return:+.2%}" if m.benchmark_total_return is not None else "N/A"

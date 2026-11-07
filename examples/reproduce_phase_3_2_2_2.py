@@ -14,7 +14,6 @@ the exact double-entry accounting reconciliation table.
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
 import sys
@@ -26,7 +25,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from backtesting.engine import BacktestEngine
-from backtesting.reporting import export_backtest_result_json, format_backtest_report
+from backtesting.reporting import export_backtest_result_json
 from data.db.engine import make_engine, make_session_factory
 from data.repository import Repository
 from schemas.backtest import (

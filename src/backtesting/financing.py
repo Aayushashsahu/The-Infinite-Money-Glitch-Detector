@@ -131,13 +131,13 @@ def calculate_variable_financing(
             continue
         total_days += period_days
         sub_years = days_to_years(period_days, day_count)
-        
+
         factor = growth_factor(period.annual_rate, sub_years, interest_convention)
         current_balance *= factor
 
     total_years = days_to_years(total_days, day_count)
     interest = current_balance - principal
-    
+
     # Implied effective annual rate
     if total_years > 0 and interest_convention == InterestConvention.COMPOUND:
         effective_annual = (current_balance / principal) ** (1.0 / total_years) - 1.0

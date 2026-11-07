@@ -21,16 +21,11 @@ from schemas.backtest import (
     AvailabilityPolicy,
     BacktestConfig,
     BacktestResult,
-    BenchmarkSpecification,
     BenchmarkType,
     PointInTimeAvailabilityStatus,
-    TradeRecord,
-    TradeStatus,
 )
-from schemas.strategy import CurrencyPair
 from backtesting.benchmarks import (
     compute_borrowing_currency_benchmark,
-    compute_investment_currency_benchmark,
 )
 from backtesting.execution import ExecutionEngine
 from backtesting.metrics import calculate_performance_metrics
@@ -38,11 +33,10 @@ from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
 from backtesting.portfolio import Portfolio
 from backtesting.signals import (
     CoveredCarrySignalGenerator,
-    TradingSignal,
     UnhedgedCarrySignalGenerator,
 )
-from backtesting.calendar import DEFAULT_FX_CALENDAR, get_settlement_calendar
-from data.schemas import DataObservation, Frequency, ObservationKind, PriceType, RateRole, StrategyExecutabilityStatus
+from backtesting.calendar import get_settlement_calendar
+from data.schemas import DataObservation, ObservationKind, PriceType, RateRole, StrategyExecutabilityStatus
 
 
 class BacktestEngine:
@@ -55,7 +49,7 @@ class BacktestEngine:
     ):
         self.config = config
         self.observations = list(observations)
-        
+
         # Point-in-time firewall
         self.firewall = PointInTimeFirewall(config.availability_config)
         self.data_store = PointInTimeDataStore(self.observations, self.firewall)

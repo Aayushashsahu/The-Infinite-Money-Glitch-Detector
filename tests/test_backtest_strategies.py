@@ -15,12 +15,10 @@ Verifies:
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-import pytest
 
 from backtesting.benchmarks import evaluate_cip_diagnostic
 from backtesting.engine import BacktestEngine
 from backtesting.signals import (
-    CoveredCarrySignalGenerator,
     UnhedgedCarrySignalGenerator,
 )
 from data.schemas import DataObservation, Frequency, ObservationKind
@@ -29,7 +27,6 @@ from schemas.backtest import (
     BacktestConfig,
     DataAvailabilityConfig,
     ExecutionConfig,
-    PositionSizingConfig,
     TradeStatus,
 )
 from schemas.strategy import CurrencyPair
@@ -101,7 +98,7 @@ def test_unhedged_carry_fails_when_depreciation_exceeds_yield():
     observations = []
     d0 = date(2024, 1, 1)
     d_mid = date(2024, 3, 31)
-    
+
     curr = d0
     while curr <= d_mid:
         # Linearly depreciating exchange rate

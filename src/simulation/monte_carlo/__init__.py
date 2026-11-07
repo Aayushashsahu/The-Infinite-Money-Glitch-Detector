@@ -32,6 +32,7 @@ from simulation.monte_carlo.factors import (
     is_observation_available_as_of,
     reconstruct_price_levels,
     reconstruct_rate_levels,
+    resolve_initial_market_levels,
     resolve_observation_as_of,
 )
 from simulation.monte_carlo.holdout import (
@@ -52,6 +53,7 @@ from simulation.monte_carlo.reporting import (
     generate_phase_4_1_1_research_report,
     generate_phase_4_1_2_research_report,
     generate_phase_4_1_2_1_research_report,
+    generate_phase_4_1_2_2_research_report,
     generate_research_report,
 )
 from simulation.monte_carlo.schemas import (
@@ -71,6 +73,7 @@ from simulation.monte_carlo.schemas import (
     FactorRowProvenance,
     FundingSensitivityReport,
     HoldoutDiagnosticReport,
+    InitialMarketLevelsReport,
     MarketFactor,
     ModelComparisonEntry,
     MonteCarloResult,
@@ -120,6 +123,7 @@ __all__ = [
     "FundingSensitivityReport",
     "HistoricalBootstrapSampler",
     "HoldoutDiagnosticReport",
+    "InitialMarketLevelsReport",
     "MarketFactor",
     "ModelComparisonEntry",
     "MonteCarloEngine",
@@ -161,6 +165,7 @@ __all__ = [
     "generate_phase_4_1_1_research_report",
     "generate_phase_4_1_2_research_report",
     "generate_phase_4_1_2_1_research_report",
+    "generate_phase_4_1_2_2_research_report",
     "generate_research_report",
     "generate_simulated_trading_sessions",
     "get_effective_availability_timestamp",
@@ -168,6 +173,7 @@ __all__ = [
     "is_observation_available_as_of",
     "reconstruct_price_levels",
     "reconstruct_rate_levels",
+    "resolve_initial_market_levels",
     "resolve_observation_as_of",
     "split_calibration_holdout",
     "validate_market_calendar_evidence",

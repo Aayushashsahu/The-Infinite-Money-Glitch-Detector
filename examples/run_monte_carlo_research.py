@@ -23,7 +23,6 @@ import hashlib
 from pathlib import Path
 import subprocess
 import sys
-import time
 
 import numpy as np
 import scipy
@@ -39,19 +38,14 @@ from data.repository import Repository
 from simulation.monte_carlo import (
     BootstrapMethod,
     CarryTradeScenarioStrategy,
-    ConvergenceReport,
-    FactorPanel,
     ModelComparisonEntry,
     MonteCarloEngine,
     MonteCarloResult,
     PITMode,
-    RegimeState,
-    ScenarioPath,
     SimulationConfig,
     SimulationModelType,
     build_availability_audit,
     build_fx_carry_factor_panel,
-    build_standard_stress_scenarios,
     calibrate_factor_panel,
     evaluate_correlation_stress_distribution,
     evaluate_factor_holdout_diagnostics,
@@ -63,7 +57,8 @@ from simulation.monte_carlo import (
     generate_phase_4_1_1_research_report,
     generate_phase_4_1_2_research_report,
     generate_phase_4_1_2_1_research_report,
-    generate_research_report,
+    generate_phase_4_1_2_2_research_report,
+    resolve_initial_market_levels,
     split_calibration_holdout,
     validate_market_calendar_evidence,
 )
@@ -118,12 +113,12 @@ def run_monte_carlo_laboratory(
     pit_mode: str | PITMode = PITMode.ESTIMATED_LAG,
 ) -> None:
     """Execute complete Phase 4.1.2.1 Monte Carlo simulation and reproducibility closure suite."""
-    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2_1")
+    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2_2")
     out_dir.mkdir(parents=True, exist_ok=True)
     mode = PITMode(pit_mode) if isinstance(pit_mode, str) else pit_mode
 
     print("=" * 85)
-    print(" PHASE 4.1.2.1 — EXECUTION-PATH INTEGRATION & RESEARCH INTEGRITY CLOSURE")
+    print(" PHASE 4.1.2.2 — RESIDUAL CONSISTENCY & EXECUTION ASSUMPTIONS CLOSURE")
     print(f" Paths: {num_paths:,} | Horizon: {horizon_steps} steps | Seed: {random_seed} | PIT Mode: {mode.value}")
     print(f" Output Directory: {out_dir}")
     print("=" * 85)
@@ -175,6 +170,17 @@ def run_monte_carlo_laboratory(
     export_json(full_panel.model_dump(mode="json"), out_dir / "factor_panel_manifest.json")
     print("      Exported calibration_report.json and factor_panel_manifest.json")
 
+    # Ground initial simulation market state dynamically from latest available observations
+    initial_levels = resolve_initial_market_levels(
+        observations=observations,
+        as_of_decision_timestamp=datetime(2024, 1, 2, 16, 0, 0, tzinfo=timezone.utc),
+        pit_mode=mode,
+    )
+    print(f"      Grounded initial market levels as of {initial_levels.as_of_decision_timestamp.isoformat()}:")
+    print(f"        FX Mid:     {initial_levels.initial_fx_rate:.6f} USD/EUR (from {initial_levels.fx_source_id} {initial_levels.fx_entity_code} on {initial_levels.fx_observation_date})")
+    print(f"        Borrowing:  {initial_levels.initial_borrowing_rate:.4f} ({initial_levels.initial_borrowing_rate*100:.2f}%) (from {initial_levels.borrowing_source_id} {initial_levels.borrowing_indicator_id} on {initial_levels.borrowing_observation_date})")
+    print(f"        Investment: {initial_levels.initial_investment_rate:.4f} ({initial_levels.initial_investment_rate*100:.2f}%) (from {initial_levels.investment_source_id} {initial_levels.investment_indicator_id} on {initial_levels.investment_observation_date})")
+
     # 4. Run simulations across 6 model architectures
     print(f"\n[4/9] Generating {num_paths:,} simulation paths across 6 model architectures...")
     strategy = CarryTradeScenarioStrategy(
@@ -196,6 +202,9 @@ def run_monte_carlo_laboratory(
         horizon_steps=horizon_steps,
         random_seed=random_seed,
         pit_mode=mode,
+        initial_fx_rate=initial_levels.initial_fx_rate,
+        initial_borrowing_rate=initial_levels.initial_borrowing_rate,
+        initial_investment_rate=initial_levels.initial_investment_rate,
     )
     mc_gauss = MonteCarloEngine(cfg_gauss, observations, strategy=strategy, panel=calib_panel).run()
     results["multivariate_gaussian"] = mc_gauss
@@ -212,6 +221,9 @@ def run_monte_carlo_laboratory(
         horizon_steps=horizon_steps,
         random_seed=random_seed + 1,
         pit_mode=mode,
+        initial_fx_rate=initial_levels.initial_fx_rate,
+        initial_borrowing_rate=initial_levels.initial_borrowing_rate,
+        initial_investment_rate=initial_levels.initial_investment_rate,
     )
     mc_mb = MonteCarloEngine(cfg_mb, observations, strategy=strategy, panel=calib_panel).run()
     results["moving_block_bootstrap"] = mc_mb
@@ -227,6 +239,9 @@ def run_monte_carlo_laboratory(
         horizon_steps=horizon_steps,
         random_seed=random_seed + 2,
         pit_mode=mode,
+        initial_fx_rate=initial_levels.initial_fx_rate,
+        initial_borrowing_rate=initial_levels.initial_borrowing_rate,
+        initial_investment_rate=initial_levels.initial_investment_rate,
     )
     mc_iid = MonteCarloEngine(cfg_iid, observations, strategy=strategy, panel=calib_panel).run()
     results["iid_bootstrap"] = mc_iid
@@ -242,6 +257,9 @@ def run_monte_carlo_laboratory(
         horizon_steps=horizon_steps,
         random_seed=random_seed + 3,
         pit_mode=mode,
+        initial_fx_rate=initial_levels.initial_fx_rate,
+        initial_borrowing_rate=initial_levels.initial_borrowing_rate,
+        initial_investment_rate=initial_levels.initial_investment_rate,
     )
     mc_stat = MonteCarloEngine(cfg_stat, observations, strategy=strategy, panel=calib_panel).run()
     results["stationary_bootstrap"] = mc_stat
@@ -255,6 +273,9 @@ def run_monte_carlo_laboratory(
         horizon_steps=horizon_steps,
         random_seed=random_seed + 4,
         pit_mode=mode,
+        initial_fx_rate=initial_levels.initial_fx_rate,
+        initial_borrowing_rate=initial_levels.initial_borrowing_rate,
+        initial_investment_rate=initial_levels.initial_investment_rate,
     )
     mc_t = MonteCarloEngine(cfg_t, observations, strategy=strategy, panel=calib_panel).run()
     results["student_t"] = mc_t
@@ -269,6 +290,9 @@ def run_monte_carlo_laboratory(
         horizon_steps=horizon_steps,
         random_seed=random_seed + 5,
         pit_mode=mode,
+        initial_fx_rate=initial_levels.initial_fx_rate,
+        initial_borrowing_rate=initial_levels.initial_borrowing_rate,
+        initial_investment_rate=initial_levels.initial_investment_rate,
     )
     mc_reg = MonteCarloEngine(cfg_reg, observations, strategy=strategy, panel=calib_panel).run()
     results["regimes"] = mc_reg
@@ -421,9 +445,26 @@ def run_monte_carlo_laboratory(
             "variance_reduction": "common_random_numbers",
             "num_paths": num_paths,
         },
+        "initial_market_levels": initial_levels.model_dump(mode="json"),
     }
 
-    if "4_1_2_1" in out_dir.name:
+    if "4_1_2_2" in out_dir.name:
+        report_md = generate_phase_4_1_2_2_research_report(
+            avail_audit=avail_audit,
+            model_comparisons=model_comparisons,
+            factor_diag=factor_diag,
+            port_diag=port_diag,
+            corr_stress=corr_stress,
+            cal_val=cal_val,
+            funding_sens=funding_sens,
+            bootstrap_result=mc_mb,
+            student_t_result=mc_t,
+            regime_result=mc_reg,
+            gaussian_result=mc_gauss,
+            manifest_info=manifest_metadata,
+            initial_levels=initial_levels,
+        )
+    elif "4_1_2_1" in out_dir.name:
         report_md = generate_phase_4_1_2_1_research_report(
             avail_audit=avail_audit,
             model_comparisons=model_comparisons,

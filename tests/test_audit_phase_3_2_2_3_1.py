@@ -39,15 +39,12 @@ from core.currency import (
 from models.risk import sharpe_ratio
 from data.schemas import (
     AvailabilityEvidence,
-    DataClassification,
     DataObservation,
     Frequency,
     ObservationKind,
     PriceType,
     RateRole,
-    StrategyExecutabilityStatus,
 )
-from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
 from backtesting.execution import ExecutionEngine
 from backtesting.engine import BacktestEngine
 from backtesting.metrics import calculate_performance_metrics, calculate_sortino_ratio
@@ -67,7 +64,7 @@ from schemas.backtest import (
     TradeRecord,
     TradeStatus,
 )
-from schemas.strategy import CurrencyPair, InterestConvention
+from schemas.strategy import CurrencyPair
 
 
 def make_test_observations(

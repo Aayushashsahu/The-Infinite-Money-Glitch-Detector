@@ -32,12 +32,11 @@ from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
-from zoneinfo import ZoneInfo
 import pytest
 from pydantic import ValidationError
 
 from backtesting.engine import BacktestEngine
-from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
+from backtesting.point_in_time import PointInTimeFirewall
 from backtesting.reporting import export_backtest_result_json, format_backtest_report
 from data.schemas import (
     AvailabilityEvidence,
@@ -54,11 +53,9 @@ from schemas.backtest import (
     BenchmarkSpecification,
     BenchmarkType,
     DataAvailabilityConfig,
-    ExecutionConfig,
     PositionSizingConfig,
     PositionSizingMethod,
     TradeRecord,
-    TradeStatus,
     BacktestResult,
 )
 from schemas.strategy import CurrencyPair

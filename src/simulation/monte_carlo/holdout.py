@@ -8,19 +8,20 @@ execution records).
 
 from __future__ import annotations
 
-from datetime import date
 import math
 from typing import Sequence
 
 import numpy as np
 import scipy.stats as stats
 
+from simulation.monte_carlo.regimes import VolatilityRegimeClassifier
 from simulation.monte_carlo.schemas import (
     FactorHoldoutDiagnostics,
     FactorPanel,
     HoldoutDiagnosticReport,
     PathEvaluationResult,
     PortfolioHoldoutDiagnostics,
+    RegimeState,
     ScenarioPath,
 )
 
@@ -29,8 +30,9 @@ def evaluate_factor_holdout_diagnostics(
     calibration_panel: FactorPanel,
     holdout_panel: FactorPanel,
     predictive_paths: Sequence[ScenarioPath] | None = None,
-    low_vol_threshold: float = 0.0592,
-    high_vol_threshold: float = 0.0871,
+    classifier: VolatilityRegimeClassifier | None = None,
+    low_vol_threshold: float | None = None,
+    high_vol_threshold: float | None = None,
 ) -> FactorHoldoutDiagnostics:
     """Evaluate calibrated predictive models against untouched out-of-sample 2024 data at the factor level.
 
@@ -40,6 +42,8 @@ def evaluate_factor_holdout_diagnostics(
     - Compares actual FX drawdown against simulated FX drawdown distribution.
     - Compares actual FX volatility against simulated FX volatility distribution.
     - Does not conflate FX factor statistics with strategy portfolio accounting.
+    - Derives volatility regime thresholds dynamically from calibration panel or supplied classifier.
+    - Standardizes taxonomy to LOW_VOLATILITY (< p20), NORMAL_VOLATILITY (p20-p80), STRESS_VOLATILITY (>= p80).
     - Formally acknowledges that two-sample KS test p-values assume independent observations
       and reports the KS statistic descriptively in the presence of serial dependence.
     """
@@ -49,13 +53,28 @@ def evaluate_factor_holdout_diagnostics(
     calib_vol = float(np.std(calib_fx, ddof=1) * math.sqrt(252))
     holdout_vol = float(np.std(holdout_fx, ddof=1) * math.sqrt(252))
 
-    # Classify 2024 volatility regime
-    if holdout_vol < low_vol_threshold:
-        vol_regime = "LOW_VOLATILITY"
-    elif holdout_vol < high_vol_threshold:
-        vol_regime = "HIGH_VOLATILITY"
+    # Resolve regime thresholds dynamically from calibration
+    if classifier is not None:
+        thresh_low = classifier.threshold_low
+        thresh_high = classifier.threshold_high
+    elif low_vol_threshold is not None and high_vol_threshold is not None:
+        thresh_low = low_vol_threshold
+        thresh_high = high_vol_threshold
     else:
-        vol_regime = "STRESS"
+        clf = VolatilityRegimeClassifier(calibration_panel)
+        thresh_low = clf.threshold_low
+        thresh_high = clf.threshold_high
+
+    # Classify 2024 volatility regime with documented boundary convention:
+    # v < threshold_low: LOW_VOLATILITY
+    # threshold_low <= v < threshold_high: NORMAL_VOLATILITY
+    # v >= threshold_high: STRESS_VOLATILITY
+    if holdout_vol < thresh_low:
+        vol_regime = RegimeState.LOW_VOLATILITY.value
+    elif holdout_vol < thresh_high:
+        vol_regime = RegimeState.NORMAL_VOLATILITY.value
+    else:
+        vol_regime = RegimeState.STRESS_VOLATILITY.value
 
     # Cumulative FX return in 2024 (provider quote: USD per EUR)
     actual_cum_ret = float(math.exp(np.sum(holdout_fx)) - 1.0)
@@ -156,8 +175,8 @@ def evaluate_factor_holdout_diagnostics(
 
     limitations = [
         "Single-year holdout window (247 trading days in 2024) does not span a complete credit or macroeconomic cycle.",
-        f"2024 realized FX volatility (6.18%) lies between the 20th percentile ({low_vol_threshold:.2%}) "
-        f"and 80th percentile ({high_vol_threshold:.2%}) of the calibration window, classified as HIGH_VOLATILITY.",
+        f"2024 realized FX volatility ({holdout_vol:.2%}) lies between the 20th percentile ({thresh_low:.2%}) "
+        f"and 80th percentile ({thresh_high:.2%}) of the calibration window, classified as {vol_regime}.",
         "Factor-level predictive coverage demonstrates empirical distribution compatibility over 2024 "
         "but does NOT establish permanent forward-looking market predictability.",
     ]
@@ -181,6 +200,8 @@ def evaluate_factor_holdout_diagnostics(
         predictive_percentile_fx_volatility=pct_vol,
         predictive_percentile_fx_drawdown=pct_dd,
         volatility_regime_classification=vol_regime,
+        low_vol_threshold=thresh_low,
+        high_vol_threshold=thresh_high,
         fx_log_return_ks_stat=float(ks_stat),
         fx_log_return_ks_pvalue=float(ks_pval),
         fx_log_return_ks_caveat=ks_caveat,
@@ -234,8 +255,9 @@ def evaluate_holdout_diagnostics(
     holdout_panel: FactorPanel,
     predictive_evaluations: Sequence[PathEvaluationResult] | None = None,
     predictive_paths: Sequence[ScenarioPath] | None = None,
-    low_vol_threshold: float = 0.0592,
-    high_vol_threshold: float = 0.0871,
+    classifier: VolatilityRegimeClassifier | None = None,
+    low_vol_threshold: float | None = None,
+    high_vol_threshold: float | None = None,
 ) -> HoldoutDiagnosticReport:
     """Legacy holdout diagnostics report preserving backwards compatibility.
 
@@ -248,12 +270,23 @@ def evaluate_holdout_diagnostics(
     holdout_vol = float(np.std(holdout_fx, ddof=1) * math.sqrt(252))
     vol_ratio = holdout_vol / calib_vol if calib_vol > 0 else 1.0
 
-    if holdout_vol < low_vol_threshold:
-        vol_regime = "LOW_VOLATILITY"
-    elif holdout_vol < high_vol_threshold:
-        vol_regime = "HIGH_VOLATILITY"
+    if classifier is not None:
+        thresh_low = classifier.threshold_low
+        thresh_high = classifier.threshold_high
+    elif low_vol_threshold is not None and high_vol_threshold is not None:
+        thresh_low = low_vol_threshold
+        thresh_high = high_vol_threshold
     else:
-        vol_regime = "STRESS"
+        clf = VolatilityRegimeClassifier(calibration_panel)
+        thresh_low = clf.threshold_low
+        thresh_high = clf.threshold_high
+
+    if holdout_vol < thresh_low:
+        vol_regime = RegimeState.LOW_VOLATILITY.value
+    elif holdout_vol < thresh_high:
+        vol_regime = RegimeState.NORMAL_VOLATILITY.value
+    else:
+        vol_regime = RegimeState.STRESS_VOLATILITY.value
 
     cum_ret_2024 = float(math.exp(np.sum(holdout_fx)) - 1.0)
     cum_path = np.concatenate(([1.0], np.exp(np.cumsum(holdout_fx))))
@@ -312,7 +345,7 @@ def evaluate_holdout_diagnostics(
 
     limitations = [
         "Single-year holdout window (247 trading days in 2024) does not represent a full macroeconomic credit cycle.",
-        f"2024 realized volatility was {holdout_vol:.2%}, lying in the HIGH_VOLATILITY regime ({low_vol_threshold:.2%} to {high_vol_threshold:.2%}).",
+        f"2024 realized volatility was {holdout_vol:.2%}, lying in the {vol_regime} regime ({thresh_low:.2%} to {thresh_high:.2%}).",
         "Out-of-sample diagnostics demonstrate model coverage over 2024 but do NOT establish permanent predictive reliability.",
     ]
 

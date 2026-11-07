@@ -22,7 +22,6 @@ from datetime import date, datetime, timedelta, timezone
 
 from backtesting.benchmarks import evaluate_cip_diagnostic
 from backtesting.engine import BacktestEngine
-from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
 from backtesting.reporting import format_backtest_report, format_walk_forward_report
 from backtesting.walk_forward import WalkForwardEngine
 from data.schemas import DataObservation, Frequency, ObservationKind
@@ -204,7 +203,7 @@ def main() -> None:
     print(f"Total Return: {res_try.metrics.total_return:+.2%}")
     print(f"Net Profit: {res_try.metrics.cumulative_net_profit:,.2f} USD")
     print(f"Max Drawdown: {res_try.metrics.max_drawdown:.2%}")
-    print(f"Loss detection verified: Yield differential of +31.5% failed to survive ~25% currency depreciation after spreads.")
+    print("Loss detection verified: Yield differential of +31.5% failed to survive ~25% currency depreciation after spreads.")
     print("\n" + "-" * 80 + "\n")
 
     # -------------------------------------------------------------------------

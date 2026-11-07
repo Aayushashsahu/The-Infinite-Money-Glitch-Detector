@@ -68,9 +68,29 @@ class BootstrapMethod(str, Enum):
 class RegimeState(str, Enum):
     """Observable market volatility regimes."""
 
-    LOW_VOLATILITY = "low_volatility"
-    HIGH_VOLATILITY = "high_volatility"
-    STRESS = "stress"
+    LOW_VOLATILITY = "LOW_VOLATILITY"
+    NORMAL_VOLATILITY = "NORMAL_VOLATILITY"
+    STRESS_VOLATILITY = "STRESS_VOLATILITY"
+
+    # Backward compatibility aliases
+    HIGH_VOLATILITY = "NORMAL_VOLATILITY"
+    STRESS = "STRESS_VOLATILITY"
+
+    @classmethod
+    def _missing_(cls, value: object) -> RegimeState | None:
+        if isinstance(value, str):
+            v_upper = value.upper()
+            if v_upper in cls._value2member_map_:
+                return cls._value2member_map_[v_upper]
+            if v_upper in ("HIGH_VOLATILITY", "HIGH"):
+                return cls.NORMAL_VOLATILITY
+            if v_upper in ("STRESS", "STRESS_VOLATILITY"):
+                return cls.STRESS_VOLATILITY
+            if v_upper in ("LOW", "LOW_VOLATILITY"):
+                return cls.LOW_VOLATILITY
+            if v_upper in ("NORMAL", "NORMAL_VOLATILITY"):
+                return cls.NORMAL_VOLATILITY
+        return None
 
 
 class PITMode(str, Enum):
@@ -396,6 +416,8 @@ class ConvergenceReport(BaseModel):
     is_converged_cvar_95: bool = True
     is_converged_drawdown: bool = True
     tail_sample_size_final: int = 0
+    stability_status: str = "CHECKPOINT_STABILITY"
+    limitations: list[str] = Field(default_factory=list)
 
 
 class CalibrationAvailabilitySummary(BaseModel):
@@ -456,6 +478,8 @@ class FactorHoldoutDiagnostics(BaseModel):
     predictive_percentile_fx_volatility: float
     predictive_percentile_fx_drawdown: float
     volatility_regime_classification: str
+    low_vol_threshold: float = 0.0
+    high_vol_threshold: float = 0.0
     fx_log_return_ks_stat: float
     fx_log_return_ks_pvalue: float
     fx_log_return_ks_caveat: str = ""
@@ -547,6 +571,32 @@ class FundingSensitivityReport(BaseModel):
     shocks_bps: list[int]
     scenarios: list[dict[str, Any]]
     notes: list[str] = Field(default_factory=list)
+
+
+class InitialMarketLevelsReport(BaseModel):
+    """Provenance and grounding report for initial simulation market state."""
+
+    as_of_decision_timestamp: datetime
+    pit_mode: str
+    initial_fx_rate: float
+    initial_borrowing_rate: float
+    initial_investment_rate: float
+    fx_observation_date: date
+    fx_availability_timestamp: datetime | None = None
+    fx_source_id: str
+    fx_entity_code: str
+    fx_raw_value: float
+    borrowing_observation_date: date
+    borrowing_availability_timestamp: datetime | None = None
+    borrowing_source_id: str
+    borrowing_indicator_id: str
+    borrowing_raw_value: float
+    investment_observation_date: date
+    investment_availability_timestamp: datetime | None = None
+    investment_source_id: str
+    investment_indicator_id: str
+    investment_raw_value: float
+    grounding_notes: list[str] = Field(default_factory=list)
 
 
 class HoldoutDiagnosticReport(BaseModel):

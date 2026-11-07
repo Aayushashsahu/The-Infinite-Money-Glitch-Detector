@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import date
 import math
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -88,9 +87,9 @@ class VolatilityRegimeClassifier:
             if v < self.threshold_low:
                 self.regime_by_index[i] = RegimeState.LOW_VOLATILITY
             elif v < self.threshold_high:
-                self.regime_by_index[i] = RegimeState.HIGH_VOLATILITY
+                self.regime_by_index[i] = RegimeState.NORMAL_VOLATILITY
             else:
-                self.regime_by_index[i] = RegimeState.STRESS
+                self.regime_by_index[i] = RegimeState.STRESS_VOLATILITY
 
         # Full regimes array matching panel length (warm-up entries set to None)
         self.regimes: list[RegimeState | None] = [
@@ -100,8 +99,8 @@ class VolatilityRegimeClassifier:
         # Valid counts
         self.regime_counts: dict[str, int] = {
             RegimeState.LOW_VOLATILITY.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.LOW_VOLATILITY),
-            RegimeState.HIGH_VOLATILITY.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.HIGH_VOLATILITY),
-            RegimeState.STRESS.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.STRESS),
+            RegimeState.NORMAL_VOLATILITY.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.NORMAL_VOLATILITY),
+            RegimeState.STRESS_VOLATILITY.value: sum(1 for r in self.regime_by_index.values() if r == RegimeState.STRESS_VOLATILITY),
         }
         self.total_valid_obs = len(self.valid_indices)
 
@@ -111,7 +110,7 @@ class VolatilityRegimeClassifier:
         Excludes warm-up observations strictly: transitions are counted only across
         consecutive valid trading days where both t-1 and t have calculated volatility.
         """
-        states = [RegimeState.LOW_VOLATILITY.value, RegimeState.HIGH_VOLATILITY.value, RegimeState.STRESS.value]
+        states = [RegimeState.LOW_VOLATILITY.value, RegimeState.NORMAL_VOLATILITY.value, RegimeState.STRESS_VOLATILITY.value]
         counts: dict[str, dict[str, int]] = {s1: {s2: 0 for s2 in states} for s1 in states}
 
         for idx in range(1, len(self.valid_indices)):
@@ -146,7 +145,7 @@ class VolatilityRegimeClassifier:
                 notes.append(f"Regime {s} has fewer than 20 observations ({c}); model may have high parameter uncertainty.")
 
         summaries: dict[str, RegimeSummary] = {}
-        for s_val in [RegimeState.LOW_VOLATILITY.value, RegimeState.HIGH_VOLATILITY.value, RegimeState.STRESS.value]:
+        for s_val in [RegimeState.LOW_VOLATILITY.value, RegimeState.NORMAL_VOLATILITY.value, RegimeState.STRESS_VOLATILITY.value]:
             vols_s = [
                 float(self.rolling_vol_series[i])
                 for i in self.valid_indices
@@ -169,7 +168,7 @@ class VolatilityRegimeClassifier:
 
         return RegimeModelReport(
             rolling_window_days=self.rolling_window,
-            regimes=[RegimeState.LOW_VOLATILITY, RegimeState.HIGH_VOLATILITY, RegimeState.STRESS],
+            regimes=[RegimeState.LOW_VOLATILITY, RegimeState.NORMAL_VOLATILITY, RegimeState.STRESS_VOLATILITY],
             regime_counts=self.regime_counts,
             transition_matrix=probs,
             thresholds={"low": self.threshold_low, "high": self.threshold_high},
@@ -203,8 +202,8 @@ class RegimeConditionedSampler:
         # Partition valid observation indices by regime
         self.regime_indices: dict[str, list[int]] = {
             RegimeState.LOW_VOLATILITY.value: [],
-            RegimeState.HIGH_VOLATILITY.value: [],
-            RegimeState.STRESS.value: [],
+            RegimeState.NORMAL_VOLATILITY.value: [],
+            RegimeState.STRESS_VOLATILITY.value: [],
         }
         for i in classifier.valid_indices:
             r = classifier.regime_by_index[i]
@@ -218,7 +217,7 @@ class RegimeConditionedSampler:
                 )
 
         self.transition_matrix = classifier.compute_transition_matrix()
-        self.states = [RegimeState.LOW_VOLATILITY.value, RegimeState.HIGH_VOLATILITY.value, RegimeState.STRESS.value]
+        self.states = [RegimeState.LOW_VOLATILITY.value, RegimeState.NORMAL_VOLATILITY.value, RegimeState.STRESS_VOLATILITY.value]
 
     def sample_regime_sequence(self, horizon: int, initial_regime: str | None = None) -> list[str]:
         """Simulate a Markov chain of regime states.

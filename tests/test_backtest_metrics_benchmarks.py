@@ -28,7 +28,7 @@ from schemas.backtest import (
     TradeSide,
     TradeStatus,
 )
-from schemas.strategy import CurrencyPair, InterestConvention
+from schemas.strategy import CurrencyPair
 
 
 def make_dummy_trade(

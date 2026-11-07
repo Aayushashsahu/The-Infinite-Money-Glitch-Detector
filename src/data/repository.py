@@ -31,7 +31,6 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import sessionmaker
 
 from data.db.models import Base, RawRecord
 from data.db.models import DataObservation as ObsRow

@@ -11,7 +11,6 @@ Verifies:
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-import pytest
 
 from backtesting.engine import BacktestEngine
 from backtesting.reporting import format_backtest_report
@@ -23,7 +22,6 @@ from schemas.backtest import (
     ExecutionConfig,
     PositionSizingConfig,
     PositionSizingMethod,
-    TradeStatus,
 )
 from schemas.strategy import CurrencyPair
 

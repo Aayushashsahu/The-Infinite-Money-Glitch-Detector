@@ -24,24 +24,14 @@ from data.schemas import AvailabilityEvidence, DataClassification, DataObservati
 from simulation.monte_carlo.schemas import (
     AvailabilityAuditReport,
     CalendarValidationReport,
-    CalibrationAvailabilitySummary,
     CorrelationStressComparison,
-    FactorCategory,
     FactorHoldoutDiagnostics,
-    FactorPanel,
     FundingSensitivityReport,
-    MarketFactor,
-    MissingDataTreatment,
     PortfolioHoldoutDiagnostics,
-    RegimeState,
     ScenarioPath,
-    SimulationConfig,
-    SimulationModelType,
-    TransformationMethod,
 )
 from simulation.monte_carlo.calibration import (
     build_availability_audit,
-    calibrate_factor_panel,
     classify_observation_evidence,
 )
 from simulation.monte_carlo.factors import build_fx_carry_factor_panel
@@ -51,7 +41,6 @@ from simulation.monte_carlo.holdout import (
 )
 from simulation.monte_carlo.shocks import (
     evaluate_correlation_stress_distribution,
-    generate_correlation_breakdown_path,
 )
 from simulation.monte_carlo.strategy_adapter import (
     CarryTradeScenarioStrategy,
@@ -60,7 +49,6 @@ from simulation.monte_carlo.strategy_adapter import (
     validate_market_calendar_evidence,
 )
 from simulation.monte_carlo.distributions import (
-    MultivariateGaussianModel,
     ensure_positive_semidefinite,
 )
 
@@ -262,7 +250,7 @@ def test_holdout_diagnostic_variable_matching(mock_panels):
 def test_holdout_predictive_sample_size(mock_panels):
     """Verify predictive sample size >= 1000 paths and MC standard error calculation."""
     calib_panel, holdout_panel = mock_panels
-    rng = np.random.default_rng(123)
+    _rng = np.random.default_rng(123)
     n_paths = 1000
     n_steps = len(holdout_panel.dates)
     sessions = holdout_panel.dates
@@ -323,7 +311,7 @@ def test_correlation_stress_marginal_variance_mean_preservation():
         [0.00005, 0.00003, 0.00016, 0.00004],
         [0.00002, 0.00001, 0.00004, 0.00025],
     ])
-    mean = np.array([0.0001, -0.0002, 0.00005, 0.00003])
+    _mean = np.array([0.0001, -0.0002, 0.00005, 0.00003])
 
     # Stressed decoupling: off-diagonals to 0
     stressed_cov = np.diag(np.diag(cov))

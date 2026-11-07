@@ -14,7 +14,7 @@ Quotation convention:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 import io
 from typing import Any
 from zoneinfo import ZoneInfo

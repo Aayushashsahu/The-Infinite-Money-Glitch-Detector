@@ -13,3 +13,4 @@ Requires-Dist: psycopg2-binary>=2.9
 Requires-Dist: alembic>=1.13
 Provides-Extra: dev
 Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: ruff>=0.8.0; extra == "dev"

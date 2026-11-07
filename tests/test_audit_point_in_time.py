@@ -12,7 +12,6 @@ Phase 3.1 Validation:
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-import pytest
 
 from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
 from data.schemas import DataObservation, Frequency, ObservationKind

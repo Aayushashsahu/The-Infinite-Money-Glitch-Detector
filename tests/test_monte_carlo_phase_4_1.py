@@ -20,28 +20,17 @@ import pytest
 
 from data.schemas import AvailabilityEvidence, DataClassification, DataObservation, Frequency, ObservationKind
 from simulation.monte_carlo.schemas import (
-    BootstrapMethod,
-    FactorCategory,
-    Frequency,
-    MarketFactor,
-    MissingDataTreatment,
     RegimeState,
     ScenarioPath,
-    SimulationConfig,
-    SimulationModelType,
     StressScenario,
-    TransformationMethod,
 )
 from simulation.monte_carlo.factors import (
     _resolve_observation,
     build_fx_carry_factor_panel,
-    compute_differences,
-    compute_log_returns,
 )
 from simulation.monte_carlo.calibration import calibrate_factor_panel
 from simulation.monte_carlo.shocks import (
     apply_stress_scenario,
-    build_standard_stress_scenarios,
     generate_correlation_breakdown_path,
 )
 from simulation.monte_carlo.strategy_adapter import (
@@ -199,7 +188,7 @@ def test_persistent_fx_shock_affects_open_position_pnl():
         is_synthetic=True,
     )
 
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     base_eval = strategy.evaluate_path(base, initial_capital_a=100_000.0)
 
     # Adverse shock to USD (-10% USD value, so USD depreciates)
@@ -234,7 +223,7 @@ def test_shock_direction_affects_pnl():
         is_synthetic=True,
     )
 
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
 
     adverse = apply_stress_scenario(
         base,
@@ -273,7 +262,7 @@ def test_zero_shock_equals_baseline():
     )
     stressed_path = apply_stress_scenario(base, zero_stress)
 
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     eval_base = strategy.evaluate_path(base, initial_capital_a=100_000.0)
     eval_zero = strategy.evaluate_path(stressed_path, initial_capital_a=100_000.0)
 
@@ -334,7 +323,7 @@ def test_compound_crisis_scenario():
         investment_rates=[0.05] * (horizon + 1),
         is_synthetic=True,
     )
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     single_shock = apply_stress_scenario(
         base,
         StressScenario(name="Single", description="", fx_shock_pct=-0.10, shock_timing="after_entry", shock_step=5),
@@ -385,7 +374,7 @@ def test_initial_state_zero_days_elapsed():
         investment_rates=[0.05] * (horizon + 1),
         is_synthetic=True,
     )
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     ev = strategy.evaluate_path(base, initial_capital_a=100_000.0)
 
     assert abs(ev.reconciliation_residual_a) <= 1e-10
@@ -670,7 +659,7 @@ def test_holdout_diagnostics_evaluation():
     model = MultivariateGaussianModel(panel_calib, random_seed=42)
     paths = model.generate_paths(num_paths=20, horizon=len(panel_holdout.dates))
 
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     evals = [strategy.evaluate_path(p, initial_capital_a=100_000.0) for p in paths]
 
     diag = evaluate_holdout_diagnostics(
@@ -699,7 +688,7 @@ def test_multi_metric_convergence_tracking():
     model = MultivariateGaussianModel(panel, random_seed=42)
     paths = model.generate_paths(num_paths=40, horizon=30)
 
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30, strict_calendar=False)
     evals = [strategy.evaluate_path(p, initial_capital_a=100_000.0) for p in paths]
 
     conv_rep = evaluate_convergence(

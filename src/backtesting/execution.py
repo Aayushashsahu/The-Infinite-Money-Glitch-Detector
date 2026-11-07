@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Sequence
 
 from core.currency import convert_to_a, convert_to_b
 from core.conversions import annualized_return
@@ -27,7 +27,7 @@ from schemas.backtest import (
     TradeSide,
     TradeStatus,
 )
-from schemas.strategy import CurrencyPair, InterestConvention
+from schemas.strategy import CurrencyPair
 from backtesting.financing import (
     RatePeriod,
     calculate_fixed_financing,
@@ -498,7 +498,7 @@ class ExecutionEngine:
         pure_gross_gain_a = investment_yield_gain_a + fx_translation_gain_a
 
         # Pure gross mid-to-mid value:
-        pure_gross_value_a = (trade.principal_borrowed_a / trade.spot_mid_entry) * f_b * exit_mid
+        _pure_gross_value_a = (trade.principal_borrowed_a / trade.spot_mid_entry) * f_b * exit_mid
 
         # Total frictions: exact difference between pure gross value and net cash realized before financing
         total_frictions_a = total_observed_spread_cost_a + total_modelled_spread_cost_a + total_slippage + trade.entry_fees_a + exit_variable_fee_a + fixed_fee_a

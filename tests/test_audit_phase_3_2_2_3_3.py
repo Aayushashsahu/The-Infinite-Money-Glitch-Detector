@@ -23,26 +23,17 @@ Verifies:
 from __future__ import annotations
 
 import json
-import math
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from backtesting.execution import ExecutionEngine
-from backtesting.metrics import calculate_performance_metrics, calculate_sortino_ratio
+from backtesting.metrics import calculate_performance_metrics
 from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
-from backtesting.reporting import format_backtest_report
 from core.currency import (
     QuoteConvention,
-    get_rate_a_per_b,
-    get_two_way_quote_a_per_b,
-    invert_two_way_quote,
-    map_canonical_side_to_provider_side,
-    normalize_directional_quote,
 )
-from core.interest import growth_factor
 from data.schemas import (
     AvailabilityEvidence,
     DataClassification,
@@ -50,23 +41,18 @@ from data.schemas import (
     Frequency,
     ObservationKind,
     PriceType,
-    RateRole,
-    StrategyExecutabilityStatus,
 )
-from models.risk import sharpe_ratio
 from schemas.backtest import (
     AvailabilityPolicy,
-    BacktestConfig,
     BenchmarkSpecification,
     BenchmarkType,
     DataAvailabilityConfig,
     ExecutableQuoteResult,
     ExecutionConfig,
     PortfolioSnapshot,
-    TradeRecord,
     TradeStatus,
 )
-from schemas.strategy import CurrencyPair, InterestConvention
+from schemas.strategy import CurrencyPair
 
 
 def make_test_obs(
@@ -630,7 +616,7 @@ def test_notrade_alpha_reporting():
         PortfolioSnapshot(as_of=date(2024, 1, 1), cash_a=100_000.0, total_borrowed_a=0.0, total_obligations_a=0.0, active_positions_count=0, positions_value_a=0.0, equity_a=100_000.0, leverage=0.0, unrealized_pnl_a=0.0, realized_pnl_a=0.0, capital_utilization=0.0),
         PortfolioSnapshot(as_of=date(2024, 1, 31), cash_a=100_000.0, total_borrowed_a=0.0, total_obligations_a=0.0, active_positions_count=0, positions_value_a=0.0, equity_a=100_000.0, leverage=0.0, unrealized_pnl_a=0.0, realized_pnl_a=0.0, capital_utilization=0.0),
     ]
-    bm = BenchmarkSpecification(benchmark_type=BenchmarkType.ZERO_CASH, name="Zero Cash (0.0%)")
+    _bm = BenchmarkSpecification(benchmark_type=BenchmarkType.ZERO_CASH, name="Zero Cash (0.0%)")
     # No closed trades
     from backtesting.benchmarks import BenchmarkSeries
     bm_series = BenchmarkSeries(

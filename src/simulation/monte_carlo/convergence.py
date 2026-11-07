@@ -134,13 +134,25 @@ def evaluate_convergence(
             notes_list.append(f"CVaR (95%) shifted by {diff_cvar:.4f} (> 0.01 tolerance).")
 
     is_overall_converged = all([conv_mean, conv_median, conv_loss, conv_var, conv_cvar, conv_dd])
+    limitations: list[str] = [
+        "Finite sample checkpoint stability across sequential sample sizes does not establish asymptotic mathematical convergence; tail risk estimates remain subject to finite sample variation."
+    ]
+    if final_tail < 100:
+        limitations.append(
+            f"At N={records[-1].sample_size}, tail sample size is {final_tail} observations below the 5th percentile, which provides limited statistical precision for CVaR (Expected Shortfall) estimation."
+        )
+
     if is_overall_converged:
+        stability_status = "CHECKPOINT_STABILITY_ACHIEVED"
         notes = (
-            f"All risk and return metrics demonstrated asymptotic convergence at N={records[-1].sample_size}. "
-            f"Tail sample size: {final_tail} observations below 5th percentile."
+            f"All risk and return metrics demonstrated checkpoint stability at N={records[-1].sample_size}. "
+            f"Tail sample size: {final_tail} observations below 5th percentile. "
+            "Finite sample stability across checkpoints does not establish asymptotic convergence; "
+            "tail risk estimates remain subject to finite sample variation."
         )
     else:
-        notes = "Warning: Some tail risk metrics have not fully stabilized: " + "; ".join(notes_list)
+        stability_status = "CHECKPOINT_STABILITY_NOT_ACHIEVED"
+        notes = "Warning: Some tail risk metrics have not achieved checkpoint stability: " + "; ".join(notes_list)
 
     return ConvergenceReport(
         checkpoints=records,
@@ -154,6 +166,8 @@ def evaluate_convergence(
         is_converged_cvar_95=conv_cvar,
         is_converged_drawdown=conv_dd,
         tail_sample_size_final=final_tail,
+        stability_status=stability_status,
+        limitations=limitations,
     )
 
 

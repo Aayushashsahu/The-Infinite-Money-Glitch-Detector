@@ -10,12 +10,10 @@ import math
 from typing import Sequence
 
 import numpy as np
-import scipy.stats as stats
 
 from simulation.monte_carlo.calibration import compute_quantiles
 from simulation.monte_carlo.schemas import (
     DistributionMetrics,
-    DistributionQuantiles,
     PathEvaluationResult,
 )
 

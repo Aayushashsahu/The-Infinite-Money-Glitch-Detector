@@ -20,8 +20,9 @@ Adds:
 
 from __future__ import annotations
 
+from datetime import date
 import math
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -123,7 +124,7 @@ def calculate_performance_metrics(
     """
     closed = [t for t in trades if t.status == TradeStatus.CLOSED and t.net_profit_a is not None]
     total_trades = len(closed)
-    
+
     winning = [t for t in closed if (t.net_profit_a or 0.0) > 0]
     losing = [t for t in closed if (t.net_profit_a or 0.0) < 0]
     breakeven = [t for t in closed if (t.net_profit_a or 0.0) == 0]

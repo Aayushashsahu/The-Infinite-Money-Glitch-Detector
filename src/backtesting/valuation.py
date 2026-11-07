@@ -17,7 +17,6 @@ from typing import Sequence
 from core.currency import convert_to_a
 from core.interest import growth_factor
 from schemas.backtest import ExecutionConfig, PortfolioSnapshot, TradeRecord, TradeStatus
-from schemas.strategy import InterestConvention
 from backtesting.financing import calculate_accrued_liability, days_to_years
 from backtesting.execution import compute_exit_execution_rate
 
@@ -120,7 +119,7 @@ def compute_portfolio_snapshot(
         pair_code = f"{trade.currency_pair.borrowing_currency}/{trade.currency_pair.investment_currency}"
         spot_rate = current_spot_rates.get(pair_code, trade.spot_mid_entry)
         val = mark_position_to_market(trade, as_of, spot_rate, config)
-        
+
         total_borrowed += trade.principal_borrowed_a
         total_obligations += val.accrued_liability_a
         total_positions_val += val.liquidation_value_a

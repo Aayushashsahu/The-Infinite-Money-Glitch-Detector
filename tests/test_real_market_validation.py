@@ -13,10 +13,9 @@ Verifies:
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-import pytest
 
 from backtesting.engine import BacktestEngine
-from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
+from backtesting.point_in_time import PointInTimeFirewall
 from backtesting.provenance import build_data_provenance_report
 from data.adapters.us_treasury import UsTreasuryAdapter
 from data.db.engine import make_engine, make_session_factory

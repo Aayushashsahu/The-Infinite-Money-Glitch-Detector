@@ -31,17 +31,15 @@ from __future__ import annotations
 import json
 import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
 
 import pytest
 
 from backtesting.execution import ExecutionEngine
-from backtesting.metrics import calculate_performance_metrics, calculate_sortino_ratio
-from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
+from backtesting.metrics import calculate_sortino_ratio
+from backtesting.point_in_time import PointInTimeDataStore
 from core.currency import (
     QuoteConvention,
     get_two_way_quote_a_per_b,
-    map_canonical_side_to_provider_side,
     normalize_directional_quote,
 )
 from core.interest import growth_factor
@@ -52,19 +50,13 @@ from data.schemas import (
     Frequency,
     ObservationKind,
     PriceType,
-    RateRole,
-    StrategyExecutabilityStatus,
 )
 from models.risk import sharpe_ratio
 from schemas.backtest import (
-    AvailabilityPolicy,
-    BacktestConfig,
     BenchmarkSpecification,
     BenchmarkType,
-    DataAvailabilityConfig,
     ExecutableQuoteResult,
     ExecutionConfig,
-    PortfolioSnapshot,
     TradeRecord,
     TradeStatus,
 )

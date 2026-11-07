@@ -8,8 +8,6 @@ degrees of freedom, and joint factor scenario generation.
 from __future__ import annotations
 
 from datetime import date
-import math
-from typing import Any
 
 import numpy as np
 import scipy.optimize as optimize

@@ -26,13 +26,12 @@ import hashlib
 import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
-import pytest
 
 from backtesting.calendar import DEFAULT_FX_CALENDAR
 from backtesting.engine import BacktestEngine
 from backtesting.execution import ExecutionEngine
 from backtesting.metrics import calculate_performance_metrics
-from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
+from backtesting.point_in_time import PointInTimeFirewall
 from backtesting.provenance import build_data_provenance_report
 from data.schemas import (
     AvailabilityEvidence,
@@ -49,12 +48,9 @@ from schemas.backtest import (
     DataAvailabilityConfig,
     ExecutionConfig,
     PortfolioSnapshot,
-    PositionSizingConfig,
-    PositionSizingMethod,
-    TradeRecord,
     TradeStatus,
 )
-from schemas.strategy import CurrencyPair, InterestConvention
+from schemas.strategy import CurrencyPair
 
 
 # =============================================================================

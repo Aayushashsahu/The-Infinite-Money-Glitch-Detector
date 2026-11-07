@@ -19,7 +19,6 @@ from schemas.backtest import (
     ExecutionConfig,
     PositionSizingConfig,
     PositionSizingMethod,
-    TradeStatus,
 )
 from schemas.strategy import CurrencyPair
 

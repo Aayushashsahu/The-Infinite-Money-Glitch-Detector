@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 import math
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -18,13 +18,11 @@ from backtesting.calendar import JointCurrencySettlementCalendar
 from backtesting.execution import ExecutionEngine
 from backtesting.financing import RatePeriod
 from backtesting.portfolio import Portfolio
-from core.currency import QuoteConvention
 from schemas.backtest import (
     ExecutionConfig,
     PositionSizingConfig,
     PositionSizingMethod,
     TradeRecord,
-    TradeStatus,
 )
 from schemas.strategy import CurrencyPair
 from simulation.monte_carlo.schemas import (
@@ -58,13 +56,69 @@ def generate_simulated_trading_sessions(
             if cal.is_settlement_day(curr):
                 sessions.append(curr)
             curr += timedelta(days=1)
-    else:
+    elif calendar_type == "WEEKDAY_TRADING_PROXY":
         while len(sessions) < n_sessions:
             if curr.weekday() < 5:  # Monday=0, ..., Friday=4
                 sessions.append(curr)
             curr += timedelta(days=1)
+    else:
+        raise ValueError(
+            f"Unknown calendar type: '{calendar_type}'. Supported: 'JOINT_TARGET2_FED', 'WEEKDAY_TRADING_PROXY'."
+        )
 
     return sessions
+
+
+def validate_calendar_dates(
+    dates: list[date] | None,
+    total_levels: int,
+    calendar_type: str = "JOINT_TARGET2_FED",
+    base_currency: str = "EUR",
+    quote_currency: str = "USD",
+) -> None:
+    """Validate scenario path dates against strict trading calendar rules.
+
+    Raises ValueError if:
+    - dates is None
+    - len(dates) != total_levels
+    - dates are not strictly chronological (out-of-order or duplicate)
+    - any date is a weekend (Saturday or Sunday)
+    - any date is not a valid settlement day according to the specified calendar
+    - calendar_type is unknown
+    """
+    if calendar_type not in ("JOINT_TARGET2_FED", "WEEKDAY_TRADING_PROXY"):
+        raise ValueError(
+            f"Unknown calendar type: '{calendar_type}'. Supported: 'JOINT_TARGET2_FED', 'WEEKDAY_TRADING_PROXY'."
+        )
+    if dates is None:
+        raise ValueError(
+            f"Scenario path must provide explicit calendar dates when strict_calendar=True (received None, expected {total_levels} dates)."
+        )
+    if len(dates) != total_levels:
+        raise ValueError(
+            f"Scenario path calendar dates length mismatch: received {len(dates)} dates, expected exactly {total_levels}."
+        )
+
+    for i in range(len(dates) - 1):
+        if dates[i] >= dates[i + 1]:
+            if dates[i] == dates[i + 1]:
+                raise ValueError(f"Duplicate calendar date detected at index {i}: {dates[i]}.")
+            raise ValueError(
+                f"Calendar dates are not strictly chronological: {dates[i]} >= {dates[i + 1]} at index {i}."
+            )
+
+    for i, d in enumerate(dates):
+        if d.weekday() >= 5:
+            day_name = "Saturday" if d.weekday() == 5 else "Sunday"
+            raise ValueError(f"Calendar date at index {i} ({d}) is a weekend ({day_name}).")
+
+    if calendar_type == "JOINT_TARGET2_FED":
+        cal = JointCurrencySettlementCalendar(base_currency=base_currency, quote_currency=quote_currency)
+        for i, d in enumerate(dates):
+            if not cal.is_settlement_day(d):
+                raise ValueError(
+                    f"Calendar date at index {i} ({d}) is a holiday/non-settlement day in {calendar_type}."
+                )
 
 
 class ScenarioStrategy(Protocol):
@@ -109,8 +163,12 @@ class CarryTradeScenarioStrategy:
         funding_mode: str = "fixed",
         calendar_type: str = "JOINT_TARGET2_FED",
         rollover_mode: str = "CONTRACTUAL_MATURITY",
-        strict_calendar: bool = False,
+        strict_calendar: bool = True,
     ) -> None:
+        if calendar_type not in ("JOINT_TARGET2_FED", "WEEKDAY_TRADING_PROXY"):
+            raise ValueError(
+                f"Unknown calendar type: '{calendar_type}'. Supported: 'JOINT_TARGET2_FED', 'WEEKDAY_TRADING_PROXY'."
+            )
         self.pair = currency_pair or CurrencyPair(
             base_currency="EUR",
             quote_currency="USD",
@@ -176,13 +234,15 @@ class CarryTradeScenarioStrategy:
 
         # Build explicit trading-session calendar
         if self.strict_calendar:
-            if path.dates is None or len(path.dates) < total_levels:
-                raise ValueError(
-                    f"ScenarioPath {path.path_id} must provide explicit calendar dates (has "
-                    f"{len(path.dates) if path.dates is not None else None}, expected at least {total_levels}). "
-                    f"Silent calendar fallback has been removed in Phase 4.1.2.1."
-                )
-            session_dates = path.dates[:total_levels]
+            validate_calendar_dates(
+                path.dates,
+                total_levels,
+                calendar_type=self.calendar_type,
+                base_currency=self.pair.borrowing_currency,
+                quote_currency=self.pair.investment_currency,
+            )
+            assert path.dates is not None
+            session_dates = path.dates
         else:
             if path.dates is not None and len(path.dates) >= total_levels:
                 session_dates = path.dates[:total_levels]

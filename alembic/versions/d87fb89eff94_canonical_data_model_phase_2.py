@@ -1,7 +1,7 @@
 """canonical data model (Phase 2)
 
 Revision ID: d87fb89eff94
-Revises: 
+Revises:
 Create Date: 2026-11-05 00:46:26.935180
 
 """

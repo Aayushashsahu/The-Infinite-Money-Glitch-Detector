@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 import pytest
 
-from backtesting.calendar import DEFAULT_FX_CALENDAR, MarketCalendar
+from backtesting.calendar import DEFAULT_FX_CALENDAR
 from backtesting.engine import BacktestEngine
 from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
 from backtesting.provenance import build_data_provenance_report
@@ -24,10 +24,8 @@ from schemas.backtest import (
     DataAvailabilityConfig,
     ExecutionConfig,
     InterestRateHierarchy,
-    InterestRateType,
     PositionSizingConfig,
     PositionSizingMethod,
-    TradeStatus,
 )
 from schemas.strategy import CurrencyPair
 

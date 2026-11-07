@@ -52,7 +52,6 @@ from core.currency import (
 )
 from data.schemas import (
     AvailabilityEvidence,
-    DataClassification,
     DataObservation,
     Frequency,
     ObservationKind,
@@ -72,9 +71,8 @@ from schemas.backtest import (
     ExecutionConfig,
     PriceType as BTPriceType,
     StrategyExecutabilityStatus,
-    TradeStatus,
 )
-from schemas.strategy import CurrencyPair, InterestConvention
+from schemas.strategy import CurrencyPair
 
 
 # =============================================================================

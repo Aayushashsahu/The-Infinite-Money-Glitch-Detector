@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, Callable, Sequence
+from typing import Callable
 
 from schemas.backtest import (
     BacktestConfig,

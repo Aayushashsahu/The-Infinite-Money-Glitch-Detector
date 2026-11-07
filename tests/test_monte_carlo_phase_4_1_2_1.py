@@ -33,17 +33,13 @@ import pytest
 from backtesting.calendar import JointCurrencySettlementCalendar
 from data.schemas import AvailabilityEvidence, DataClassification, DataObservation, Frequency, ObservationKind
 from simulation.monte_carlo.bootstrap import HistoricalBootstrapSampler
-from simulation.monte_carlo.calibration import build_availability_audit, calibrate_factor_panel, split_calibration_holdout
 from simulation.monte_carlo.distributions import MultivariateGaussianModel, MultivariateStudentTModel
 from simulation.monte_carlo.engine import MonteCarloEngine
 from simulation.monte_carlo.factors import (
     build_fx_carry_factor_panel,
     get_effective_availability_timestamp,
-    get_session_decision_timestamp,
-    is_observation_available_as_of,
 )
 from simulation.monte_carlo.holdout import (
-    evaluate_factor_holdout_diagnostics,
     evaluate_portfolio_holdout_diagnostics,
 )
 from simulation.monte_carlo.metrics import calculate_distribution_metrics
@@ -54,10 +50,8 @@ from simulation.monte_carlo.reporting import (
 from simulation.monte_carlo.schemas import (
     AvailabilityAuditReport,
     BootstrapMethod,
-    CalendarValidationReport,
     CorrelationStressComparison,
     FactorHoldoutDiagnostics,
-    FactorPanel,
     ModelComparisonEntry,
     MonteCarloResult,
     PathEvaluationResult,

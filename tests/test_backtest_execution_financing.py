@@ -25,7 +25,6 @@ from backtesting.financing import (
     calculate_accrued_liability,
     calculate_fixed_financing,
     calculate_variable_financing,
-    days_to_years,
 )
 from core.interest import loan_repayment
 from models.carry_trade import CarryTradeInput, calculate_carry_trade

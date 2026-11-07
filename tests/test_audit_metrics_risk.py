@@ -22,7 +22,7 @@ Audits:
 from __future__ import annotations
 
 import math
-from datetime import date, timedelta
+from datetime import date
 import numpy as np
 import pytest
 
@@ -43,7 +43,7 @@ from schemas.backtest import (
     TradeSide,
     TradeStatus,
 )
-from schemas.strategy import CurrencyPair, InterestConvention
+from schemas.strategy import CurrencyPair
 
 
 # =============================================================================

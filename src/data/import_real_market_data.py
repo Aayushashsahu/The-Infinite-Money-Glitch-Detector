@@ -22,6 +22,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+from typing import Any
 
 # Prevent src/data from shadowing standard library 'http'
 if sys.path and Path(sys.path[0]).resolve() == Path(__file__).resolve().parent:
@@ -42,7 +43,6 @@ from data.schemas import (
     DataClassification,
     Frequency,
     IndicatorInfo,
-    ObservationKind,
 )
 
 
@@ -143,7 +143,7 @@ def run_import(
         obs.entity_code = "USD/EUR"
         obs.unit = "USD_per_EUR"
         obs.classification = DataClassification.REAL_VERIFIED
-    
+
     # 2. EUR/USD (EUR per 1 USD: ECB reference rate with base USD, quote EUR)
     fx_eur_usd_res = fx_adapter.fetch_series("USD", "EUR", start_date, end_date)
     for obs in fx_eur_usd_res.observations:

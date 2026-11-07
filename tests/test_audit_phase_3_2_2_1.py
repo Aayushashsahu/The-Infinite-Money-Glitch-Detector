@@ -28,9 +28,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import pytest
 
-from backtesting.calendar import DEFAULT_FX_CALENDAR, MarketCalendar
+from backtesting.calendar import DEFAULT_FX_CALENDAR
 from backtesting.engine import BacktestEngine
-from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
+from backtesting.point_in_time import PointInTimeFirewall
 from data.db.engine import make_engine, make_session_factory
 from data.repository import Repository
 from data.schemas import (
@@ -48,9 +48,6 @@ from schemas.backtest import (
     BenchmarkSpecification,
     BenchmarkType,
     DataAvailabilityConfig,
-    ExecutionConfig,
-    PositionSizingConfig,
-    PositionSizingMethod,
 )
 from schemas.strategy import CurrencyPair
 

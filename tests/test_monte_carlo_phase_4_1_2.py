@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from data.schemas import AvailabilityEvidence, DataClassification, DataObservation, Frequency, ObservationKind
-from simulation.monte_carlo.calibration import build_availability_audit, calibrate_factor_panel, split_calibration_holdout
+from simulation.monte_carlo.calibration import split_calibration_holdout
 from simulation.monte_carlo.distributions import MultivariateGaussianModel
 from simulation.monte_carlo.factors import (
     build_fx_carry_factor_panel,
@@ -31,31 +31,17 @@ from simulation.monte_carlo.factors import (
 )
 from simulation.monte_carlo.holdout import (
     evaluate_factor_holdout_diagnostics,
-    evaluate_portfolio_holdout_diagnostics,
 )
 from simulation.monte_carlo.schemas import (
-    AvailabilityAuditReport,
     CalendarValidationReport,
     CorrelationStressComparison,
-    FactorCategory,
-    FactorHoldoutDiagnostics,
-    FactorObservation,
-    FactorPanel,
-    FundingSensitivityReport,
-    MarketFactor,
-    PortfolioHoldoutDiagnostics,
-    RegimeState,
     ScenarioPath,
-    TransformationMethod,
 )
 from simulation.monte_carlo.shocks import (
     evaluate_correlation_stress_distribution,
-    generate_correlation_breakdown_path,
 )
 from simulation.monte_carlo.strategy_adapter import (
     CarryTradeScenarioStrategy,
-    evaluate_funding_sensitivity,
-    generate_simulated_trading_sessions,
     validate_market_calendar_evidence,
 )
 
@@ -517,6 +503,7 @@ def test_fx_quote_direction_canonical_inversion_and_directional_pnl():
     strategy = CarryTradeScenarioStrategy(
         tenor_days=30,
         rebalance_days=30,
+        strict_calendar=False,
     )
 
     # EUR/USD rises from 1.10 to 1.20 -> EUR appreciates, USD depreciates

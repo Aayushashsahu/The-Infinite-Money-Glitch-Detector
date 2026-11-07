@@ -31,11 +31,9 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
-import pytest
+from datetime import date, datetime, timezone
 
 from backtesting.calendar import (
-    JointCurrencySettlementCalendar,
     _easter_date,
     _target_holidays,
     _us_fed_holidays,
@@ -45,13 +43,11 @@ from backtesting.engine import BacktestEngine
 from backtesting.point_in_time import PointInTimeDataStore, PointInTimeFirewall
 from data.schemas import (
     AvailabilityEvidence,
-    DataClassification,
     DataObservation,
     Frequency,
     ObservationKind,
     PriceType,
     RateRole,
-    StrategyExecutabilityStatus,
 )
 from schemas.backtest import (
     AvailabilityPolicy,
@@ -59,9 +55,6 @@ from schemas.backtest import (
     BenchmarkSpecification,
     BenchmarkType,
     DataAvailabilityConfig,
-    ExecutionConfig,
-    PositionSizingConfig,
-    PositionSizingMethod,
     TradeStatus,
 )
 from schemas.strategy import CurrencyPair

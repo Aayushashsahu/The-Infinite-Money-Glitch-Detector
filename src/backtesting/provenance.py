@@ -89,7 +89,7 @@ def build_data_provenance_report(
         if o.kind == ObservationKind.EXCHANGE_RATE and o.entity_code == currency_pair_code
     )
     all_trading_days = set(cal.trading_days_between(start_date, end_date))
-    
+
     if all_trading_days:
         observed_trading_days = len(fx_obs_dates.intersection(all_trading_days))
         missing_trading_days = len(all_trading_days) - observed_trading_days

@@ -125,7 +125,7 @@ def compute_investment_currency_benchmark(
     # Starting with 1.0 unit of currency A
     initial_spot = spot_rates[0]
     initial_b = convert_to_b(1.0, initial_spot)
-    
+
     current_b = initial_b
     values = [1.0]
     returns = [0.0]
@@ -134,11 +134,11 @@ def compute_investment_currency_benchmark(
         days = (dates[i] - dates[i - 1]).days
         years = days_to_years(days)
         rate_b = investment_rates[i - 1]
-        
+
         # Accumulate foreign interest
         f_b = growth_factor(rate_b, years, interest_convention)
         current_b *= f_b
-        
+
         # Value in currency A
         val_a = convert_to_a(current_b, spot_rates[i])
         step_return = (val_a / values[-1]) - 1.0
@@ -148,7 +148,7 @@ def compute_investment_currency_benchmark(
     total_days = (dates[-1] - dates[0]).days
     total_years = max(1e-6, days_to_years(total_days))
     total_ret = values[-1] - 1.0
-    
+
     ann_ret = (val_a) ** (1.0 / total_years) - 1.0 if val_a > 0 else -1.0
 
     return BenchmarkSeries(

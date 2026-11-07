@@ -23,15 +23,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Sequence
+from typing import Sequence
 
-import pandas as pd
 
 from core.currency import (
     QuoteConvention,
     get_rate_a_per_b,
     get_two_way_quote_a_per_b,
-    invert_two_way_quote,
     map_canonical_side_to_provider_side,
     normalize_directional_quote,
 )
@@ -115,7 +113,7 @@ class PointInTimeFirewall:
             )
             if obs.publication_date is not None:
                 return obs.publication_date, is_verified, "publication_date"
-            
+
             # Check for custom indicator lag first
             lag_days: int | None = None
             if obs.indicator_id and obs.indicator_id in self.config.custom_indicator_lags:
@@ -146,7 +144,6 @@ class PointInTimeFirewall:
         Returns:
             (is_eligible, avail_date, avail_timestamp, is_verified, reason_note)
         """
-        from data.schemas import AvailabilityEvidence
         as_of_d, as_of_dt = _parse_as_of(as_of)
 
         # 1. Observation timestamp/date lookahead check: observation itself cannot be in the future

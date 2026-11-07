@@ -15,9 +15,9 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from core.currency import QuoteConvention, validate_currency_code
+from core.currency import QuoteConvention
 from schemas.strategy import CurrencyPair, InterestConvention
 from data.schemas import Frequency, PriceType, RateRole, StrategyExecutabilityStatus
 
@@ -439,24 +439,24 @@ class PerformanceMetrics(BaseModel):
     losing_trades: int
     break_even_trades: int
     win_rate: float = Field(description="winning_trades / total_trades")
-    
+
     cumulative_net_profit: float = Field(description="Total realized net profit in borrowing currency A.")
     total_return: float = Field(description="Cumulative net profit relative to initial equity.")
     annualized_return: float = Field(description="Annualized compounded or simple return.")
     annualized_volatility: float = Field(description="Annualized sample standard deviation of period returns.")
-    
+
     sharpe_ratio: float | None = Field(description="Annualized Sharpe ratio over risk-free rate.")
     sortino_ratio: float | None = Field(description="Annualized Sortino ratio penalizing downside volatility only.")
     max_drawdown: float = Field(description="Maximum peak-to-trough equity decline as a negative fraction.")
     calmar_ratio: float | None = Field(description="Annualized return divided by absolute max drawdown.")
-    
+
     avg_winning_trade: float = 0.0
     avg_losing_trade: float = 0.0
     profit_factor: float | None = Field(default=None, description="Gross winning profit / abs(gross losing loss).")
-    
+
     var_95: float = Field(description="Historical 95% Value at Risk (lower quantile).")
     cvar_95: float = Field(description="Historical 95% Conditional VaR (Expected Shortfall).")
-    
+
     avg_capital_utilization: float = Field(description="Average ratio of invested capital to total equity.")
     max_exposure_a: float = Field(description="Peak total borrowed exposure in currency A.")
 
@@ -590,7 +590,7 @@ class BacktestConfig(BaseModel):
     initial_capital_a: float = Field(default=100_000.0, gt=0.0)
     tenor_days: int = Field(default=30, gt=0, description="Holding period per trade in calendar days.")
     rebalance_frequency_days: int = Field(default=30, gt=0)
-    
+
     availability_config: DataAvailabilityConfig = Field(default_factory=DataAvailabilityConfig)
     execution_config: ExecutionConfig = Field(default_factory=ExecutionConfig)
     position_sizing: PositionSizingConfig = Field(default_factory=PositionSizingConfig)
