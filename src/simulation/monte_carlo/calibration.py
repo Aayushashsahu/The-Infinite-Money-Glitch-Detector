@@ -356,10 +356,10 @@ def build_availability_audit(
     is_reconciled = (exact_ver + estimated + retrospective + missing_ev + unrecognized_ev == genuine_incl)
 
     release_lag_policies = {
-        "FX_EUR_USD": "ECB daily reference rate published ~16:00 CET; estimated availability at 17:00 CET / end of day.",
-        "DGS1MO": "US Treasury 1-Month constant maturity yield published daily by FRED with next-business-day reporting lag.",
-        "DGS3MO": "US Treasury 3-Month constant maturity yield published daily by FRED with next-business-day reporting lag.",
-        "EUR_BORROW_RATE": "ECB Main Refinancing Operations / ESTR policy rate; piecewise-constant effective from announcement/effective dates.",
+        "FX_EUR_USD": "ECB daily reference rate published ~16:00 CET / ~15:00-16:00 UTC on observation date; available for decision at 16:00 UTC.",
+        "DGS1MO": "Federal Reserve H.15 Selected Interest Rates release published at 4:15 PM Eastern Time on next Federal Reserve business day (accounting for EST/EDT daylight saving and Federal Reserve holidays).",
+        "DGS3MO": "Federal Reserve H.15 Selected Interest Rates release published at 4:15 PM Eastern Time on next Federal Reserve business day (accounting for EST/EDT daylight saving and Federal Reserve holidays).",
+        "EUR_BORROW_RATE": "ECB Main Refinancing Operations / Deposit Facility Rate; piecewise-constant effective from 00:00 UTC on announcement/effective date.",
     }
 
     audit_scope = (

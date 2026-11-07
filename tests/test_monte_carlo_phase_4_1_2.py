@@ -263,16 +263,19 @@ def test_pit_us_treasury_next_business_day_reporting_lag():
         is_synthetic=False,
     )
     eff_mon = get_effective_availability_timestamp(obs_mon)
-    assert eff_mon == datetime(2024, 6, 4, 15, 0, tzinfo=timezone.utc)
+    assert eff_mon == datetime(2024, 6, 4, 20, 15, tzinfo=timezone.utc)
 
     # Monday at 16:00 UTC -> NOT available yet
     avail_mon_eve, _ = is_observation_available_as_of(obs_mon, datetime(2024, 6, 3, 16, 0, tzinfo=timezone.utc))
     assert avail_mon_eve is False
-    # Tuesday at 16:00 UTC -> available
-    avail_tue_eve, _ = is_observation_available_as_of(obs_mon, datetime(2024, 6, 4, 16, 0, tzinfo=timezone.utc))
+    # Tuesday at 16:00 UTC -> NOT available yet (published at 20:15 UTC)
+    avail_tue_16, _ = is_observation_available_as_of(obs_mon, datetime(2024, 6, 4, 16, 0, tzinfo=timezone.utc))
+    assert avail_tue_16 is False
+    # Tuesday at 20:30 UTC -> available
+    avail_tue_eve, _ = is_observation_available_as_of(obs_mon, datetime(2024, 6, 4, 20, 30, tzinfo=timezone.utc))
     assert avail_tue_eve is True
 
-    # Friday observation -> available Monday 15:00 UTC
+    # Friday observation -> available Monday 20:15 UTC (4:15 PM ET)
     fri_d = date(2024, 6, 7)
     obs_fri = DataObservation(
         kind=ObservationKind.INTEREST_RATE,
@@ -290,7 +293,7 @@ def test_pit_us_treasury_next_business_day_reporting_lag():
         is_synthetic=False,
     )
     eff_fri = get_effective_availability_timestamp(obs_fri)
-    assert eff_fri == datetime(2024, 6, 10, 15, 0, tzinfo=timezone.utc)
+    assert eff_fri == datetime(2024, 6, 10, 20, 15, tzinfo=timezone.utc)
 
     # Friday 16:00 UTC -> NOT available
     avail_fri, _ = is_observation_available_as_of(obs_fri, datetime(2024, 6, 7, 16, 0, tzinfo=timezone.utc))
@@ -298,8 +301,11 @@ def test_pit_us_treasury_next_business_day_reporting_lag():
     # Sunday 12:00 UTC -> NOT available
     avail_sun, _ = is_observation_available_as_of(obs_fri, datetime(2024, 6, 9, 12, 0, tzinfo=timezone.utc))
     assert avail_sun is False
-    # Monday 15:30 UTC -> available
-    avail_mon, _ = is_observation_available_as_of(obs_fri, datetime(2024, 6, 10, 15, 30, tzinfo=timezone.utc))
+    # Monday 16:00 UTC -> NOT available yet
+    avail_mon_16, _ = is_observation_available_as_of(obs_fri, datetime(2024, 6, 10, 16, 0, tzinfo=timezone.utc))
+    assert avail_mon_16 is False
+    # Monday 20:30 UTC -> available
+    avail_mon, _ = is_observation_available_as_of(obs_fri, datetime(2024, 6, 10, 20, 30, tzinfo=timezone.utc))
     assert avail_mon is True
 
 

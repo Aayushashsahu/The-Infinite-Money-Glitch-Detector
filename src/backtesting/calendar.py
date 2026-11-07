@@ -15,8 +15,11 @@ or data-quality failures.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Container
+import zoneinfo
+
+EASTERN_TZ = zoneinfo.ZoneInfo("America/New_York")
 
 
 def _easter_date(year: int) -> date:
@@ -372,3 +375,71 @@ def get_settlement_calendar(curr_a: str, curr_b: str) -> JointCurrencySettlement
 
 # Global default instance
 DEFAULT_FX_CALENDAR = MarketCalendar()
+
+
+class FederalReserveH15Calendar:
+    """Federal Reserve Statistical Release H.15 Availability Calendar.
+
+    Publication rules for daily Selected Interest Rates (H.15):
+    - Rates for business day T are published at approximately 4:15 PM Eastern Time
+      (America/New_York) on the next Federal Reserve business day (T_next).
+    - Federal Reserve business days are Monday through Friday, excluding Federal Reserve holidays:
+      New Year's Day, Martin Luther King Jr. Day, Washington's Birthday/Presidents Day,
+      Memorial Day, Juneteenth National Independence Day, Independence Day, Labor Day,
+      Columbus Day, Veterans Day, Thanksgiving Day, and Christmas Day.
+    - Weekend observance shifts: Sunday holidays are observed on Monday; Saturday holidays
+      are observed on Friday.
+    - Timezone conversion evaluates Eastern Standard Time (UTC-5, 21:15 UTC) and Eastern
+      Daylight Time (UTC-4, 20:15 UTC) accurately via zoneinfo.ZoneInfo("America/New_York").
+    """
+
+    def __init__(self) -> None:
+        self._holiday_cache: dict[int, set[date]] = {}
+
+    def is_weekend(self, d: date) -> bool:
+        """Saturday (5) and Sunday (6) are weekend closures."""
+        return d.weekday() >= 5
+
+    def get_fed_holidays(self, year: int) -> set[date]:
+        """Return scheduled Federal Reserve holidays for a given year."""
+        if year not in self._holiday_cache:
+            self._holiday_cache[year] = _us_fed_holidays(year)
+        return self._holiday_cache[year]
+
+    def is_fed_holiday(self, d: date) -> bool:
+        """Check whether date is an official Federal Reserve holiday."""
+        return d in self.get_fed_holidays(d.year)
+
+    def is_fed_business_day(self, d: date) -> bool:
+        """Check whether date is an active Federal Reserve business day."""
+        return not self.is_weekend(d) and not self.is_fed_holiday(d)
+
+    def next_fed_business_day(self, d: date) -> date:
+        """Earliest Federal Reserve business day strictly after date d."""
+        curr = d + timedelta(days=1)
+        while not self.is_fed_business_day(curr):
+            curr += timedelta(days=1)
+        return curr
+
+    def get_next_business_day(self, d: date) -> date:
+        """Alias for next_fed_business_day."""
+        return self.next_fed_business_day(d)
+
+    def previous_fed_business_day(self, d: date) -> date:
+        """Latest Federal Reserve business day strictly before date d."""
+        curr = d - timedelta(days=1)
+        while not self.is_fed_business_day(curr):
+            curr -= timedelta(days=1)
+        return curr
+
+    def get_h15_release_timestamp(self, obs_date: date) -> datetime:
+        """Compute the point-in-time H.15 availability timestamp in UTC for an observation date.
+
+        The rate for obs_date is released at 16:15 Eastern Time on the next Federal Reserve business day.
+        """
+        release_date = self.next_fed_business_day(obs_date)
+        et_dt = datetime(release_date.year, release_date.month, release_date.day, 16, 15, 0, tzinfo=EASTERN_TZ)
+        return et_dt.astimezone(timezone.utc)
+
+
+FED_H15_CALENDAR = FederalReserveH15Calendar()

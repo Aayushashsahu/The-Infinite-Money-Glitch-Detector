@@ -10,11 +10,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timezone
 import math
 
 import numpy as np
 
+from backtesting.calendar import FED_H15_CALENDAR
+from core.currency import QuoteConvention
 from data.schemas import (
     AvailabilityEvidence,
     DataClassification,
@@ -118,6 +120,56 @@ def get_session_decision_timestamp(
     )
 
 
+def _normalize_rate_to_decimal(obs: DataObservation) -> float:
+    """Convert an interest rate observation to decimal strictly via metadata."""
+    unit_str = (obs.unit or "").strip().lower()
+    if unit_str in ("percent", "percentage", "%", "pct"):
+        return obs.value / 100.0
+    elif unit_str in ("decimal", "fraction", "ratio", "rate"):
+        return obs.value
+    elif unit_str in ("basis_points", "bps"):
+        return obs.value / 10000.0
+    else:
+        raise ValueError(
+            f"Cannot determine rate unit conversion for series '{obs.indicator_id or obs.entity_code}' "
+            f"with unknown unit '{obs.unit}'. Unit must be explicitly declared ('percent', 'decimal', etc.)."
+        )
+
+
+def _normalize_fx_quote_to_usd_per_eur(fx_obs: DataObservation) -> float:
+    """Normalize FX quote to canonical provider quote convention (USD per EUR) strictly via metadata."""
+    unit_str = (fx_obs.unit or "").strip().lower()
+    convention = fx_obs.quote_convention
+
+    # Indirect quote conventions (EUR per USD): invert to get USD per EUR
+    if (
+        unit_str in ("eur_per_usd", "eur/usd")
+        or (fx_obs.base_currency == "USD" and fx_obs.quote_currency == "EUR")
+        or convention == QuoteConvention.BASE_PER_QUOTE
+    ):
+        return 1.0 / fx_obs.value
+
+    # Direct quote conventions (USD per EUR): keep value
+    if (
+        unit_str in ("usd_per_eur", "usd/eur")
+        or (fx_obs.base_currency == "EUR" and fx_obs.quote_currency == "USD")
+        or convention == QuoteConvention.QUOTE_PER_BASE
+    ):
+        return fx_obs.value
+
+    # Default fallback for canonical pair code if unit is not explicit
+    if fx_obs.entity_code == "EUR/USD":
+        return fx_obs.value
+    elif fx_obs.entity_code == "USD/EUR":
+        return 1.0 / fx_obs.value
+
+    raise ValueError(
+        f"Cannot determine quote convention for FX observation {fx_obs.entity_code} "
+        f"with unit='{fx_obs.unit}', quote_convention={fx_obs.quote_convention}, "
+        f"base={fx_obs.base_currency}, quote={fx_obs.quote_currency}."
+    )
+
+
 def get_effective_availability_timestamp(obs: DataObservation) -> datetime | None:
     """Compute effective point-in-time availability timestamp for an observation.
 
@@ -125,10 +177,11 @@ def get_effective_availability_timestamp(obs: DataObservation) -> datetime | Non
     - Retrospective: returns None (no forward availability evidence).
     - Verified exact timestamp: uses publication_timestamp ONLY if availability_evidence
       is explicitly EXACT_TIMESTAMP_VERIFIED.
-    - EUR/USD exchange rate (ECB reference): published ~16:00 CET, available 17:00 CET (16:00 UTC) on observation date.
-    - US Treasury yields (DGS1MO, DGS3MO): published daily by FRED on NEXT business day at ~15:00 UTC (~09:00 ET).
-    - ECB policy rate (KR.MRR_FR.LEV): effective on effective_timestamp or 00:00 UTC on observation date.
-    - Fallback: 23:59:59 UTC on observation date.
+    - EUR/USD exchange rate (ECB reference midpoint): published ~16:00 CET, available 16:00 UTC on observation date.
+    - US Treasury yields (DGS1MO, DGS3MO): published under Federal Reserve H.15 release calendar
+      (4:15 PM Eastern Time on next Federal Reserve business day, skipping weekends and Fed holidays).
+    - ECB policy rate (KR.MRR_FR.LEV, DFR): effective on effective_timestamp or 00:00 UTC on observation date.
+    - Unmapped series: returns None (fail-closed, no fabricated availability timestamp).
     - Late publication: If an observation has a publication_timestamp later than the scheduled release,
       it cannot be available before it was actually published.
     """
@@ -149,33 +202,36 @@ def get_effective_availability_timestamp(obs: DataObservation) -> datetime | Non
 
     obs_d = obs.observation_date
 
-    # 3. Exchange Rate (EUR/USD ECB reference rate)
-    if obs.kind == ObservationKind.EXCHANGE_RATE or obs.entity_code == "EUR/USD" or obs.source_id in ("frankfurter", "ecb"):
+    # 3. Exchange Rate (EUR/USD ECB reference rate from Frankfurter or ECB)
+    if obs.kind == ObservationKind.EXCHANGE_RATE and (
+        obs.entity_code in ("EUR/USD", "USD/EUR")
+        or obs.source_id in ("frankfurter", "ecb")
+    ):
         sched_ts = datetime(obs_d.year, obs_d.month, obs_d.day, 16, 0, 0, tzinfo=timezone.utc)
-    # 4. US Treasury yields: published next business day at 15:00 UTC
-    elif (
-        obs.indicator_id in ("DGS1MO", "DGS3MO")
-        or obs.entity_code in ("DGS1MO", "DGS3MO", "USD")
+
+    # 4. US Treasury yields: Federal Reserve H.15 release calendar (4:15 PM Eastern Time on next Fed business day)
+    elif obs.kind == ObservationKind.INTEREST_RATE and (
+        obs.indicator_id in ("DGS1MO", "DGS3MO", "USD_RATE")
+        or obs.entity_code in ("DGS1MO", "DGS3MO")
         or obs.source_id == "us_treasury"
     ):
-        weekday = obs_d.weekday()
-        # Friday (4) -> Monday (+3), Saturday (5) -> Monday (+2), Sunday (6) -> Monday (+1), Weekday -> +1
-        delta_days = 3 if weekday == 4 else (2 if weekday == 5 else 1)
-        next_bday = obs_d + timedelta(days=delta_days)
-        sched_ts = datetime(next_bday.year, next_bday.month, next_bday.day, 15, 0, 0, tzinfo=timezone.utc)
+        sched_ts = FED_H15_CALENDAR.get_h15_release_timestamp(obs_d)
+
     # 5. ECB Policy rate: effective date/time
-    elif (
-        obs.indicator_id in ("KR.MRR_FR.LEV", "DFR")
+    elif obs.kind == ObservationKind.INTEREST_RATE and (
+        obs.indicator_id in ("KR.MRR_FR.LEV", "DFR", "EUR_RATE")
         or obs.entity_code in ("ECB_EA", "EUR", "DFR")
-        or obs.source_id == "policy_rates"
+        or obs.source_id in ("policy_rates", "ecb")
     ):
         if obs.effective_timestamp is not None:
             ts = obs.effective_timestamp
             sched_ts = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
         else:
             sched_ts = datetime(obs_d.year, obs_d.month, obs_d.day, 0, 0, 0, tzinfo=timezone.utc)
+
     else:
-        sched_ts = datetime(obs_d.year, obs_d.month, obs_d.day, 23, 59, 59, tzinfo=timezone.utc)
+        # Fail closed on unmapped series
+        return None
 
     if obs.publication_timestamp is not None:
         pub = obs.publication_timestamp
@@ -228,9 +284,15 @@ def is_observation_available_as_of(
             try:
                 mode = PITMode(pit_mode)
             except ValueError:
-                mode = PITMode.ESTIMATED_LAG
-        else:
+                raise ValueError(
+                    f"Invalid pit_mode: '{pit_mode}'. Must be one of {[m.value for m in PITMode]}."
+                )
+        elif isinstance(pit_mode, PITMode):
             mode = pit_mode
+        else:
+            raise ValueError(f"Invalid pit_mode type: {type(pit_mode).__name__}.")
+    else:
+        mode = PITMode.RESEARCH_ONLY if not strict_executable else PITMode.STRICT_VERIFIED
 
     # Strict executable mode / Strict Verified checks
     if mode == PITMode.STRICT_VERIFIED or (mode is None and strict_executable):
@@ -248,11 +310,18 @@ def is_observation_available_as_of(
                 return False, "missing_publication_timestamp_in_strict_verified_mode"
 
     if mode == PITMode.ESTIMATED_LAG:
+        if obs.availability_evidence is None:
+            return False, "missing_availability_evidence_rejected_in_estimated_lag_mode"
         if (
             obs.classification == DataClassification.REAL_RETROSPECTIVE
             or obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE
         ):
             return False, "retrospective_evidence_rejected_in_estimated_lag_mode"
+        if obs.availability_evidence not in (
+            AvailabilityEvidence.ESTIMATED_SCHEDULE,
+            AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED,
+        ):
+            return False, f"unrecognized_or_unpermitted_evidence_{obs.availability_evidence}_in_estimated_lag_mode"
 
     avail_ts = get_effective_availability_timestamp(obs)
     if avail_ts is None:
@@ -755,11 +824,7 @@ def resolve_initial_market_levels(
     if fx_obs is None:
         raise ValueError(f"Failed to resolve FX observation for '{fx_entity}' as of {as_of_decision_timestamp}.")
 
-    # Invert Frankfurter quote (EUR per USD) to canonical provider quote (USD per EUR) if raw_value < 1.0
-    if fx_obs.value > 0 and fx_obs.value < 1.0:
-        initial_fx = 1.0 / fx_obs.value
-    else:
-        initial_fx = fx_obs.value
+    initial_fx = _normalize_fx_quote_to_usd_per_eur(fx_obs)
 
     # 2. Resolve borrowing rate observation
     b_cands = [
@@ -784,8 +849,7 @@ def resolve_initial_market_levels(
             f"Failed to resolve borrowing rate observation for '{borrowing_series_id}' as of {as_of_decision_timestamp}."
         )
 
-    # Convert percentage to decimal if > 0.5 (e.g. 4.5% -> 0.045)
-    initial_borrowing = b_obs.value / 100.0 if b_obs.value > 0.5 else b_obs.value
+    initial_borrowing = _normalize_rate_to_decimal(b_obs)
 
     # 3. Resolve investment rate observation
     inv_cands = [
@@ -810,13 +874,12 @@ def resolve_initial_market_levels(
             f"Failed to resolve investment rate observation for '{investment_series_id}' as of {as_of_decision_timestamp}."
         )
 
-    # Convert percentage to decimal if > 0.5 (e.g. 5.6% -> 0.056)
-    initial_investment = inv_obs.value / 100.0 if inv_obs.value > 0.5 else inv_obs.value
+    initial_investment = _normalize_rate_to_decimal(inv_obs)
 
     notes = [
-        f"Grounded initial FX rate: {initial_fx:.6f} USD/EUR from {fx_obs.source_id} {fx_obs.entity_code} on {fx_obs.observation_date} (raw={fx_obs.value}).",
-        f"Grounded initial borrowing rate: {initial_borrowing:.4f} ({initial_borrowing*100:.2f}%) from {b_obs.source_id} {b_obs.indicator_id} on {b_obs.observation_date}.",
-        f"Grounded initial investment rate: {initial_investment:.4f} ({initial_investment*100:.2f}%) from {inv_obs.source_id} {inv_obs.indicator_id} on {inv_obs.observation_date}.",
+        f"Grounded initial FX rate: {initial_fx:.6f} USD/EUR from {fx_obs.source_id} {fx_obs.entity_code} on {fx_obs.observation_date} (raw={fx_obs.value}, unit={fx_obs.unit}).",
+        f"Grounded initial borrowing rate: {initial_borrowing:.4f} ({initial_borrowing*100:.2f}%) from {b_obs.source_id} {b_obs.indicator_id} on {b_obs.observation_date} (unit={b_obs.unit}).",
+        f"Grounded initial investment rate: {initial_investment:.4f} ({initial_investment*100:.2f}%) from {inv_obs.source_id} {inv_obs.indicator_id} on {inv_obs.observation_date} (unit={inv_obs.unit}).",
         f"Resolved strictly point-in-time as of {as_of_decision_timestamp.isoformat()} under policy {mode.value}.",
     ]
 

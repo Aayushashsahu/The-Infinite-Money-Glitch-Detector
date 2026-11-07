@@ -60,14 +60,17 @@ def _make_obs(
     val: float,
     pub_dt: datetime,
     rev: int = 0,
+    unit: str | None = None,
 ) -> DataObservation:
+    if unit is None:
+        unit = "percent" if kind == ObservationKind.INTEREST_RATE else "USD_per_EUR"
     return DataObservation(
         kind=kind,
         source_id=source_id,
         entity_code=entity_code,
         indicator_id=indicator_id,
         value=val,
-        unit="percent" if kind == ObservationKind.INTEREST_RATE else "USD_per_EUR",
+        unit=unit,
         frequency=Frequency.DAILY,
         observation_date=obs_date,
         retrieved_at=pub_dt,
@@ -173,7 +176,7 @@ def test_build_fx_carry_factor_panel_revision_awareness():
                     rev=1,
                 )
             )
-            if days_count == 2:
+            if days_count == 5:
                 target_date = curr
                 obs_set.append(
                     _make_obs(
@@ -425,6 +428,7 @@ def test_resolve_initial_market_levels():
             obs_date=date(2024, 1, 2),
             val=1.0950,
             pub_dt=datetime(2024, 1, 2, 15, 0, 0, tzinfo=timezone.utc),
+            unit="USD_per_EUR",
         ),
         _make_obs(
             kind=ObservationKind.INTEREST_RATE,
@@ -434,6 +438,17 @@ def test_resolve_initial_market_levels():
             obs_date=date(2024, 1, 2),
             val=0.0400,
             pub_dt=datetime(2024, 1, 2, 14, 15, 0, tzinfo=timezone.utc),
+            unit="decimal",
+        ),
+        _make_obs(
+            kind=ObservationKind.INTEREST_RATE,
+            source_id="us_treasury",
+            entity_code="USD",
+            indicator_id="USD_RATE",
+            obs_date=date(2023, 12, 28),
+            val=0.0538,
+            pub_dt=datetime(2023, 12, 29, 21, 15, 0, tzinfo=timezone.utc),
+            unit="decimal",
         ),
         _make_obs(
             kind=ObservationKind.INTEREST_RATE,
@@ -441,8 +456,9 @@ def test_resolve_initial_market_levels():
             entity_code="USD",
             indicator_id="USD_RATE",
             obs_date=date(2023, 12, 29),
-            val=0.0538,
-            pub_dt=datetime(2024, 1, 1, 15, 0, 0, tzinfo=timezone.utc),
+            val=0.0540,
+            pub_dt=datetime(2024, 1, 2, 21, 15, 0, tzinfo=timezone.utc),
+            unit="decimal",
         ),
     ]
 
@@ -459,7 +475,7 @@ def test_resolve_initial_market_levels():
     assert report.initial_borrowing_rate == 0.0400
     assert report.initial_investment_rate == 0.0538
     assert report.fx_observation_date == date(2024, 1, 2)
-    assert report.investment_observation_date == date(2023, 12, 29)
+    assert report.investment_observation_date == date(2023, 12, 28)
 
 
 # ============================================================================

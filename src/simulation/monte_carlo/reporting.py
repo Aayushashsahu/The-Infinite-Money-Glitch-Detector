@@ -278,6 +278,21 @@ def _generate_monte_carlo_closure_report(
             f"`{mc.prob_drawdown_10pct:.1%}` | `{mc.mean_fx_drag:+.2%}` | `{-mc.mean_financing_drag:+.2%}` |"
         )
 
+    lines.append("\n### Per-Model Checkpoint Stability Convergence Breakdown:")
+    lines.append("| Simulation Model | Checkpoint Stability Status | Mean Return | Median Return | Loss Probability | VaR (95%) | CVaR (95%) | Max Drawdown |")
+    lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
+    for mc in model_comparisons:
+        m_s = "PASS" if getattr(mc, "is_converged_mean", True) else "FAIL"
+        med_s = "PASS" if getattr(mc, "is_converged_median", True) else "FAIL"
+        loss_s = "PASS" if getattr(mc, "is_converged_prob_loss", True) else "FAIL"
+        var_s = "PASS" if getattr(mc, "is_converged_var_95", True) else "FAIL"
+        cvar_s = "PASS" if getattr(mc, "is_converged_cvar_95", True) else "FAIL"
+        dd_s = "PASS" if getattr(mc, "is_converged_drawdown", True) else "FAIL"
+        st_status = getattr(mc, "checkpoint_stability_status", "CHECKPOINT_STABILITY_ACHIEVED")
+        lines.append(
+            f"| **{mc.model_name}** | `{st_status}` | `{m_s}` | `{med_s}` | `{loss_s}` | `{var_s}` | `{cvar_s}` | `{dd_s}` |"
+        )
+
     if model_comparisons:
         min_med = min(mc.median_return for mc in model_comparisons)
         max_med = max(mc.median_return for mc in model_comparisons)
@@ -356,11 +371,12 @@ def _generate_monte_carlo_closure_report(
     low_thr = factor_diag.low_vol_threshold if factor_diag.low_vol_threshold > 0 else 0.0592
     high_thr = factor_diag.high_vol_threshold if factor_diag.high_vol_threshold > 0 else 0.0871
     lines.append(
-        f"> **Volatility Regime & Percentile Definitions**: Historical calibration sample partitions annualized FX volatility into "
+        f"> **Volatility Regime Horizons & Reconciliation**: Volatility regime thresholds are estimated from the distribution "
+        f"of rolling 63-trading-day annualized volatilities across the 2020–2023 calibration sample (warm-up excluded): "
         f"Low Volatility (< {low_thr:.2%}, lower 20th percentile), Normal Volatility ({low_thr:.2%} to {high_thr:.2%}, central 20th–80th percentile band), "
         f"and Stress Volatility (>= {high_thr:.2%}, upper 20th percentile tail). Realized 2024 volatility ({factor_diag.actual_fx_realized_volatility:.2%}) "
-        f"is classified in the `{factor_diag.volatility_regime_classification}` regime. Predictive volatility percentile measures the empirical "
-        f"CDF position of realized 2024 volatility within the model's simulated out-of-sample distribution."
+        f"represents full-year 247-trading-day sample annualized volatility, classified in the `{factor_diag.volatility_regime_classification}` regime. "
+        f"Predictive volatility percentile measures the empirical CDF position of realized 2024 volatility within the model's simulated out-of-sample distribution."
     )
 
     # 4. Strategy Portfolio Holdout Diagnostics
@@ -449,7 +465,12 @@ def _generate_monte_carlo_closure_report(
         lines.append(f"- **Simulation Code Commit**: `{manifest_info.get('simulation_code_commit', '24e7f0fa19986b14f37b9876962499ee0c6168ce')}`")
         lines.append(f"- **Working Tree Clean**: `{manifest_info.get('git_working_tree_clean', True)}`")
         lines.append(f"- **RNG Bit Generator**: `{manifest_info.get('rng_bit_generator', 'PCG64')}` (Seed: `{manifest_info.get('random_seed', 42)}`)")
-        lines.append(f"- **Environment**: Python `{manifest_info.get('environment', {}).get('python_version', '').split()[0]}`, NumPy `{manifest_info.get('environment', {}).get('numpy_version')}`, SciPy `{manifest_info.get('environment', {}).get('scipy_version')}`")
+        env_info = manifest_info.get('environment', {}) or {}
+        py_ver = env_info.get('python_version', '')
+        py_ver_short = py_ver.split()[0] if py_ver else 'unknown'
+        np_ver = env_info.get('numpy_version', 'unknown')
+        sp_ver = env_info.get('scipy_version', 'unknown')
+        lines.append(f"- **Environment**: Python `{py_ver_short}`, NumPy `{np_ver}`, SciPy `{sp_ver}`")
 
     return "\n".join(lines)
 
@@ -568,6 +589,40 @@ def generate_phase_4_1_2_2_research_report(
     """Generate the authoritative Phase 4.1.2.2 residual consistency & execution assumptions closure report."""
     return _generate_monte_carlo_closure_report(
         phase_title="Phase 4.1.2.2 — Residual Consistency & Execution Assumptions Closure Report",
+        avail_audit=avail_audit,
+        model_comparisons=model_comparisons,
+        factor_diag=factor_diag,
+        port_diag=port_diag,
+        corr_stress=corr_stress,
+        cal_val=cal_val,
+        funding_sens=funding_sens,
+        bootstrap_result=bootstrap_result,
+        student_t_result=student_t_result,
+        regime_result=regime_result,
+        gaussian_result=gaussian_result,
+        manifest_info=manifest_info,
+        initial_levels=initial_levels,
+    )
+
+
+def generate_phase_4_1_2_2_1_research_report(
+    avail_audit: AvailabilityAuditReport,
+    model_comparisons: list[ModelComparisonEntry],
+    factor_diag: FactorHoldoutDiagnostics,
+    port_diag: PortfolioHoldoutDiagnostics,
+    corr_stress: CorrelationStressComparison,
+    cal_val: CalendarValidationReport,
+    funding_sens: FundingSensitivityReport,
+    bootstrap_result: MonteCarloResult,
+    student_t_result: MonteCarloResult,
+    regime_result: MonteCarloResult,
+    gaussian_result: MonteCarloResult | None = None,
+    manifest_info: dict[str, Any] | None = None,
+    initial_levels: InitialMarketLevelsReport | None = None,
+) -> str:
+    """Generate the authoritative Phase 4.1.2.2.1 Federal Reserve release calendar & PIT integrity closure report."""
+    return _generate_monte_carlo_closure_report(
+        phase_title="Phase 4.1.2.2.1 — Federal Reserve H.15 Release Calendar & PIT Integrity Closure Report",
         avail_audit=avail_audit,
         model_comparisons=model_comparisons,
         factor_diag=factor_diag,

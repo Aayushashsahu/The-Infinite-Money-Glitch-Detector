@@ -208,7 +208,7 @@ def test_unverified_publication_timestamp_does_not_override_estimated_schedule()
     )
 
     eff_ts = get_effective_availability_timestamp(obs_unverified)
-    assert eff_ts == datetime(2023, 5, 11, 15, 0, tzinfo=timezone.utc)
+    assert eff_ts == datetime(2023, 5, 11, 20, 15, tzinfo=timezone.utc)
     assert eff_ts != pub_ts, "Unverified publication timestamp erroneously bypassed estimated lag schedule"
 
 

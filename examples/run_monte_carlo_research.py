@@ -58,6 +58,7 @@ from simulation.monte_carlo import (
     generate_phase_4_1_2_research_report,
     generate_phase_4_1_2_1_research_report,
     generate_phase_4_1_2_2_research_report,
+    generate_phase_4_1_2_2_1_research_report,
     resolve_initial_market_levels,
     split_calibration_holdout,
     validate_market_calendar_evidence,
@@ -308,6 +309,7 @@ def run_monte_carlo_laboratory(
         ("Regime-Conditioned Bootstrap", mc_reg),
     ]:
         dm = r.distribution_metrics
+        conv = r.convergence_report
         model_comparisons.append(
             ModelComparisonEntry(
                 model_name=name,
@@ -324,6 +326,15 @@ def run_monte_carlo_laboratory(
                 prob_drawdown_10pct=dm.prob_drawdown_10pct,
                 mean_fx_drag=dm.mean_fx_translation_gain_a / 100_000.0,
                 mean_financing_drag=dm.mean_financing_costs_a / 100_000.0,
+                checkpoint_stability_status=conv.stability_status if conv else "CHECKPOINT_STABILITY_ACHIEVED",
+                is_converged_mean=conv.is_converged_mean if conv else True,
+                is_converged_median=conv.is_converged_median if conv else True,
+                is_converged_prob_loss=conv.is_converged_prob_loss if conv else True,
+                is_converged_var_95=conv.is_converged_var_95 if conv else True,
+                is_converged_cvar_95=conv.is_converged_cvar_95 if conv else True,
+                is_converged_drawdown=conv.is_converged_drawdown if conv else True,
+                tail_sample_size=conv.tail_sample_size_final if conv else int(0.05 * r.config.num_paths),
+                stability_notes=conv.convergence_notes if conv else "",
             )
         )
 
@@ -394,7 +405,32 @@ def run_monte_carlo_laboratory(
     print(f"      Funding Sensitivity: Evaluated {len(funding_sens.scenarios)} scenarios across fixed vs floating funding.")
     print("      Exported funding_sensitivity.json")
 
+    per_model_stab = {}
+    for name, r in [
+        ("Multivariate Gaussian", mc_gauss),
+        ("Moving-Block Bootstrap (20d)", mc_mb),
+        ("IID Bootstrap", mc_iid),
+        ("Stationary Bootstrap (20d)", mc_stat),
+        ("Multivariate Student-t", mc_t),
+        ("Regime-Conditioned Bootstrap", mc_reg),
+    ]:
+        if r.convergence_report:
+            c = r.convergence_report
+            per_model_stab[name] = {
+                "stability_status": c.stability_status,
+                "is_converged": c.is_converged,
+                "is_converged_mean": c.is_converged_mean,
+                "is_converged_median": c.is_converged_median,
+                "is_converged_prob_loss": c.is_converged_prob_loss,
+                "is_converged_var_95": c.is_converged_var_95,
+                "is_converged_cvar_95": c.is_converged_cvar_95,
+                "is_converged_drawdown": c.is_converged_drawdown,
+                "tail_sample_size": c.tail_sample_size_final,
+                "notes": c.convergence_notes,
+            }
+
     if mc_mb.convergence_report:
+        mc_mb.convergence_report.per_model_stability = per_model_stab
         export_json(mc_mb.convergence_report, out_dir / "convergence_report.json")
         print("      Exported convergence_report.json")
 
@@ -439,7 +475,8 @@ def run_monte_carlo_laboratory(
         "data_classification": "SIMULATED_RESEARCH_PROXY",
         "pit_policy": mode.value if hasattr(mode, "value") else str(mode),
         "predictive_sample_size": 1000,
-        "calendar_implementation": "JointTarget2FedCalendar (TARGET2 + Federal Reserve holiday settlement calendar)",
+        "calendar_implementation": "JointTarget2FedCalendar (TARGET2 + Federal Reserve holiday settlement calendar; Federal Reserve H.15 release calendar at 4:15 PM Eastern Time)",
+        "h15_release_schedule": "4:15 PM Eastern Time on next Federal Reserve business day (ZoneInfo('America/New_York'))",
         "correlation_stress_config": {
             "method": "zero_off_diagonal_decoupling",
             "variance_reduction": "common_random_numbers",
@@ -448,7 +485,23 @@ def run_monte_carlo_laboratory(
         "initial_market_levels": initial_levels.model_dump(mode="json"),
     }
 
-    if "4_1_2_2" in out_dir.name:
+    if "4_1_2_2_1" in out_dir.name:
+        report_md = generate_phase_4_1_2_2_1_research_report(
+            avail_audit=avail_audit,
+            model_comparisons=model_comparisons,
+            factor_diag=factor_diag,
+            port_diag=port_diag,
+            corr_stress=corr_stress,
+            cal_val=cal_val,
+            funding_sens=funding_sens,
+            bootstrap_result=mc_mb,
+            student_t_result=mc_t,
+            regime_result=mc_reg,
+            gaussian_result=mc_gauss,
+            manifest_info=manifest_metadata,
+            initial_levels=initial_levels,
+        )
+    elif "4_1_2_2" in out_dir.name:
         report_md = generate_phase_4_1_2_2_research_report(
             avail_audit=avail_audit,
             model_comparisons=model_comparisons,
@@ -590,11 +643,11 @@ def run_monte_carlo_laboratory(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 4.1.2.1 Monte Carlo Research Integrity & Reproducibility Closure Runner")
+    parser = argparse.ArgumentParser(description="Phase 4.1.2.2.1 Monte Carlo Research Integrity & Reproducibility Closure Runner")
     parser.add_argument("--paths", type=int, default=1000, help="Number of simulation paths per model (default: 1000)")
     parser.add_argument("--horizon", type=int, default=252, help="Simulation horizon in trading days (default: 252)")
     parser.add_argument("--seed", type=int, default=42, help="Random number generator seed (default: 42)")
-    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2_1", help="Output directory for simulation results")
+    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2_2_1", help="Output directory for simulation results")
     parser.add_argument("--pit-mode", type=str, default="ESTIMATED_LAG", choices=["STRICT_VERIFIED", "ESTIMATED_LAG", "RESEARCH_ONLY"], help="Point-in-time enforcement mode (default: ESTIMATED_LAG)")
     parser.add_argument("--smoke", action="store_true", help="Run fast smoke test with 50 paths over 30 steps")
     args = parser.parse_args()

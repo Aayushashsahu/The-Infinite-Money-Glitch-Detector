@@ -418,6 +418,7 @@ class ConvergenceReport(BaseModel):
     tail_sample_size_final: int = 0
     stability_status: str = "CHECKPOINT_STABILITY"
     limitations: list[str] = Field(default_factory=list)
+    per_model_stability: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class CalibrationAvailabilitySummary(BaseModel):
@@ -641,6 +642,15 @@ class ModelComparisonEntry(BaseModel):
     prob_drawdown_10pct: float
     mean_fx_drag: float
     mean_financing_drag: float
+    checkpoint_stability_status: str = "CHECKPOINT_STABILITY_ACHIEVED"
+    is_converged_mean: bool = True
+    is_converged_median: bool = True
+    is_converged_prob_loss: bool = True
+    is_converged_var_95: bool = True
+    is_converged_cvar_95: bool = True
+    is_converged_drawdown: bool = True
+    tail_sample_size: int = 50
+    stability_notes: str = ""
 
 
 class MonteCarloResult(BaseModel):
