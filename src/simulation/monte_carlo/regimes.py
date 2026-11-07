@@ -7,6 +7,7 @@ and executes regime-conditioned scenario resampling.
 
 from __future__ import annotations
 
+from datetime import date
 import math
 from typing import Any
 
@@ -250,6 +251,7 @@ class RegimeConditionedSampler:
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
         initial_regime: str | None = None,
+        dates: list[date] | None = None,
     ) -> ScenarioPath:
         """Generate a simulated path conditioned on simulated regime transitions."""
         regime_seq = self.sample_regime_sequence(horizon, initial_regime)
@@ -287,6 +289,7 @@ class RegimeConditionedSampler:
         return ScenarioPath(
             path_id=path_id,
             steps=horizon,
+            dates=dates,
             fx_rates=fx_rates,
             borrowing_rates=borrowing_rates,
             investment_rates=investment_rates,
@@ -301,6 +304,7 @@ class RegimeConditionedSampler:
         initial_fx: float = 1.09,
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
+        dates: list[date] | None = None,
     ) -> list[ScenarioPath]:
         """Generate multiple regime-conditioned scenario paths."""
         return [
@@ -310,6 +314,7 @@ class RegimeConditionedSampler:
                 initial_fx=initial_fx,
                 initial_borrowing_rate=initial_borrowing_rate,
                 initial_investment_rate=initial_investment_rate,
+                dates=dates,
             )
             for p in range(num_paths)
         ]

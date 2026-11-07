@@ -51,6 +51,7 @@ from simulation.monte_carlo.reporting import (
     export_markdown,
     generate_phase_4_1_1_research_report,
     generate_phase_4_1_2_research_report,
+    generate_phase_4_1_2_1_research_report,
     generate_research_report,
 )
 from simulation.monte_carlo.schemas import (
@@ -74,6 +75,7 @@ from simulation.monte_carlo.schemas import (
     ModelComparisonEntry,
     MonteCarloResult,
     PathEvaluationResult,
+    PITMode,
     PortfolioHoldoutDiagnostics,
     RegimeState,
     ScenarioPath,
@@ -125,6 +127,7 @@ __all__ = [
     "MultivariateGaussianModel",
     "MultivariateStudentTModel",
     "PathEvaluationResult",
+    "PITMode",
     "PortfolioHoldoutDiagnostics",
     "RegimeConditionedSampler",
     "RegimeModelReport",
@@ -157,6 +160,7 @@ __all__ = [
     "generate_correlation_breakdown_path",
     "generate_phase_4_1_1_research_report",
     "generate_phase_4_1_2_research_report",
+    "generate_phase_4_1_2_1_research_report",
     "generate_research_report",
     "generate_simulated_trading_sessions",
     "get_effective_availability_timestamp",

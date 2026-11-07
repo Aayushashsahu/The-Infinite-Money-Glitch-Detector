@@ -7,6 +7,7 @@ degrees of freedom, and joint factor scenario generation.
 
 from __future__ import annotations
 
+from datetime import date
 import math
 from typing import Any
 
@@ -132,6 +133,7 @@ class MultivariateGaussianModel:
         initial_fx: float = 1.09,
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
+        dates: list[date] | None = None,
     ) -> ScenarioPath:
         """Generate a simulated path via Gaussian innovations."""
         sampled = self.sample(horizon)
@@ -160,6 +162,7 @@ class MultivariateGaussianModel:
         return ScenarioPath(
             path_id=path_id,
             steps=horizon,
+            dates=dates,
             fx_rates=fx_rates,
             borrowing_rates=borrowing_rates,
             investment_rates=investment_rates,
@@ -173,6 +176,7 @@ class MultivariateGaussianModel:
         initial_fx: float = 1.09,
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
+        dates: list[date] | None = None,
     ) -> list[ScenarioPath]:
         """Generate multiple Gaussian scenario paths."""
         return [
@@ -182,6 +186,7 @@ class MultivariateGaussianModel:
                 initial_fx=initial_fx,
                 initial_borrowing_rate=initial_borrowing_rate,
                 initial_investment_rate=initial_investment_rate,
+                dates=dates,
             )
             for p in range(num_paths)
         ]
@@ -326,6 +331,7 @@ class MultivariateStudentTModel:
         initial_fx: float = 1.09,
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
+        dates: list[date] | None = None,
     ) -> ScenarioPath:
         """Generate a simulated path via multivariate Student-t innovations."""
         sampled = self.sample(horizon)
@@ -354,6 +360,7 @@ class MultivariateStudentTModel:
         return ScenarioPath(
             path_id=path_id,
             steps=horizon,
+            dates=dates,
             fx_rates=fx_rates,
             borrowing_rates=borrowing_rates,
             investment_rates=investment_rates,
@@ -367,6 +374,7 @@ class MultivariateStudentTModel:
         initial_fx: float = 1.09,
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
+        dates: list[date] | None = None,
     ) -> list[ScenarioPath]:
         """Generate multiple multivariate Student-t scenario paths."""
         return [
@@ -376,6 +384,7 @@ class MultivariateStudentTModel:
                 initial_fx=initial_fx,
                 initial_borrowing_rate=initial_borrowing_rate,
                 initial_investment_rate=initial_investment_rate,
+                dates=dates,
             )
             for p in range(num_paths)
         ]

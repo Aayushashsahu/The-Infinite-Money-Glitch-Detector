@@ -6,6 +6,7 @@ shock timing contracts, and correlation breakdown overlays.
 
 from __future__ import annotations
 
+from datetime import date
 import math
 from typing import Any
 
@@ -18,6 +19,7 @@ from simulation.monte_carlo.schemas import (
     ScenarioPath,
     StressScenario,
 )
+from simulation.monte_carlo.strategy_adapter import generate_simulated_trading_sessions
 
 
 def build_standard_stress_scenarios() -> list[StressScenario]:
@@ -231,6 +233,7 @@ def generate_correlation_breakdown_path(
     initial_fx: float = 1.09,
     initial_borrowing_rate: float = 0.04,
     initial_investment_rate: float = 0.05,
+    dates: list[date] | None = None,
 ) -> tuple[ScenarioPath, dict[str, Any]]:
     """Generate a path under a stressed, decoupled correlation structure.
 
@@ -293,9 +296,18 @@ def generate_correlation_breakdown_path(
         max(0.0, initial_investment_rate + (inv / 10000.0)) for inv in cum_invest
     ]
 
+    path_dates = dates
+    if path_dates is None:
+        path_dates = generate_simulated_trading_sessions(
+            start_date=date(2024, 1, 2),
+            n_sessions=horizon + 1,
+            calendar_type="JOINT_TARGET2_FED",
+        )
+
     path = ScenarioPath(
         path_id=9999,
         steps=horizon,
+        dates=path_dates,
         fx_rates=fx_rates,
         borrowing_rates=borrowing_rates,
         investment_rates=investment_rates,
@@ -325,6 +337,7 @@ def evaluate_correlation_stress_distribution(
     initial_fx: float = 1.09,
     initial_borrowing_rate: float = 0.04,
     initial_investment_rate: float = 0.05,
+    dates: list[date] | None = None,
 ) -> CorrelationStressComparison:
     """Execute a rigorous distribution comparison between empirical and decorrelated market structures.
 
@@ -383,6 +396,15 @@ def evaluate_correlation_stress_distribution(
     base_evals = []
     stressed_evals = []
     paired_return_diffs: list[float] = []
+    if dates is None:
+        from simulation.monte_carlo.strategy_adapter import generate_simulated_trading_sessions
+        path_dates = generate_simulated_trading_sessions(
+            date(2024, 1, 2),
+            n_sessions=horizon + 1,
+            calendar_type="JOINT_TARGET2_FED",
+        )
+    else:
+        path_dates = dates
 
     for i in range(num_paths):
         z_i = Z[i]
@@ -404,6 +426,7 @@ def evaluate_correlation_stress_distribution(
         p_base = ScenarioPath(
             path_id=i,
             steps=horizon,
+            dates=path_dates,
             fx_rates=fx_rates_base,
             borrowing_rates=borrow_base,
             investment_rates=invest_base,
@@ -429,6 +452,7 @@ def evaluate_correlation_stress_distribution(
         p_stressed = ScenarioPath(
             path_id=i,
             steps=horizon,
+            dates=path_dates,
             fx_rates=fx_rates_stressed,
             borrowing_rates=borrow_stressed,
             investment_rates=invest_stressed,

@@ -382,6 +382,7 @@ def build_availability_audit(
         unrecognized_evidence_count=unrecognized_ev,
         is_reconciled=is_reconciled,
         data_classification_label="SIMULATED_RESEARCH_PROXY",
+        pit_mode=getattr(panel, "pit_mode", "ESTIMATED_LAG") if panel is not None else "ESTIMATED_LAG",
         audit_scope_description=audit_scope,
         release_lag_policies=release_lag_policies,
         factor_breakdown=factor_breakdown,

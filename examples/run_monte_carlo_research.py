@@ -44,6 +44,7 @@ from simulation.monte_carlo import (
     ModelComparisonEntry,
     MonteCarloEngine,
     MonteCarloResult,
+    PITMode,
     RegimeState,
     ScenarioPath,
     SimulationConfig,
@@ -61,6 +62,7 @@ from simulation.monte_carlo import (
     export_markdown,
     generate_phase_4_1_1_research_report,
     generate_phase_4_1_2_research_report,
+    generate_phase_4_1_2_1_research_report,
     generate_research_report,
     split_calibration_holdout,
     validate_market_calendar_evidence,
@@ -113,14 +115,16 @@ def run_monte_carlo_laboratory(
     horizon_steps: int = 252,
     random_seed: int = 42,
     output_dir: Path | None = None,
+    pit_mode: str | PITMode = PITMode.ESTIMATED_LAG,
 ) -> None:
-    """Execute complete Phase 4.1.2 Monte Carlo simulation and reproducibility closure suite."""
-    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2")
+    """Execute complete Phase 4.1.2.1 Monte Carlo simulation and reproducibility closure suite."""
+    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2_1")
     out_dir.mkdir(parents=True, exist_ok=True)
+    mode = PITMode(pit_mode) if isinstance(pit_mode, str) else pit_mode
 
     print("=" * 85)
-    print(" PHASE 4.1.2 — FINAL RESEARCH INTEGRITY & REPRODUCIBILITY CLOSURE")
-    print(f" Paths: {num_paths:,} | Horizon: {horizon_steps} steps | Seed: {random_seed}")
+    print(" PHASE 4.1.2.1 — EXECUTION-PATH INTEGRATION & RESEARCH INTEGRITY CLOSURE")
+    print(f" Paths: {num_paths:,} | Horizon: {horizon_steps} steps | Seed: {random_seed} | PIT Mode: {mode.value}")
     print(f" Output Directory: {out_dir}")
     print("=" * 85)
 
@@ -134,12 +138,13 @@ def run_monte_carlo_laboratory(
     print(f"      Loaded {len(all_observations):,} total observations ({len(observations):,} genuine, {len(all_observations) - len(observations)} synthetic).")
 
     # 2. Build full factor panel and split into calibration vs holdout
-    print("\n[2/9] Constructing and aligning factor panels (Option A / Option B)...")
+    print(f"\n[2/9] Constructing and aligning factor panels (Option A / Option B, PIT mode: {mode.value})...")
     full_panel = build_fx_carry_factor_panel(
         observations=observations,
         start_date=date(2020, 1, 1),
         end_date=date(2024, 12, 31),
         sovereign_yield_series_id="DGS3MO",
+        pit_mode=mode,
     )
     calib_panel, holdout_panel = split_calibration_holdout(
         panel=full_panel,
@@ -172,7 +177,13 @@ def run_monte_carlo_laboratory(
 
     # 4. Run simulations across 6 model architectures
     print(f"\n[4/9] Generating {num_paths:,} simulation paths across 6 model architectures...")
-    strategy = CarryTradeScenarioStrategy(tenor_days=30, rebalance_days=30)
+    strategy = CarryTradeScenarioStrategy(
+        tenor_days=30,
+        rebalance_days=30,
+        calendar_type="JOINT_TARGET2_FED",
+        rollover_mode="CONTRACTUAL_MATURITY",
+        strict_calendar=True,
+    )
     results: dict[str, MonteCarloResult] = {}
     model_comparisons: list[ModelComparisonEntry] = []
 
@@ -184,8 +195,9 @@ def run_monte_carlo_laboratory(
         num_paths=num_paths,
         horizon_steps=horizon_steps,
         random_seed=random_seed,
+        pit_mode=mode,
     )
-    mc_gauss = MonteCarloEngine(cfg_gauss, observations, strategy=strategy).run()
+    mc_gauss = MonteCarloEngine(cfg_gauss, observations, strategy=strategy, panel=calib_panel).run()
     results["multivariate_gaussian"] = mc_gauss
     export_json(mc_gauss, out_dir / "gaussian_results.json")
 
@@ -199,8 +211,9 @@ def run_monte_carlo_laboratory(
         num_paths=num_paths,
         horizon_steps=horizon_steps,
         random_seed=random_seed + 1,
+        pit_mode=mode,
     )
-    mc_mb = MonteCarloEngine(cfg_mb, observations, strategy=strategy).run()
+    mc_mb = MonteCarloEngine(cfg_mb, observations, strategy=strategy, panel=calib_panel).run()
     results["moving_block_bootstrap"] = mc_mb
     export_json(mc_mb, out_dir / "bootstrap_results.json")
 
@@ -213,8 +226,9 @@ def run_monte_carlo_laboratory(
         num_paths=num_paths,
         horizon_steps=horizon_steps,
         random_seed=random_seed + 2,
+        pit_mode=mode,
     )
-    mc_iid = MonteCarloEngine(cfg_iid, observations, strategy=strategy).run()
+    mc_iid = MonteCarloEngine(cfg_iid, observations, strategy=strategy, panel=calib_panel).run()
     results["iid_bootstrap"] = mc_iid
 
     # Model 3: Stationary Bootstrap (Politis & Romano 1994)
@@ -227,8 +241,9 @@ def run_monte_carlo_laboratory(
         num_paths=num_paths,
         horizon_steps=horizon_steps,
         random_seed=random_seed + 3,
+        pit_mode=mode,
     )
-    mc_stat = MonteCarloEngine(cfg_stat, observations, strategy=strategy).run()
+    mc_stat = MonteCarloEngine(cfg_stat, observations, strategy=strategy, panel=calib_panel).run()
     results["stationary_bootstrap"] = mc_stat
 
     # Model 4: Multivariate Student-t (Fat-Tailed Parametric with Profile MLE df)
@@ -239,8 +254,9 @@ def run_monte_carlo_laboratory(
         num_paths=num_paths,
         horizon_steps=horizon_steps,
         random_seed=random_seed + 4,
+        pit_mode=mode,
     )
-    mc_t = MonteCarloEngine(cfg_t, observations, strategy=strategy).run()
+    mc_t = MonteCarloEngine(cfg_t, observations, strategy=strategy, panel=calib_panel).run()
     results["student_t"] = mc_t
     export_json(mc_t, out_dir / "student_t_results.json")
 
@@ -252,8 +268,9 @@ def run_monte_carlo_laboratory(
         num_paths=num_paths,
         horizon_steps=horizon_steps,
         random_seed=random_seed + 5,
+        pit_mode=mode,
     )
-    mc_reg = MonteCarloEngine(cfg_reg, observations, strategy=strategy).run()
+    mc_reg = MonteCarloEngine(cfg_reg, observations, strategy=strategy, panel=calib_panel).run()
     results["regimes"] = mc_reg
     export_json(mc_reg, out_dir / "regime_results.json")
 
@@ -291,7 +308,7 @@ def run_monte_carlo_laboratory(
 
     # 5. Execute Deterministic Stress Tests & Correlation Breakdown Distribution Comparison
     print("\n[5/9] Executing deterministic macro-financial stress suite...")
-    stress_results = MonteCarloEngine(cfg_mb, observations, strategy=strategy).run_deterministic_stress_tests()
+    stress_results = MonteCarloEngine(cfg_mb, observations, strategy=strategy, panel=calib_panel).run_deterministic_stress_tests()
     export_json(stress_results, out_dir / "stress_test_results.json")
     print(f"      Completed {len(stress_results)} stress scenarios; exported stress_test_results.json")
 
@@ -310,10 +327,14 @@ def run_monte_carlo_laboratory(
 
     # 7. Out-of-Sample Holdout Diagnostics (Untouched 2024 Data)
     print("\n[7/9] Evaluating untouched 2024 holdout diagnostics against predictive distributions...")
-    mb_engine = MonteCarloEngine(cfg_mb, observations, strategy=strategy)
+    mb_engine = MonteCarloEngine(cfg_mb, observations, strategy=strategy, panel=calib_panel)
     mb_model = mb_engine._initialize_model()
-    # Generate 1,000 predictive factor paths for full predictive coverage
-    predictive_paths = mb_model.generate_paths(num_paths=1000, horizon=len(holdout_panel.dates))
+    # Generate 1,000 predictive factor paths with real calendar dates for full predictive coverage
+    predictive_paths = mb_model.generate_paths(
+        num_paths=1000,
+        horizon=len(holdout_panel.dates),
+        dates=holdout_panel.dates,
+    )
 
     factor_diag = evaluate_factor_holdout_diagnostics(
         calibration_panel=calib_panel,
@@ -374,7 +395,7 @@ def run_monte_carlo_laboratory(
         "git_commit": git_sha,
         "simulation_code_commit": git_sha,
         "simulation_source_commit": git_sha,
-        "documentation_commit": git_sha,
+        "documentation_commit": "UNCOMMITTED_AT_EXECUTION",
         "source_tree_digest": get_git_tree_digest(),
         "database_sha256": db_digest,
         "git_working_tree_clean": check_git_working_tree_clean(),
@@ -392,8 +413,9 @@ def run_monte_carlo_laboratory(
         "strategy_config_digest": strat_cfg_digest,
         "model_config_digest": model_cfg_digest,
         "data_classification": "SIMULATED_RESEARCH_PROXY",
+        "pit_policy": mode.value if hasattr(mode, "value") else str(mode),
         "predictive_sample_size": 1000,
-        "calendar_implementation": "JointTarget2FedCalendar / WeekdayTradingProxy",
+        "calendar_implementation": "JointTarget2FedCalendar (TARGET2 + Federal Reserve holiday settlement calendar)",
         "correlation_stress_config": {
             "method": "zero_off_diagonal_decoupling",
             "variance_reduction": "common_random_numbers",
@@ -401,7 +423,22 @@ def run_monte_carlo_laboratory(
         },
     }
 
-    if "4_1_2" in out_dir.name:
+    if "4_1_2_1" in out_dir.name:
+        report_md = generate_phase_4_1_2_1_research_report(
+            avail_audit=avail_audit,
+            model_comparisons=model_comparisons,
+            factor_diag=factor_diag,
+            port_diag=port_diag,
+            corr_stress=corr_stress,
+            cal_val=cal_val,
+            funding_sens=funding_sens,
+            bootstrap_result=mc_mb,
+            student_t_result=mc_t,
+            regime_result=mc_reg,
+            gaussian_result=mc_gauss,
+            manifest_info=manifest_metadata,
+        )
+    elif "4_1_2" in out_dir.name:
         report_md = generate_phase_4_1_2_research_report(
             avail_audit=avail_audit,
             model_comparisons=model_comparisons,
@@ -479,7 +516,8 @@ def run_monte_carlo_laboratory(
             "num_paths": num_paths,
             "horizon_steps": horizon_steps,
             "random_seed": random_seed,
-            "output_directory": str(out_dir),
+            "output_directory": out_dir.relative_to(ROOT_DIR).as_posix() if out_dir.is_relative_to(ROOT_DIR) else str(out_dir),
+            "pit_mode": mode.value if hasattr(mode, "value") else str(mode),
         },
         "models_evaluated": [
             "multivariate_gaussian",
@@ -511,11 +549,12 @@ def run_monte_carlo_laboratory(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 4.1.2 Monte Carlo Research Integrity & Reproducibility Closure Runner")
+    parser = argparse.ArgumentParser(description="Phase 4.1.2.1 Monte Carlo Research Integrity & Reproducibility Closure Runner")
     parser.add_argument("--paths", type=int, default=1000, help="Number of simulation paths per model (default: 1000)")
     parser.add_argument("--horizon", type=int, default=252, help="Simulation horizon in trading days (default: 252)")
     parser.add_argument("--seed", type=int, default=42, help="Random number generator seed (default: 42)")
-    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2", help="Output directory for simulation results")
+    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2_1", help="Output directory for simulation results")
+    parser.add_argument("--pit-mode", type=str, default="ESTIMATED_LAG", choices=["STRICT_VERIFIED", "ESTIMATED_LAG", "RESEARCH_ONLY"], help="Point-in-time enforcement mode (default: ESTIMATED_LAG)")
     parser.add_argument("--smoke", action="store_true", help="Run fast smoke test with 50 paths over 30 steps")
     args = parser.parse_args()
 
@@ -528,6 +567,7 @@ def main() -> None:
         horizon_steps=horizon,
         random_seed=args.seed,
         output_dir=out_path,
+        pit_mode=args.pit_mode,
     )
 
 

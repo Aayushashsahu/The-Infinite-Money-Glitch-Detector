@@ -39,7 +39,7 @@ from simulation.monte_carlo.schemas import (
 def generate_simulated_trading_sessions(
     start_date: date,
     n_sessions: int,
-    calendar_type: str = "WEEKDAY_TRADING_PROXY",
+    calendar_type: str = "JOINT_TARGET2_FED",
     base_currency: str = "EUR",
     quote_currency: str = "USD",
 ) -> list[date]:
@@ -108,6 +108,8 @@ class CarryTradeScenarioStrategy:
         cash_deposit_rate_annual: float = 0.015,
         funding_mode: str = "fixed",
         calendar_type: str = "JOINT_TARGET2_FED",
+        rollover_mode: str = "CONTRACTUAL_MATURITY",
+        strict_calendar: bool = False,
     ) -> None:
         self.pair = currency_pair or CurrencyPair(
             base_currency="EUR",
@@ -119,6 +121,8 @@ class CarryTradeScenarioStrategy:
         self.rebalance_days = rebalance_days
         self.funding_mode = funding_mode.lower()
         self.calendar_type = calendar_type
+        self.rollover_mode = rollover_mode
+        self.strict_calendar = strict_calendar
         self.exec_config = execution_config or ExecutionConfig(
             bid_ask_spread_bps=2.0,
             slippage_bps=0.5,
@@ -171,16 +175,25 @@ class CarryTradeScenarioStrategy:
         n_transitions = path.steps if path.steps > 0 else (total_levels - 1)
 
         # Build explicit trading-session calendar
-        if path.dates is not None and len(path.dates) >= total_levels:
+        if self.strict_calendar:
+            if path.dates is None or len(path.dates) < total_levels:
+                raise ValueError(
+                    f"ScenarioPath {path.path_id} must provide explicit calendar dates (has "
+                    f"{len(path.dates) if path.dates is not None else None}, expected at least {total_levels}). "
+                    f"Silent calendar fallback has been removed in Phase 4.1.2.1."
+                )
             session_dates = path.dates[:total_levels]
         else:
-            session_dates = generate_simulated_trading_sessions(
-                date(2024, 1, 2),
-                total_levels,
-                calendar_type=self.calendar_type,
-                base_currency=self.pair.borrowing_currency,
-                quote_currency=self.pair.investment_currency,
-            )
+            if path.dates is not None and len(path.dates) >= total_levels:
+                session_dates = path.dates[:total_levels]
+            else:
+                session_dates = generate_simulated_trading_sessions(
+                    date(2024, 1, 2),
+                    total_levels,
+                    calendar_type=self.calendar_type,
+                    base_currency=self.pair.borrowing_currency,
+                    quote_currency=self.pair.investment_currency,
+                )
 
         peak_equity = initial_capital_a
         max_drawdown = 0.0
@@ -304,25 +317,33 @@ class CarryTradeScenarioStrategy:
             daily_returns.append(period_ret)
             prior_equity = equity_t
 
-            # 4. Check trade entry conditions (no active trade, rebalance step, not terminal)
-            if active_trade is None and t % self.rebalance_days == 0 and t < total_levels - 1:
-                sizing_res = portfolio.calculate_position_size()
-                if sizing_res.is_allowed and sizing_res.allocated_amount_a > 0.0:
-                    trade_counter += 1
-                    opened = engine.open_trade(
-                        trade_id=f"PATH_TRD_{trade_counter:04d}",
-                        strategy_name="CarryTradeScenario",
-                        currency_pair=self.pair,
-                        entry_date=current_date,
-                        tenor_days=self.tenor_days,
-                        principal_borrowed_a=sizing_res.allocated_amount_a,
-                        borrowing_rate=current_borrow_rate,
-                        investment_rate=current_invest_rate,
-                        spot_mid_entry=canonical_spot,
-                    )
-                    if portfolio.register_open_trade(opened):
-                        active_trade = opened
-                        active_trade_rate_periods = []
+            # 4. Check trade entry / rollover conditions (no active trade, not terminal)
+            if active_trade is None and t < total_levels - 1:
+                should_enter = False
+                if self.rollover_mode == "CONTRACTUAL_MATURITY":
+                    # Roll into subsequent contract immediately upon maturity on eligible settlement days
+                    should_enter = True
+                elif t % self.rebalance_days == 0:
+                    should_enter = True
+
+                if should_enter:
+                    sizing_res = portfolio.calculate_position_size()
+                    if sizing_res.is_allowed and sizing_res.allocated_amount_a > 0.0:
+                        trade_counter += 1
+                        opened = engine.open_trade(
+                            trade_id=f"PATH_TRD_{trade_counter:04d}",
+                            strategy_name="CarryTradeScenario",
+                            currency_pair=self.pair,
+                            entry_date=current_date,
+                            tenor_days=self.tenor_days,
+                            principal_borrowed_a=sizing_res.allocated_amount_a,
+                            borrowing_rate=current_borrow_rate,
+                            investment_rate=current_invest_rate,
+                            spot_mid_entry=canonical_spot,
+                        )
+                        if portfolio.register_open_trade(opened):
+                            active_trade = opened
+                            active_trade_rate_periods = []
 
         # Final terminal equity calculation
         terminal_equity = portfolio.cash_a
@@ -384,6 +405,7 @@ def validate_market_calendar_evidence() -> CalendarValidationReport:
         tenor_days=30,
         rebalance_days=35,
         calendar_type="JOINT_TARGET2_FED",
+        rollover_mode="PERIODIC_REBALANCE",
     )
 
     # 1. Measured evidence: Initial state at t=0 has strictly zero interest

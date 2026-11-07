@@ -7,6 +7,7 @@ strictly positive FX price paths and interest-rate trajectories.
 
 from __future__ import annotations
 
+from datetime import date
 import math
 from typing import Any
 
@@ -89,6 +90,7 @@ class HistoricalBootstrapSampler:
         initial_fx: float = 1.09,
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
+        dates: list[date] | None = None,
     ) -> ScenarioPath:
         """Sample a joint multivariate factor sequence and reconstruct price & rate levels."""
         indices = self.sample_indices(horizon)
@@ -122,6 +124,7 @@ class HistoricalBootstrapSampler:
         return ScenarioPath(
             path_id=path_id,
             steps=horizon,
+            dates=dates,
             fx_rates=fx_rates,
             borrowing_rates=borrowing_rates,
             investment_rates=investment_rates,
@@ -135,6 +138,7 @@ class HistoricalBootstrapSampler:
         initial_fx: float = 1.09,
         initial_borrowing_rate: float = 0.04,
         initial_investment_rate: float = 0.05,
+        dates: list[date] | None = None,
     ) -> list[ScenarioPath]:
         """Generate multiple independent bootstrap scenario paths."""
         paths: list[ScenarioPath] = []
@@ -145,6 +149,7 @@ class HistoricalBootstrapSampler:
                 initial_fx=initial_fx,
                 initial_borrowing_rate=initial_borrowing_rate,
                 initial_investment_rate=initial_investment_rate,
+                dates=dates,
             )
             paths.append(path)
         return paths

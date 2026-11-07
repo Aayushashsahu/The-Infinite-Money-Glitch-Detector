@@ -73,6 +73,14 @@ class RegimeState(str, Enum):
     STRESS = "stress"
 
 
+class PITMode(str, Enum):
+    """Point-in-time data availability policy modes."""
+
+    STRICT_VERIFIED = "STRICT_VERIFIED"
+    ESTIMATED_LAG = "ESTIMATED_LAG"
+    RESEARCH_ONLY = "RESEARCH_ONLY"
+
+
 # =============================================================================
 # Market Factor Definitions & Panel
 # =============================================================================
@@ -152,6 +160,10 @@ class FactorPanel(BaseModel):
         default_factory=dict,
         description="Factor ID -> row-level audit provenance for each transformed observation",
     )
+    pit_mode: str = Field(
+        default="ESTIMATED_LAG",
+        description="Point-in-time availability policy mode used to construct the panel",
+    )
 
 
 # =============================================================================
@@ -163,6 +175,10 @@ class SimulationConfig(BaseModel):
     """Configuration for a Monte Carlo simulation run."""
 
     simulation_id: str = Field(default="", description="Unique identifier for the simulation")
+    pit_mode: PITMode = Field(
+        default=PITMode.ESTIMATED_LAG,
+        description="Point-in-time data availability policy mode",
+    )
     model_type: SimulationModelType = Field(
         default=SimulationModelType.HISTORICAL_BOOTSTRAP,
         description="Simulation generator type",
@@ -413,6 +429,7 @@ class AvailabilityAuditReport(BaseModel):
     unrecognized_evidence_count: int = 0
     is_reconciled: bool = True
     data_classification_label: str = "SIMULATED_RESEARCH_PROXY"
+    pit_mode: str = "ESTIMATED_LAG"
     audit_scope_description: str = ""
     release_lag_policies: dict[str, str] = Field(default_factory=dict)
     factor_breakdown: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -591,5 +608,6 @@ class MonteCarloResult(BaseModel):
     git_commit: str = ""
     created_at: datetime = Field(default_factory=datetime.utcnow)
     data_classification: DataClassification = DataClassification.SIMULATED
+    pit_mode: str = "ESTIMATED_LAG"
     is_executable_strategy: bool = False
     audit_notes: list[str] = Field(default_factory=list)

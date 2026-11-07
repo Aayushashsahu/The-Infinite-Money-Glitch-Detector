@@ -265,6 +265,7 @@ def _generate_monte_carlo_closure_report(
         max_med = max(mc.median_return for mc in model_comparisons)
         min_loss = min(mc.prob_loss for mc in model_comparisons)
         max_loss = max(mc.prob_loss for mc in model_comparisons)
+        worst_cvar = min(mc.cvar_95 for mc in model_comparisons)
         lines.append("\n### Authoritative Model Findings:")
         lines.append(
             f"- **Annual Loss Probability**: Consistently ranges between **{min_loss:.1%} and {max_loss:.1%}** across all 6 architectures."
@@ -273,7 +274,7 @@ def _generate_monte_carlo_closure_report(
             f"- **Median Annual Return**: Modestly positive between **{min_med:+.2%} and {max_med:+.2%}**, driven by interest yield spread and unallocated cash interest."
         )
         lines.append(
-            "- **Deep Downside Tail Risk**: Fat-tailed Student-t innovations and regime-switching models capture realistic carry crashes (CVaR 95% up to -5.64%), which are underestimated by standard Gaussian models."
+            f"- **Deep Downside Tail Risk**: Fat-tailed Student-t innovations and regime-switching models capture realistic carry crashes (worst CVaR 95% is {worst_cvar:+.2%}), which are underestimated by standard Gaussian models."
         )
 
     # 2. Availability Audit
@@ -283,6 +284,7 @@ def _generate_monte_carlo_closure_report(
     lines.append(f"- **Genuine Historical Observations Evaluated**: `{avail_audit.genuine_observations_included:,}`")
     lines.append(f"- **Date Window Exclusions (outside 2020-2023)**: `{avail_audit.date_window_exclusions:,}`")
     lines.append(f"- **Alignment Exclusions (incomplete cross-factor coverage)**: `{avail_audit.factor_alignment_exclusions:,}`")
+    lines.append(f"- **Point-in-Time Mode Enforced**: `{getattr(avail_audit, 'pit_mode', 'ESTIMATED_LAG')}`")
     lines.append(f"- **Exhaustive Reconciliation Status**: `{'EXACT (100% Reconciled)' if avail_audit.is_reconciled else 'DISCREPANCY'}`")
 
     lines.append("\n### Mutually Exclusive Availability Breakdown:\n")
@@ -323,7 +325,7 @@ def _generate_monte_carlo_closure_report(
     lines.append(f"> [!NOTE]\n> {factor_diag.fx_log_return_ks_caveat}")
 
     lines.append("\n> [!NOTE]")
-    lines.append("> **Volatility Regime & Percentile Definitions**: Historical calibration sample partitions annualized FX volatility into Low Volatility (< 5.92%, lower 20th percentile), Normal/Middle Volatility (5.92% to 8.71%, central 20th–80th percentile band), and Stress Volatility (>= 8.71%, upper 20th percentile tail). Realized 2024 volatility (6.18%) lies in the Normal/Middle Volatility Regime. Predictive volatility percentile measures the empirical CDF position of realized 2024 volatility within the model's simulated out-of-sample distribution.")
+    lines.append(f"> **Volatility Regime & Percentile Definitions**: Historical calibration sample partitions annualized FX volatility into Low Volatility (< 5.92%, lower 20th percentile), Normal/Middle Volatility (5.92% to 8.71%, central 20th–80th percentile band), and Stress Volatility (>= 8.71%, upper 20th percentile tail). Realized 2024 volatility ({factor_diag.actual_fx_realized_volatility:.2%}) is classified in the `{factor_diag.volatility_regime_classification}` regime. Predictive volatility percentile measures the empirical CDF position of realized 2024 volatility within the model's simulated out-of-sample distribution.")
 
     # 4. Strategy Portfolio Holdout Diagnostics
     lines.append("\n## 4. Strategy Portfolio Holdout Diagnostics\n")
@@ -472,4 +474,37 @@ def generate_phase_4_1_2_research_report(
         gaussian_result=gaussian_result,
         manifest_info=manifest_info,
     )
+
+
+def generate_phase_4_1_2_1_research_report(
+    avail_audit: AvailabilityAuditReport,
+    model_comparisons: list[ModelComparisonEntry],
+    factor_diag: FactorHoldoutDiagnostics,
+    port_diag: PortfolioHoldoutDiagnostics,
+    corr_stress: CorrelationStressComparison,
+    cal_val: CalendarValidationReport,
+    funding_sens: FundingSensitivityReport,
+    bootstrap_result: MonteCarloResult,
+    student_t_result: MonteCarloResult,
+    regime_result: MonteCarloResult,
+    gaussian_result: MonteCarloResult | None = None,
+    manifest_info: dict[str, Any] | None = None,
+) -> str:
+    """Generate the authoritative Phase 4.1.2.1 execution-path integration & research integrity closure report."""
+    return _generate_monte_carlo_closure_report(
+        phase_title="Phase 4.1.2.1 — Execution-Path Integration & Research Integrity Closure Report",
+        avail_audit=avail_audit,
+        model_comparisons=model_comparisons,
+        factor_diag=factor_diag,
+        port_diag=port_diag,
+        corr_stress=corr_stress,
+        cal_val=cal_val,
+        funding_sens=funding_sens,
+        bootstrap_result=bootstrap_result,
+        student_t_result=student_t_result,
+        regime_result=regime_result,
+        gaussian_result=gaussian_result,
+        manifest_info=manifest_info,
+    )
+
 

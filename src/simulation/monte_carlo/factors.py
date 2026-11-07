@@ -28,6 +28,7 @@ from simulation.monte_carlo.schemas import (
     FactorRowProvenance,
     MarketFactor,
     MissingDataTreatment,
+    PITMode,
     TransformationMethod,
 )
 
@@ -120,31 +121,38 @@ def get_effective_availability_timestamp(obs: DataObservation) -> datetime | Non
     """Compute effective point-in-time availability timestamp for an observation.
 
     Applies documented release schedules:
-    - Verified exact timestamp: uses verified publication_timestamp.
     - Retrospective: returns None (no forward availability evidence).
+    - Verified exact timestamp: uses publication_timestamp ONLY if availability_evidence
+      is explicitly EXACT_TIMESTAMP_VERIFIED.
     - EUR/USD exchange rate (ECB reference): published ~16:00 CET, available 17:00 CET (16:00 UTC) on observation date.
     - US Treasury yields (DGS1MO, DGS3MO): published daily by FRED on NEXT business day at ~15:00 UTC (~09:00 ET).
     - ECB policy rate (KR.MRR_FR.LEV): effective on effective_timestamp or 00:00 UTC on observation date.
     - Fallback: 23:59:59 UTC on observation date.
+    - Late publication: If an observation has a publication_timestamp later than the scheduled release,
+      it cannot be available before it was actually published.
     """
-    if obs.publication_timestamp is not None:
-        ts = obs.publication_timestamp
-        return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
-
+    # 1. Retrospective observations have no forward availability
     if (
         obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE
         or obs.classification == DataClassification.REAL_RETROSPECTIVE
     ):
         return None
 
+    # 2. Exact verified publication timestamp is trusted ONLY if evidence classification verifies it
+    if (
+        obs.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED
+        and obs.publication_timestamp is not None
+    ):
+        ts = obs.publication_timestamp
+        return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
+
     obs_d = obs.observation_date
 
-    # 1. Exchange Rate (EUR/USD ECB reference rate)
+    # 3. Exchange Rate (EUR/USD ECB reference rate)
     if obs.kind == ObservationKind.EXCHANGE_RATE or obs.entity_code == "EUR/USD" or obs.source_id in ("frankfurter", "ecb"):
-        return datetime(obs_d.year, obs_d.month, obs_d.day, 16, 0, 0, tzinfo=timezone.utc)
-
-    # 2. US Treasury yields: published next business day at 15:00 UTC
-    if (
+        sched_ts = datetime(obs_d.year, obs_d.month, obs_d.day, 16, 0, 0, tzinfo=timezone.utc)
+    # 4. US Treasury yields: published next business day at 15:00 UTC
+    elif (
         obs.indicator_id in ("DGS1MO", "DGS3MO")
         or obs.entity_code in ("DGS1MO", "DGS3MO", "USD")
         or obs.source_id == "us_treasury"
@@ -153,35 +161,42 @@ def get_effective_availability_timestamp(obs: DataObservation) -> datetime | Non
         # Friday (4) -> Monday (+3), Saturday (5) -> Monday (+2), Sunday (6) -> Monday (+1), Weekday -> +1
         delta_days = 3 if weekday == 4 else (2 if weekday == 5 else 1)
         next_bday = obs_d + timedelta(days=delta_days)
-        return datetime(next_bday.year, next_bday.month, next_bday.day, 15, 0, 0, tzinfo=timezone.utc)
-
-    # 3. ECB Policy rate: effective date/time
-    if (
+        sched_ts = datetime(next_bday.year, next_bday.month, next_bday.day, 15, 0, 0, tzinfo=timezone.utc)
+    # 5. ECB Policy rate: effective date/time
+    elif (
         obs.indicator_id in ("KR.MRR_FR.LEV", "DFR")
         or obs.entity_code in ("ECB_EA", "EUR", "DFR")
         or obs.source_id == "policy_rates"
     ):
         if obs.effective_timestamp is not None:
             ts = obs.effective_timestamp
-            return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
-        return datetime(obs_d.year, obs_d.month, obs_d.day, 0, 0, 0, tzinfo=timezone.utc)
+            sched_ts = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
+        else:
+            sched_ts = datetime(obs_d.year, obs_d.month, obs_d.day, 0, 0, 0, tzinfo=timezone.utc)
+    else:
+        sched_ts = datetime(obs_d.year, obs_d.month, obs_d.day, 23, 59, 59, tzinfo=timezone.utc)
 
-    # Default end of observation day
-    return datetime(obs_d.year, obs_d.month, obs_d.day, 23, 59, 59, tzinfo=timezone.utc)
+    if obs.publication_timestamp is not None:
+        pub = obs.publication_timestamp
+        pub_utc = pub.replace(tzinfo=timezone.utc) if pub.tzinfo is None else pub.astimezone(timezone.utc)
+        return max(sched_ts, pub_utc)
+
+    return sched_ts
 
 
 def is_observation_available_as_of(
     obs: DataObservation,
     as_of: datetime,
     strict_executable: bool = False,
+    pit_mode: PITMode | str | None = None,
 ) -> tuple[bool, str]:
     """Check whether observation is genuinely available at decision timestamp as_of.
 
-    Guarantees:
-    - Blocks future observation dates and observation timestamps.
-    - Blocks observations whose publication or estimated release is after as_of.
-    - In strict executable mode, rejects retrospective data and missing availability evidence.
-    - Respects effective timestamp for policy rates.
+    Enforces explicit PIT policy modes:
+    - STRICT_VERIFIED: Requires exact verified timestamp evidence (EXACT_TIMESTAMP_VERIFIED).
+      Estimated schedules and retrospective data are strictly rejected.
+    - ESTIMATED_LAG: Requires documented release schedule (ESTIMATED_SCHEDULE). Retrospective data rejected.
+    - RESEARCH_ONLY: Preserves retrospective research proxy semantics with clear audit provenance.
     """
     if as_of.tzinfo is None:
         as_of = as_of.replace(tzinfo=timezone.utc)
@@ -190,7 +205,7 @@ def is_observation_available_as_of(
 
     as_of_date = as_of.date()
 
-    # 1. Look-ahead check on observation date and observation timestamp
+    # Look-ahead check on observation date and observation timestamp
     if obs.observation_date > as_of_date:
         return False, "future_observation_date_leakage_blocked"
     if obs.observation_timestamp is not None:
@@ -199,8 +214,25 @@ def is_observation_available_as_of(
         if obs_ts_utc > as_of:
             return False, "future_observation_timestamp_leakage_blocked"
 
-    # 2. Strict executable mode checks
-    if strict_executable:
+    # Effective timestamp check (e.g. policy rate effective date)
+    if obs.effective_timestamp is not None:
+        eff_ts = obs.effective_timestamp
+        eff_ts_utc = eff_ts.replace(tzinfo=timezone.utc) if eff_ts.tzinfo is None else eff_ts.astimezone(timezone.utc)
+        if eff_ts_utc > as_of:
+            return False, "policy_rate_not_yet_effective_at_as_of"
+
+    mode = None
+    if pit_mode is not None:
+        if isinstance(pit_mode, str):
+            try:
+                mode = PITMode(pit_mode)
+            except ValueError:
+                mode = PITMode.ESTIMATED_LAG
+        else:
+            mode = pit_mode
+
+    # Strict executable mode / Strict Verified checks
+    if mode == PITMode.STRICT_VERIFIED or (mode is None and strict_executable):
         if (
             obs.classification == DataClassification.REAL_RETROSPECTIVE
             or obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE
@@ -208,18 +240,22 @@ def is_observation_available_as_of(
             return False, "retrospective_evidence_rejected_in_strict_executable_mode"
         if obs.availability_evidence is None:
             return False, "missing_availability_evidence_rejected_in_strict_executable_mode"
+        if mode == PITMode.STRICT_VERIFIED:
+            if obs.availability_evidence != AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED:
+                return False, "unverified_evidence_rejected_in_strict_verified_mode"
+            if obs.publication_timestamp is None:
+                return False, "missing_publication_timestamp_in_strict_verified_mode"
 
-    # 3. Effective timestamp check (e.g. policy rate effective date)
-    if obs.effective_timestamp is not None:
-        eff_ts = obs.effective_timestamp
-        eff_ts_utc = eff_ts.replace(tzinfo=timezone.utc) if eff_ts.tzinfo is None else eff_ts.astimezone(timezone.utc)
-        if eff_ts_utc > as_of:
-            return False, "policy_rate_not_yet_effective_at_as_of"
+    if mode == PITMode.ESTIMATED_LAG:
+        if (
+            obs.classification == DataClassification.REAL_RETROSPECTIVE
+            or obs.availability_evidence == AvailabilityEvidence.RETROSPECTIVE
+        ):
+            return False, "retrospective_evidence_rejected_in_estimated_lag_mode"
 
-    # 4. Availability timestamp check
     avail_ts = get_effective_availability_timestamp(obs)
     if avail_ts is None:
-        if strict_executable:
+        if strict_executable or mode in (PITMode.STRICT_VERIFIED, PITMode.ESTIMATED_LAG):
             return False, "no_valid_availability_timestamp_in_strict_executable_mode"
         return True, "retrospective_research_proxy_admitted"
 
@@ -233,6 +269,7 @@ def resolve_observation_as_of(
     observations: list[DataObservation],
     as_of: datetime,
     strict_executable: bool = False,
+    pit_mode: PITMode | str | None = None,
 ) -> DataObservation | None:
     """Deterministically resolve the authoritative observation as of a decision timestamp.
 
@@ -243,7 +280,7 @@ def resolve_observation_as_of(
     """
     available_obs = [
         o for o in observations
-        if is_observation_available_as_of(o, as_of, strict_executable=strict_executable)[0]
+        if is_observation_available_as_of(o, as_of, strict_executable=strict_executable, pit_mode=pit_mode)[0]
     ]
     if not available_obs:
         return None
@@ -256,6 +293,7 @@ def resolve_observation_as_of(
         return (rev, ts)
 
     return max(available_obs, key=_sort_key)
+
 
 
 def _resolve_observation(existing: DataObservation, candidate: DataObservation) -> DataObservation:
@@ -286,6 +324,7 @@ def build_fx_carry_factor_panel(
     investment_series_id: str = "DGS1MO",
     sovereign_yield_series_id: str | None = "DGS3MO",
     strict_pit: bool = False,
+    pit_mode: PITMode | str = PITMode.ESTIMATED_LAG,
     decision_time_utc: time = time(16, 0),
 ) -> FactorPanel:
     """Build a synchronized, multi-factor panel for FX carry simulation.
@@ -299,7 +338,9 @@ def build_fx_carry_factor_panel(
     Rules:
     - Filters strictly genuine historical observations (is_synthetic=False).
     - Preserves observation availability and timestamps with row-level provenance.
-    - If strict_pit=True, excludes retrospective data and enforces availability <= decision timestamp.
+    - If pit_mode=STRICT_VERIFIED (or strict_pit=True), requires verified timestamps and rejects estimated/retrospective.
+      Fails clearly if verified observations are insufficient.
+    - If pit_mode=ESTIMATED_LAG, enforces documented release schedules.
     - Uses joint trading days where FX rates and all required Treasury rates are genuinely observed (Option A: Common Complete Panel).
     - Never uses cross-series substitution (e.g. NEVER substitutes DGS1MO for missing DGS3MO).
     - Represents ECB policy rate as prevailing rate on joint trading days (piecewise-constant without future look-ahead).
@@ -307,22 +348,51 @@ def build_fx_carry_factor_panel(
     """
     audit_log: list[str] = []
 
-    # 1. Filter observations by date window and valid classifications
-    allowed_classifications = (
-        (DataClassification.REAL_VERIFIED,)
-        if strict_pit
-        else (DataClassification.REAL_VERIFIED, DataClassification.REAL_RETROSPECTIVE)
-    )
+    if strict_pit and pit_mode == PITMode.ESTIMATED_LAG:
+        mode = PITMode.STRICT_VERIFIED
+    elif isinstance(pit_mode, str):
+        mode = PITMode(pit_mode)
+    else:
+        mode = pit_mode
+
+    # 1. Enforce strict verified availability data sufficiency
+    if mode == PITMode.STRICT_VERIFIED:
+        verified_count = sum(
+            1 for o in observations
+            if not getattr(o, "is_synthetic", False)
+            and start_date <= o.observation_date <= end_date
+            and o.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED
+            and o.publication_timestamp is not None
+        )
+        if verified_count < 50:
+            raise ValueError(
+                f"Strict verified PIT mode requested, but dataset contains {verified_count} verified observations. "
+                f"Strict verified PIT cannot support a genuine historical experiment with this dataset. "
+                f"Use PITMode.ESTIMATED_LAG for estimated-PIT research or PITMode.RESEARCH_ONLY for retrospective research."
+            )
+        allowed_classifications = (DataClassification.REAL_VERIFIED,)
+    elif mode == PITMode.ESTIMATED_LAG:
+        allowed_classifications = (
+            DataClassification.REAL_VERIFIED,
+            DataClassification.REAL_ESTIMATED_AVAILABILITY,
+        )
+    else:  # RESEARCH_ONLY
+        allowed_classifications = (
+            DataClassification.REAL_VERIFIED,
+            DataClassification.REAL_ESTIMATED_AVAILABILITY,
+            DataClassification.REAL_RETROSPECTIVE,
+        )
 
     valid_obs = [
         o for o in observations
         if start_date <= o.observation_date <= end_date
         and not o.is_synthetic
         and o.classification in allowed_classifications
-        and (not strict_pit or o.availability_evidence != AvailabilityEvidence.RETROSPECTIVE)
+        and (mode == PITMode.RESEARCH_ONLY or o.availability_evidence != AvailabilityEvidence.RETROSPECTIVE)
+        and (mode != PITMode.STRICT_VERIFIED or o.availability_evidence == AvailabilityEvidence.EXACT_TIMESTAMP_VERIFIED)
     ]
     audit_log.append(
-        f"Filtered {len(valid_obs)} valid real observations between {start_date} and {end_date} (strict_pit={strict_pit})."
+        f"Filtered {len(valid_obs)} valid real observations between {start_date} and {end_date} (pit_mode={mode.value})."
     )
 
     # 2. Extract series dictionaries: date -> DataObservation with deterministic revision resolution
@@ -333,12 +403,6 @@ def build_fx_carry_factor_panel(
 
     for o in valid_obs:
         d = o.observation_date
-        if strict_pit:
-            as_of_dt = get_session_decision_timestamp(d, decision_time_utc)
-            is_avail, _ = is_observation_available_as_of(o, as_of_dt, strict_executable=True)
-            if not is_avail:
-                continue
-
         if o.kind == ObservationKind.EXCHANGE_RATE and o.entity_code == fx_entity:
             fx_obs_by_date[d] = _resolve_observation(fx_obs_by_date[d], o) if d in fx_obs_by_date else o
         elif o.kind == ObservationKind.INTEREST_RATE:
@@ -370,7 +434,9 @@ def build_fx_carry_factor_panel(
         raise ValueError(f"Insufficient aligned trading days across complete factor panel: {len(common_dates)}")
     audit_log.append(f"Synchronized complete common trading calendar with {len(common_dates)} active days.")
 
-    # 4. Align raw level series across common trading dates
+    # 4. Align raw level series across common trading dates with point-in-time availability
+    import bisect
+
     aligned_dates: list[date] = []
     fx_raw: list[float] = []
     borrowing_raw: list[float] = []
@@ -385,17 +451,68 @@ def build_fx_carry_factor_panel(
 
     all_borrowing_dates = sorted(borrowing_obs_by_date.keys())
 
+    # Build sorted availability index for fast O(log N) point-in-time resolution
+    invest_eff_list = sorted(
+        [(get_effective_availability_timestamp(o), o) for o in invest_obs_by_date.values() if get_effective_availability_timestamp(o) is not None],
+        key=lambda x: x[0],  # type: ignore[arg-type,return-value]
+    )
+    invest_eff_times = [x[0] for x in invest_eff_list]
+
+    sov_eff_list = sorted(
+        [(get_effective_availability_timestamp(o), o) for o in sov_obs_by_date.values() if get_effective_availability_timestamp(o) is not None],
+        key=lambda x: x[0],  # type: ignore[arg-type,return-value]
+    )
+    sov_eff_times = [x[0] for x in sov_eff_list]
+
+    borrowing_eff_list = sorted(
+        [(get_effective_availability_timestamp(o), o) for o in borrowing_obs_by_date.values() if get_effective_availability_timestamp(o) is not None],
+        key=lambda x: x[0],  # type: ignore[arg-type,return-value]
+    )
+    borrowing_eff_times = [x[0] for x in borrowing_eff_list]
+
     for d in common_dates:
-        # Prevailing borrowing rate on or strictly before date d (no future look-ahead)
-        prior_dates = [bd for bd in all_borrowing_dates if bd <= d]
-        if not prior_dates:
+        as_of_dt = get_session_decision_timestamp(d, decision_time_utc)
+        fx_o = fx_obs_by_date[d]
+
+        # FX availability check
+        is_fx_avail, _ = is_observation_available_as_of(fx_o, as_of_dt, strict_executable=(mode == PITMode.STRICT_VERIFIED), pit_mode=mode)
+        if not is_fx_avail:
             continue
-        prevailing_borrowing_obs = borrowing_obs_by_date[prior_dates[-1]]
+
+        # Prevailing borrowing rate (ECB)
+        if mode == PITMode.RESEARCH_ONLY:
+            prior_dates = [bd for bd in all_borrowing_dates if bd <= d]
+            if not prior_dates:
+                continue
+            prevailing_borrowing_obs = borrowing_obs_by_date[prior_dates[-1]]
+        else:
+            b_idx = bisect.bisect_right(borrowing_eff_times, as_of_dt) - 1
+            if b_idx < 0:
+                continue
+            prevailing_borrowing_obs = borrowing_eff_list[b_idx][1]
+
+        # Investment rate (DGS1MO)
+        if mode == PITMode.RESEARCH_ONLY:
+            invest_o = invest_obs_by_date[d]
+        else:
+            i_idx = bisect.bisect_right(invest_eff_times, as_of_dt) - 1
+            if i_idx < 0:
+                continue
+            invest_o = invest_eff_list[i_idx][1]
+
+        # Sovereign yield (DGS3MO)
+        if has_sovereign:
+            if mode == PITMode.RESEARCH_ONLY:
+                sov_o = sov_obs_by_date[d]
+            else:
+                s_idx = bisect.bisect_right(sov_eff_times, as_of_dt) - 1
+                if s_idx < 0:
+                    continue
+                sov_o = sov_eff_list[s_idx][1]
+        else:
+            sov_o = None
 
         aligned_dates.append(d)
-        fx_o = fx_obs_by_date[d]
-        invest_o = invest_obs_by_date[d]
-
         fx_raw.append(fx_o.value)
         borrowing_raw.append(prevailing_borrowing_obs.value)
         invest_raw.append(invest_o.value)
@@ -404,13 +521,13 @@ def build_fx_carry_factor_panel(
         borrowing_aligned_obs.append(prevailing_borrowing_obs)
         invest_aligned_obs.append(invest_o)
 
-        if has_sovereign:
-            sov_o = sov_obs_by_date[d]
+        if has_sovereign and sov_o is not None:
             sov_raw.append(sov_o.value)
             sov_aligned_obs.append(sov_o)
 
-    if len(aligned_dates) < 2:
-        raise ValueError("Insufficient dates to compute factor differences.")
+    if len(aligned_dates) < 50:
+        raise ValueError(f"Insufficient aligned trading days across complete factor panel after PIT filtering: {len(aligned_dates)}")
+
 
     # 5. Compute mathematical factor transformations (differences & log returns)
     factor_dates = aligned_dates[1:]
@@ -586,4 +703,5 @@ def build_fx_carry_factor_panel(
         is_aligned=True,
         alignment_audit=audit_log,
         row_provenance=dict(row_provenance),
+        pit_mode=mode.value,
     )

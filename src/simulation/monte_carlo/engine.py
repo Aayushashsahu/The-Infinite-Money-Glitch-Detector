@@ -6,6 +6,7 @@ strategy evaluation, distributional risk measurement, and convergence tracking.
 
 from __future__ import annotations
 
+from datetime import date
 import hashlib
 from pathlib import Path
 import time
@@ -45,6 +46,7 @@ from simulation.monte_carlo.shocks import (
 from simulation.monte_carlo.strategy_adapter import (
     CarryTradeScenarioStrategy,
     ScenarioStrategy,
+    generate_simulated_trading_sessions,
 )
 
 
@@ -54,19 +56,28 @@ class MonteCarloEngine:
     def __init__(
         self,
         config: SimulationConfig,
-        observations: list[DataObservation],
+        observations: list[DataObservation] | None = None,
         strategy: ScenarioStrategy | None = None,
+        panel: FactorPanel | None = None,
     ) -> None:
         self.config = config
-        self.observations = observations
-        self.strategy = strategy or CarryTradeScenarioStrategy()
-
-        # Build factor panel across calibration window
-        self.panel = build_fx_carry_factor_panel(
-            observations=observations,
-            start_date=config.calibration_start_date,
-            end_date=config.calibration_end_date,
+        self.observations = observations or []
+        self.strategy = strategy or CarryTradeScenarioStrategy(
+            calendar_type="JOINT_TARGET2_FED",
+            strict_calendar=False,
+            rollover_mode="CONTRACTUAL_MATURITY",
         )
+
+        # Inject pre-built factor panel OR construct with explicit PIT mode
+        if panel is not None:
+            self.panel = panel
+        else:
+            self.panel = build_fx_carry_factor_panel(
+                observations=self.observations,
+                start_date=config.calibration_start_date,
+                end_date=config.calibration_end_date,
+                pit_mode=config.pit_mode,
+            )
 
     def _initialize_model(self) -> Any:
         """Instantiate the configured mathematical scenario model."""
@@ -115,6 +126,14 @@ class MonteCarloEngine:
         model = self._initialize_model()
         audit_notes.append(f"Initialized simulation model: {self.config.model_type.value}")
 
+        # Generate joint settlement calendar trading sessions
+        sim_start_date = self.config.holdout_start_date or date(2024, 1, 2)
+        session_dates = generate_simulated_trading_sessions(
+            start_date=sim_start_date,
+            n_sessions=self.config.horizon_steps + 1,
+            calendar_type="JOINT_TARGET2_FED",
+        )
+
         # 2. Generate simulated scenario paths
         paths: list[ScenarioPath] = model.generate_paths(
             num_paths=self.config.num_paths,
@@ -122,8 +141,9 @@ class MonteCarloEngine:
             initial_fx=self.config.initial_fx_rate,
             initial_borrowing_rate=self.config.initial_borrowing_rate,
             initial_investment_rate=self.config.initial_investment_rate,
+            dates=session_dates,
         )
-        audit_notes.append(f"Generated {len(paths)} independent paths over {self.config.horizon_steps} steps.")
+        audit_notes.append(f"Generated {len(paths)} independent paths over {self.config.horizon_steps} steps with JOINT_TARGET2_FED calendar.")
 
         # 3. Evaluate financial strategy along each path
         evaluations: list[PathEvaluationResult] = []
@@ -175,6 +195,7 @@ class MonteCarloEngine:
             representative_paths=rep_paths,
             data_manifest_digest=manifest_digest,
             data_classification=DataClassification.SIMULATED,
+            pit_mode=self.panel.pit_mode,
             is_executable_strategy=False,
             audit_notes=audit_notes,
         )
@@ -188,16 +209,35 @@ class MonteCarloEngine:
         if scenarios is None:
             scenarios = build_standard_stress_scenarios()
 
+        sim_start_date = self.config.holdout_start_date or date(2024, 1, 2)
+        horizon = self.config.horizon_steps
+        session_dates = generate_simulated_trading_sessions(
+            start_date=sim_start_date,
+            n_sessions=horizon + 1,
+            calendar_type="JOINT_TARGET2_FED",
+        )
+
         if base_path is None:
             # Construct a flat baseline path (constant FX and interest rates)
-            horizon = self.config.horizon_steps
             base_path = ScenarioPath(
                 path_id=0,
                 steps=horizon,
+                dates=session_dates,
                 fx_rates=[self.config.initial_fx_rate] * (horizon + 1),
                 borrowing_rates=[self.config.initial_borrowing_rate] * (horizon + 1),
                 investment_rates=[self.config.initial_investment_rate] * (horizon + 1),
                 is_synthetic=True,
+            )
+        elif base_path.dates is None:
+            base_path = ScenarioPath(
+                path_id=base_path.path_id,
+                steps=base_path.steps,
+                dates=session_dates,
+                fx_rates=base_path.fx_rates,
+                borrowing_rates=base_path.borrowing_rates,
+                investment_rates=base_path.investment_rates,
+                regimes=base_path.regimes,
+                is_synthetic=base_path.is_synthetic,
             )
 
         results: list[dict[str, Any]] = []
