@@ -127,6 +127,47 @@ _NON_PAIR_ENTITY_PREFIXES = (
     "KR.",
 )
 
+_VALID_FX_TRANSFORMATIONS = frozenset({"LOGRET", "LEVEL", "RET", "RETURN", "DIFF", "BPS", "PCT"})
+_VALID_IR_TENORS = frozenset(
+    {
+        "1D",
+        "2D",
+        "3D",
+        "1W",
+        "2W",
+        "3W",
+        "1M",
+        "2M",
+        "3M",
+        "4M",
+        "5M",
+        "6M",
+        "9M",
+        "1Y",
+        "2Y",
+        "3Y",
+        "4Y",
+        "5Y",
+        "7Y",
+        "10Y",
+        "15Y",
+        "20Y",
+        "30Y",
+        "ON",
+        "TN",
+        "SN",
+        "OIS",
+        "SOFR",
+        "ESTR",
+        "MRO",
+        "DFR",
+        "MLF",
+        "FFR",
+        "PRIME",
+        "EFFR",
+    }
+)
+
 
 def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str, str] | None:
     """Extract (base, quote) currency codes from a pair representation string.
@@ -147,10 +188,18 @@ def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str,
 
     2. Documented Non-Pair Namespaces:
        - Identifiers starting with documented non-pair prefixes ('FX_', 'IR_', 'ECB_', 'FED_', 'BCB_',
-         'BOE_', 'BOJ_', 'KR_', 'KR.') without slash syntax are preserved as legitimate non-pair entities
-         (returning None when strict=False, or raising ValueError when strict=True).
-       - Examples: 'KR.MRR_FR.LEV' (SDMX interest rate series), 'ECB_EA' (ECB economic entity),
-         'FX_EUR_USD_LOGRET' (factor log return series), 'IR_USD_1M' (interest rate factor series).
+         'BOE_', 'BOJ_', 'KR_', 'KR.') without slash syntax must strictly adhere to their namespace grammar:
+         * 'FX_': factor series must follow 'FX_<BASE>_<QUOTE>_<TRANSFORM>' (e.g. 'FX_EUR_USD_LOGRET')
+           or factor interaction grammar ('__vs__'). Missing components, malformed currency codes (e.g. 'FX_EUR_US'),
+           or unrecognized transformations (e.g. 'FX_EUR_USD_EXTRA') fail closed with ValueError.
+         * 'IR_': interest rate factor series must follow 'IR_<CURRENCY>_<TENOR>' (e.g. 'IR_USD_1M').
+           Malformed currency codes or invalid tenors (e.g. 'IR_USD_US') fail closed with ValueError.
+         * 'KR_' / 'KR.': ECB key rates namespace represents policy interest rates (e.g. 'KR.MRR_FR.LEV')
+           and must never contain currency pairs (e.g. 'KR_EUR_USD' fails closed with ValueError).
+         * Central bank prefixes ('ECB_', 'FED_', etc.): represent central bank entities or calendars (e.g. 'ECB_EA',
+           'FED_USA', 'FED_H15_CALENDAR') and must never contain currency pairs (e.g. 'ECB_EUR_USD' fails closed).
+       - Legitimate namespace non-pair entities return None when strict=False, or raise ValueError with
+         'Malformed FX pair metadata' when strict=True.
 
     3. Underscore-delimited identifiers ('_' in text):
        - Empty or trailing components (e.g. 'EUR_USD_', '_EUR_USD', 'EUR__USD') fail closed with ValueError.
@@ -191,6 +240,112 @@ def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str,
 
     # Rule 2: Documented non-pair namespaces and SDMX keys without '/'
     if s_upper.startswith(_NON_PAIR_ENTITY_PREFIXES):
+        if s_upper.startswith("FX_"):
+            if "__VS__" in s_upper:
+                left, _ = s_upper.split("__VS__", 1)
+                left_parts = left.split("_")
+                if len(left_parts) != 4:
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': FX interaction factor prefix is malformed."
+                    )
+                b, q, trans = left_parts[1], left_parts[2], left_parts[3]
+                if len(b) != 3 or not b.isalpha():
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': base currency '{b}' must be a 3-letter ISO-4217 alphabetic code."
+                    )
+                if len(q) != 3 or not q.isalpha():
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': quote currency '{q}' must be a 3-letter ISO-4217 alphabetic code."
+                    )
+                if trans not in _VALID_FX_TRANSFORMATIONS:
+                    raise ValueError(f"Malformed pair-like FX identifier '{text}': invalid transformation '{trans}'.")
+            else:
+                parts = s_upper.split("_")
+                if any(len(p.strip()) == 0 for p in parts):
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': FX namespace identifier contains extra or empty components."
+                    )
+                if len(parts) == 3:
+                    p1, p2 = parts[1].strip(), parts[2].strip()
+                    if len(p1) != 3 or not p1.isalpha():
+                        raise ValueError(
+                            f"Malformed pair-like FX identifier '{text}': base currency '{parts[1].strip()}' must be a 3-letter ISO-4217 alphabetic code."
+                        )
+                    if len(p2) != 3 or not p2.isalpha():
+                        raise ValueError(
+                            f"Malformed pair-like FX identifier '{text}': quote currency '{parts[2].strip()}' must be a 3-letter ISO-4217 alphabetic code."
+                        )
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': FX namespace requires a valid transformation suffix (e.g. 'LOGRET')."
+                    )
+                elif len(parts) == 4:
+                    p1, p2, p3 = parts[1].strip(), parts[2].strip(), parts[3].strip()
+                    if len(p1) != 3 or not p1.isalpha():
+                        raise ValueError(
+                            f"Malformed pair-like FX identifier '{text}': base currency '{parts[1].strip()}' must be a 3-letter ISO-4217 alphabetic code."
+                        )
+                    if len(p2) != 3 or not p2.isalpha():
+                        raise ValueError(
+                            f"Malformed pair-like FX identifier '{text}': quote currency '{parts[2].strip()}' must be a 3-letter ISO-4217 alphabetic code."
+                        )
+                    if p3 not in _VALID_FX_TRANSFORMATIONS:
+                        raise ValueError(
+                            f"Malformed pair-like FX identifier '{text}': invalid transformation '{parts[3].strip()}'. Expected one of {sorted(_VALID_FX_TRANSFORMATIONS)}."
+                        )
+                elif len(parts) < 3:
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': FX namespace requires base currency, quote currency, and transformation suffix."
+                    )
+                else:
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': FX namespace identifier contains extra components."
+                    )
+
+        elif s_upper.startswith("IR_"):
+            parts = s_upper.split("_")
+            if any(len(p.strip()) == 0 for p in parts):
+                raise ValueError(
+                    f"Malformed pair-like FX identifier '{text}': IR namespace identifier contains extra or empty components."
+                )
+            if len(parts) == 3:
+                p1, p2 = parts[1].strip(), parts[2].strip()
+                if len(p1) != 3 or not p1.isalpha():
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': currency '{parts[1].strip()}' must be a 3-letter ISO-4217 alphabetic code."
+                    )
+                if p2 not in _VALID_IR_TENORS:
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': invalid tenor '{parts[2].strip()}'. Expected a valid interest rate tenor or benchmark."
+                    )
+            elif len(parts) == 2:
+                raise ValueError(
+                    f"Malformed pair-like FX identifier '{text}': IR namespace requires currency and tenor (e.g. 'IR_USD_1M')."
+                )
+            else:
+                raise ValueError(
+                    f"Malformed pair-like FX identifier '{text}': IR namespace identifier contains extra components."
+                )
+
+        elif s_upper.startswith("KR_"):
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs."
+            )
+
+        elif s_upper.startswith("KR."):
+            if "EUR" in s_upper and ("USD" in s_upper or "US" in s_upper):
+                raise ValueError(
+                    f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs."
+                )
+
+        elif s_upper.startswith(("ECB_", "FED_", "BCB_", "BOE_", "BOJ_")):
+            parts = s_upper.split("_")
+            if len(parts) >= 3:
+                p1, p2 = parts[1].strip(), parts[2].strip()
+                if (len(p1) in (2, 3) and p1.isalpha()) and (len(p2) in (2, 3) and p2.isalpha()):
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': central bank namespace cannot contain currency pairs."
+                    )
+
         if strict:
             raise ValueError(
                 f"Malformed FX pair metadata: '{text}'. Expected a currency pair like 'EUR/USD' or 'EUR_USD'."
