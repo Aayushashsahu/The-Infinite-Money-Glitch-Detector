@@ -51,9 +51,9 @@ Key achievements:
 |---|---|---|
 | **Stage A Source Commit** | `3e43403f2e807811eb846102651d4e0e0a73cca8` | `ecfed0886da5ea19dba0b7918977b58c9c52bcb3` |
 | **Stage B Documentation Commit** | `ff0da82cca3180314b2de4a4c4285423aaa59d14` | `1a0210f54ecf932b894583102166c20ef60c1c73` |
-| **Stage B+ Update Commit** | `fcd331e3901c8744b630a565ae385dc1a0b1074f` | — |
-| **Stage B CI Run ID** | `42497349211` | **`42500364722`** (Both 3.11 & 3.12 passed) |
-| **Main-Head CI Run ID** | `42497628977` | **`42500364722`** (Verified main-head commit) |
+| **Stage B+ Update Commit** | `fcd331e3901c8744b630a565ae385dc1a0b1074f` | `a33e2ebe7e655d0c8c447d34c2683d82b5a40f9b` |
+| **Stage B CI Run ID** | `42497349211` | **`42500364722`** (Tested Stage B `1a0210f`; passed) |
+| **Main-Head CI Run ID** | `42497628977` | **`42500711496`** (Tested Stage B+ `a33e2eb`; passed) |
 | **Test Suite Passed** | 572 passed | **616 passed** (44 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
 | **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** |
@@ -231,10 +231,17 @@ Execution follows strict dual-stage delivery:
 
 - **Stage B (Closure Documentation & Historical Lineage Reconciliation)**:
   * Commit SHA: `1a0210f54ecf932b894583102166c20ef60c1c73`
-  * CI Run ID: `42500364722` (Both Python 3.11 and 3.12 passed)
+  * CI Run ID: `42500364722` (Tested Stage B commit `1a0210f`; both Python 3.11 and 3.12 passed)
   * Modified: `PHASE_4_1_2_2_3_6_CLOSURE_REPORT.md`
   * Added: `PHASE_4_1_2_2_3_7_CLOSURE_REPORT.md`
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.7 closure report & reconcile Phase 4.1.2.2.3.6 lineage (Stage B)`
+
+- **Stage B+ (Documentation Lineage Update Commit)**:
+  * Commit SHA: `a33e2ebe7e655d0c8c447d34c2683d82b5a40f9b`
+  * CI Run ID: `42500711496` (Tested documentation follow-up commit `a33e2eb`; both Python 3.11 and 3.12 passed)
+  * Modified: `PHASE_4_1_2_2_3_7_CLOSURE_REPORT.md`
+  * Commit message: `docs(results): record successful CI run ID 42500364722 in Phase 4.1.2.2.3.7 closure report`
+  * Purpose: Recorded the completed CI run ID `42500364722` for Stage B, followed by immediate automated CI verification on main head (`42500711496`).
 
 ---
 
