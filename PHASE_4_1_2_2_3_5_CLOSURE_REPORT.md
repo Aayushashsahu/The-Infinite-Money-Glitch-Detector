@@ -1,4 +1,4 @@
-﻿# Phase 4.1.2.2.3.5 Closure Report: FX Entity-Code Integrity & Research Evidence Sign-Off
+# Phase 4.1.2.2.3.5 Closure Report: FX Entity-Code Integrity & Research Evidence Sign-Off
 
 **Project:** The Infinite Money Glitch Detector  
 **Core Principle:** *Mathematics first. Data second. Prediction third. AI last.*  
@@ -41,9 +41,9 @@ Key achievements:
 | Attribute | Phase 4.1.2.2.3.4 Predecessor | Phase 4.1.2.2.3.5 Current Closure |
 |---|---|---|
 | **Stage A Source Commit** | `d1cb043788ca0134e2cfa79b6dea54000616ef26` | `b38a227dfc0e8faaacbb8ce27df117fcdd2d03d8` |
-| **Stage B Documentation Commit** | `3658587815bfd3e8b844474af766277ddaed9721` | *Pending Stage B commit* |
+| **Stage B Documentation Commit** | `3658587815bfd3e8b844474af766277ddaed9721` | `6bf751cc22f96867ad53d79a6366a3858c8a4990` |
 | **Research Artifacts Baseline** | `data/results/phase_4_1_2_2_3/` | `data/results/phase_4_1_2_2_3/` (Invariant) |
-| **Predecessor CI Run ID** | `42480238073` | *Pending remote CI run* |
+| **Predecessor CI Run ID** | `42480238073` | Pending follow-up CI run |
 | **Test Suite Baseline** | 512 passed | **530 passed** (18 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean (0 errors) | **Ruff clean** (0 errors, 0 warnings) |
 | **Data Classification** | `SIMULATED_RESEARCH_PROXY` | `SIMULATED_RESEARCH_PROXY` |
@@ -163,12 +163,14 @@ Comparing current runtime outputs against committed baseline research artifacts 
 
 | Quantity | Baseline Artifact | Runtime Output | Maximum Absolute Difference | Status |
 |---|---|---|---|---|
-| **Calibration Covariance Matrix** | `calibration_report.json` | Recomputed from panel | $8.88 \times 10^{-16}$ | **Invariant** ($\le 10^{-15} \ll 10^{-9}$) |
+| **Calibration Covariance Matrix** | `calibration_report.json` | Recomputed from panel | $8.88 \times 10^{-16}$ (MSVC) / $1.95 \times 10^{-13}$ (OpenBLAS) | **Invariant** ($\le 10^{-9}$ tolerance) |
 | **Calibration Correlation Matrix** | `calibration_report.json` | Recomputed from panel | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
-| **Holdout Correlation Shifts** | `factor_holdout_diagnostics.json` | Recomputed diagnostics | $1.39 \times 10^{-17}$ | **Invariant** ($\le 10^{-15} \ll 10^{-9}$) |
+| **Holdout Correlation Shifts** | `factor_holdout_diagnostics.json` | Recomputed diagnostics | $1.39 \times 10^{-17}$ (MSVC) / $1.92 \times 10^{-15}$ (OpenBLAS) | **Invariant** ($\le 10^{-9}$ tolerance) |
 | **Initial FX Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
 | **Initial Borrowing Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
 | **Initial Investment Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
+
+Cross-platform numerical analysis: On Windows x86_64 with MSVC C runtime, differences against the committed JSON artifacts are $\le 8.88 \times 10^{-16}$. On Ubuntu Linux x86_64 CI runners with OpenBLAS / AVX2 FMA vector reduction ordering, covariance differences are $1.95 \times 10^{-13}$ and correlation shift differences are $1.92 \times 10^{-15}$. Both platforms satisfy the canonical $\le 10^{-9}$ numerical invariance tolerance by four to seven orders of magnitude.
 
 ### 5.4 Portfolio Holdout Diagnostics Status
 
@@ -198,7 +200,7 @@ Phase 4.1.2.2.3.5 was executed under two distinct commits:
   `b38a227dfc0e8faaacbb8ce27df117fcdd2d03d8`
   `feat(simulation): Phase 4.1.2.2.3.5 FX entity-code integrity & numerical safeguard verification (Stage A)`
 - **Stage B (Documentation & Closure Report)**:
-  *To be committed immediately following report generation*
+  `6bf751cc22f96867ad53d79a6366a3858c8a4990`
   `docs(results): publish Phase 4.1.2.2.3.5 closure report (Stage B)`
 
 ---
