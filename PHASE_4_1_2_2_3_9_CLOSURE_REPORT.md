@@ -58,10 +58,10 @@ Phase 4.1.2.2.3.9 completes the comprehensive hardening of currency and factor m
 | Attribute | Phase 4.1.2.2.3.8 Verified | Phase 4.1.2.2.3.9 Current Closure |
 |---|---|---|
 | **Stage A Source Commit** | `4ba002c5bda731d78e4f6df2dbca6d1dd9177531` | `1e2ca9dff2f1e6e835c2ea3c20077297d1b7129a` |
-| **Stage B Documentation Commit** | `e6476b128121b3eb7ec7f6630116006ceb1f8d5b` | *(Current documentation follow-up)* |
+| **Stage B Documentation Commit** | `e6476b128121b3eb7ec7f6630116006ceb1f8d5b` | `376398f60b5cb71e8afba478a92d0be0ca252288` |
 | **Stage B+ Update Commit** | `a15281499be2886efabe721d7de2f78d8bc00673` | *(To be verified upon push)* |
 | **Stage A CI Run ID** | `42513771885` | **`42517996555`** (Both 3.11 & 3.12 passed) |
-| **Stage B CI Run ID** | `42514331670` | *(To be verified upon push)* |
+| **Stage B CI Run ID** | `42514331670` | **`42518275430`** (Tested Stage B `376398f`; passed) |
 | **Stage B+ CI Run ID** | `42514788989` | *(To be verified upon push)* |
 | **Test Suite Passed** | 734 passed | **884 passed** (150 new tests in 3_9 suite, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
@@ -296,16 +296,17 @@ Execution follows strict dual-stage delivery:
   * Commit message: `feat(simulation): Phase 4.1.2.2.3.9 namespace edge cases & interaction grammar (Stage A)`
 
 - **Stage B (Closure Documentation & Historical Lineage Reconciliation)**:
-  * Commit SHA: *(Current commit)*
-  * CI Run ID: *(To be recorded upon push)*
+  * Commit SHA: `376398f60b5cb71e8afba478a92d0be0ca252288`
+  * CI Run ID: `42518275430` (Tested Stage B commit `376398f`; passed on Python 3.11 and 3.12)
   * Modified: `PHASE_4_1_2_2_3_8_CLOSURE_REPORT.md`
   * Added: `PHASE_4_1_2_2_3_9_CLOSURE_REPORT.md`
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.9 closure report & reconcile Phase 4.1.2.2.3.8 lineage (Stage B)`
 
 - **Stage B+ (Documentation Lineage Final Sign-Off Commit)**:
-  * Commit SHA: *(To be executed following Stage B CI completion)*
+  * Commit SHA: *(Current commit)*
   * Modified: `PHASE_4_1_2_2_3_9_CLOSURE_REPORT.md`
-  * Purpose: Record verified Stage B CI Run ID.
+  * Commit message: `docs(results): record successful CI run ID 42518275430 in Phase 4.1.2.2.3.9 closure report`
+  * Purpose: Recorded verified Stage B CI Run ID `42518275430`, completing formal dual-stage lineage sign-off.
 
 ---
 
