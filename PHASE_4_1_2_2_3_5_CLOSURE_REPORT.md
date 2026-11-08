@@ -43,7 +43,7 @@ Key achievements:
 | **Stage A Source Commit** | `d1cb043788ca0134e2cfa79b6dea54000616ef26` | `b38a227dfc0e8faaacbb8ce27df117fcdd2d03d8` |
 | **Stage B Documentation Commit** | `3658587815bfd3e8b844474af766277ddaed9721` | `6bf751cc22f96867ad53d79a6366a3858c8a4990` |
 | **Research Artifacts Baseline** | `data/results/phase_4_1_2_2_3/` | `data/results/phase_4_1_2_2_3/` (Invariant) |
-| **Predecessor CI Run ID** | `42480238073` | Pending follow-up CI run |
+| **CI Run ID** | `42480238073` | `42487376183` |
 | **Test Suite Baseline** | 512 passed | **530 passed** (18 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean (0 errors) | **Ruff clean** (0 errors, 0 warnings) |
 | **Data Classification** | `SIMULATED_RESEARCH_PROXY` | `SIMULATED_RESEARCH_PROXY` |
