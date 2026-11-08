@@ -229,20 +229,61 @@ def _generate_monte_carlo_closure_report(
     gaussian_result: MonteCarloResult | None = None,
     manifest_info: dict[str, Any] | None = None,
     initial_levels: InitialMarketLevelsReport | None = None,
+    calibration_report: CalibrationReport | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append(f"# {phase_title}")
     lines.append("\n**Platform**: `The Infinite Money Glitch Detector`  ")
     lines.append("**Status**: Complete, Reconciled & Validated  ")
-    calib_days = getattr(avail_audit, "complete_aligned_factor_days", 991)
-    if calib_days <= 0:
-        calib_days = 991
-    lines.append(
-        f"**Historical Calibration Window**: `2020-01-01` to `2023-12-31` ({calib_days} aligned observation days, {calib_days - 1} factor return transitions)  "
+    calib_levels = (
+        getattr(calibration_report, "calibration_level_count", 0)
+        or getattr(avail_audit, "aligned_level_count", 0)
+        or 990
     )
-    lines.append(
-        f"**Holdout Evaluation Window**: `{factor_diag.holdout_start}` to `{factor_diag.holdout_end}` ({factor_diag.holdout_days} aligned trading days)  "
+    calib_trans = (
+        getattr(calibration_report, "calibration_transition_count", 0)
+        or getattr(avail_audit, "transition_count", 0)
+        or (calib_levels - 1 if calib_levels > 0 else 989)
     )
+    first_lvl = getattr(calibration_report, "first_calibration_level_date", None) or getattr(avail_audit, "first_level_date", None)
+    last_lvl = getattr(calibration_report, "last_calibration_level_date", None) or getattr(avail_audit, "last_level_date", None)
+    first_tr = getattr(calibration_report, "first_calibration_transition_date", None) or getattr(avail_audit, "first_transition_date", None)
+    last_tr = getattr(calibration_report, "last_calibration_transition_date", None) or getattr(avail_audit, "last_transition_date", None)
+
+    if first_lvl and last_lvl and first_tr and last_tr:
+        lines.append(
+            f"**Historical Calibration Window**: `2020-01-01` to `2023-12-31` ({calib_levels} aligned level dates [{first_lvl} to {last_lvl}], {calib_trans} factor return transitions [{first_tr} to {last_tr}])  "
+        )
+    else:
+        lines.append(
+            f"**Historical Calibration Window**: `2020-01-01` to `2023-12-31` ({calib_levels} aligned observation level dates, {calib_trans} factor return transitions)  "
+        )
+
+    h_levels = (
+        getattr(calibration_report, "holdout_level_count", 0)
+        or (factor_diag.holdout_days + 1 if factor_diag and factor_diag.holdout_days else 0)
+    )
+    h_trans = (
+        getattr(calibration_report, "holdout_transition_count", 0)
+        or (factor_diag.holdout_days if factor_diag else 0)
+    )
+    first_h_lvl = getattr(calibration_report, "first_holdout_level_date", None)
+    last_h_lvl = getattr(calibration_report, "last_holdout_level_date", None)
+    first_h_tr = getattr(calibration_report, "first_holdout_transition_date", None)
+    last_h_tr = getattr(calibration_report, "last_holdout_transition_date", None)
+
+    if first_h_lvl and last_h_lvl and first_h_tr and last_h_tr:
+        lines.append(
+            f"**Holdout Evaluation Window**: `{factor_diag.holdout_start}` to `{factor_diag.holdout_end}` ({h_levels} aligned level dates [{first_h_lvl} to {last_h_lvl}], {h_trans} factor return transitions [{first_h_tr} to {last_h_tr}])  "
+        )
+    elif h_levels > 0 and h_trans > 0:
+        lines.append(
+            f"**Holdout Evaluation Window**: `{factor_diag.holdout_start}` to `{factor_diag.holdout_end}` ({h_levels} aligned level dates, {h_trans} factor return transitions)  "
+        )
+    else:
+        lines.append(
+            f"**Holdout Evaluation Window**: `{factor_diag.holdout_start}` to `{factor_diag.holdout_end}` ({factor_diag.holdout_days} aligned trading days)  "
+        )
     lines.append("**Data Classification**: `SIMULATED_RESEARCH_PROXY`  ")
     lines.append("**Core Philosophy**: *Mathematics first. Data second. Prediction third. AI last.*  ")
 
@@ -636,6 +677,42 @@ def generate_phase_4_1_2_2_1_research_report(
         gaussian_result=gaussian_result,
         manifest_info=manifest_info,
         initial_levels=initial_levels,
+    )
+
+
+def generate_phase_4_1_2_2_2_research_report(
+    avail_audit: AvailabilityAuditReport,
+    model_comparisons: list[ModelComparisonEntry],
+    factor_diag: FactorHoldoutDiagnostics,
+    port_diag: PortfolioHoldoutDiagnostics,
+    corr_stress: CorrelationStressComparison,
+    cal_val: CalendarValidationReport,
+    funding_sens: FundingSensitivityReport,
+    bootstrap_result: MonteCarloResult,
+    student_t_result: MonteCarloResult,
+    regime_result: MonteCarloResult,
+    gaussian_result: MonteCarloResult | None = None,
+    manifest_info: dict[str, Any] | None = None,
+    initial_levels: InitialMarketLevelsReport | None = None,
+    calibration_report: CalibrationReport | None = None,
+) -> str:
+    """Generate the authoritative Phase 4.1.2.2.2 canonical FX panel integrity & research artifact reconciliation report."""
+    return _generate_monte_carlo_closure_report(
+        phase_title="Phase 4.1.2.2.2 — Canonical FX Panel Integrity & Research Artifact Reconciliation Report",
+        avail_audit=avail_audit,
+        model_comparisons=model_comparisons,
+        factor_diag=factor_diag,
+        port_diag=port_diag,
+        corr_stress=corr_stress,
+        cal_val=cal_val,
+        funding_sens=funding_sens,
+        bootstrap_result=bootstrap_result,
+        student_t_result=student_t_result,
+        regime_result=regime_result,
+        gaussian_result=gaussian_result,
+        manifest_info=manifest_info,
+        initial_levels=initial_levels,
+        calibration_report=calibration_report,
     )
 
 

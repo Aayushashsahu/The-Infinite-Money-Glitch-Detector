@@ -42,9 +42,21 @@ class CalibrationReport(BaseModel):
     calibration_start: date
     calibration_end: date
     calibration_sample_size: int
+    calibration_level_count: int = Field(default=0, description="Aligned level observation count for calibration")
+    calibration_transition_count: int = Field(default=0, description="Factor transition count for calibration")
+    first_calibration_level_date: date | None = None
+    last_calibration_level_date: date | None = None
+    first_calibration_transition_date: date | None = None
+    last_calibration_transition_date: date | None = None
     holdout_start: date | None = None
     holdout_end: date | None = None
     holdout_sample_size: int = 0
+    holdout_level_count: int = Field(default=0, description="Aligned level observation count for holdout")
+    holdout_transition_count: int = Field(default=0, description="Factor transition count for holdout")
+    first_holdout_level_date: date | None = None
+    last_holdout_level_date: date | None = None
+    first_holdout_transition_date: date | None = None
+    last_holdout_transition_date: date | None = None
     factor_summaries: dict[str, FactorSummary]
     factor_names: list[str]
     correlation_matrix: list[list[float]]
@@ -80,26 +92,53 @@ def split_calibration_holdout(
     calib_raw = {f: [panel.raw_levels[f][i] for i in calib_indices] for f in panel.raw_levels}
     holdout_raw = {f: [panel.raw_levels[f][i] for i in holdout_indices] for f in panel.raw_levels}
 
+    calib_canonical = {f: [panel.canonical_levels[f][i] for i in calib_indices] for f in panel.canonical_levels}
+    holdout_canonical = {f: [panel.canonical_levels[f][i] for i in holdout_indices] for f in panel.canonical_levels}
+
+    # Slice level dates
+    if panel.level_dates and len(panel.level_dates) == len(panel.dates) + 1:
+        calib_level_dates = panel.level_dates[: len(calib_dates) + 1]
+        holdout_level_dates = panel.level_dates[len(calib_dates) :]
+    else:
+        calib_level_dates = [calib_dates[0]] + calib_dates
+        holdout_level_dates = [holdout_dates[0]] + holdout_dates
+
     calib_panel = FactorPanel(
         factors=panel.factors,
         dates=calib_dates,
+        level_dates=calib_level_dates,
         values=calib_values,
         raw_levels=calib_raw,
+        canonical_levels=calib_canonical,
+        aligned_level_count=len(calib_level_dates),
+        transition_count=len(calib_dates),
+        first_level_date=calib_level_dates[0] if calib_level_dates else None,
+        last_level_date=calib_level_dates[-1] if calib_level_dates else None,
+        first_transition_date=calib_dates[0] if calib_dates else None,
+        last_transition_date=calib_dates[-1] if calib_dates else None,
         calendar_name=panel.calendar_name,
         effective_sample_size=len(calib_dates),
         is_aligned=True,
-        alignment_audit=[f"Calibration split: {len(calib_dates)} days through {calibration_end}"],
+        alignment_audit=[f"Calibration split: {len(calib_dates)} transition days ({len(calib_level_dates)} levels) through {calibration_end}"],
     )
 
     holdout_panel = FactorPanel(
         factors=panel.factors,
         dates=holdout_dates,
+        level_dates=holdout_level_dates,
         values=holdout_values,
         raw_levels=holdout_raw,
+        canonical_levels=holdout_canonical,
+        aligned_level_count=len(holdout_level_dates),
+        transition_count=len(holdout_dates),
+        first_level_date=holdout_level_dates[0] if holdout_level_dates else None,
+        last_level_date=holdout_level_dates[-1] if holdout_level_dates else None,
+        first_transition_date=holdout_dates[0] if holdout_dates else None,
+        last_transition_date=holdout_dates[-1] if holdout_dates else None,
         calendar_name=panel.calendar_name,
         effective_sample_size=len(holdout_dates),
         is_aligned=True,
-        alignment_audit=[f"Holdout split: {len(holdout_dates)} days after {calibration_end}"],
+        alignment_audit=[f"Holdout split: {len(holdout_dates)} transition days ({len(holdout_level_dates)} levels) after {calibration_end}"],
     )
 
     return calib_panel, holdout_panel
@@ -234,13 +273,39 @@ def calibrate_factor_panel(
             data_classification_label="SIMULATED_RESEARCH_PROXY",
         )
 
+    calib_level_count = panel.aligned_level_count or (len(panel.dates) + 1)
+    calib_trans_count = panel.transition_count or len(panel.dates)
+    first_calib_lvl = panel.first_level_date or (panel.level_dates[0] if panel.level_dates else min(panel.dates))
+    last_calib_lvl = panel.last_level_date or (panel.level_dates[-1] if panel.level_dates else max(panel.dates))
+    first_calib_tr = panel.first_transition_date or min(panel.dates)
+    last_calib_tr = panel.last_transition_date or max(panel.dates)
+
+    h_level_count = (holdout_panel.aligned_level_count if holdout_panel and holdout_panel.aligned_level_count else (len(holdout_panel.dates) + 1 if holdout_panel and holdout_panel.dates else 0))
+    h_trans_count = holdout_panel.transition_count if holdout_panel and holdout_panel.transition_count else (len(holdout_panel.dates) if holdout_panel else 0)
+    first_h_lvl = holdout_panel.first_level_date if holdout_panel else None
+    last_h_lvl = holdout_panel.last_level_date if holdout_panel else None
+    first_h_tr = holdout_panel.first_transition_date if holdout_panel else None
+    last_h_tr = holdout_panel.last_transition_date if holdout_panel else None
+
     return CalibrationReport(
         calibration_start=calib_start,
         calibration_end=calib_end,
         calibration_sample_size=n_obs,
+        calibration_level_count=calib_level_count,
+        calibration_transition_count=calib_trans_count,
+        first_calibration_level_date=first_calib_lvl,
+        last_calibration_level_date=last_calib_lvl,
+        first_calibration_transition_date=first_calib_tr,
+        last_calibration_transition_date=last_calib_tr,
         holdout_start=h_start,
         holdout_end=h_end,
         holdout_sample_size=h_count,
+        holdout_level_count=h_level_count,
+        holdout_transition_count=h_trans_count,
+        first_holdout_level_date=first_h_lvl,
+        last_holdout_level_date=last_h_lvl,
+        first_holdout_transition_date=first_h_tr,
+        last_holdout_transition_date=last_h_tr,
         factor_summaries=summaries,
         factor_names=factor_names,
         correlation_matrix=corr_mat.tolist(),
@@ -368,6 +433,13 @@ def build_availability_audit(
         f"Point-in-time classifications reconcile with 100% mutual exclusivity."
     )
 
+    calib_level_count = getattr(panel, "aligned_level_count", 0) or (len(panel.dates) + 1 if panel and panel.dates else 0)
+    calib_trans_count = getattr(panel, "transition_count", 0) or (len(panel.dates) if panel and panel.dates else 0)
+    first_lvl = getattr(panel, "first_level_date", None) or (panel.level_dates[0] if panel and panel.level_dates else (min(panel.dates) if panel and panel.dates else None))
+    last_lvl = getattr(panel, "last_level_date", None) or (panel.level_dates[-1] if panel and panel.level_dates else (max(panel.dates) if panel and panel.dates else None))
+    first_tr = getattr(panel, "first_transition_date", None) or (min(panel.dates) if panel and panel.dates else None)
+    last_tr = getattr(panel, "last_transition_date", None) or (max(panel.dates) if panel and panel.dates else None)
+
     return AvailabilityAuditReport(
         total_source_observations=total_source,
         genuine_observations_included=genuine_incl,
@@ -386,5 +458,12 @@ def build_availability_audit(
         audit_scope_description=audit_scope,
         release_lag_policies=release_lag_policies,
         factor_breakdown=factor_breakdown,
+        complete_aligned_factor_days=calib_trans_count,
+        aligned_level_count=calib_level_count,
+        transition_count=calib_trans_count,
+        first_level_date=first_lvl,
+        last_level_date=last_lvl,
+        first_transition_date=first_tr,
+        last_transition_date=last_tr,
     )
 

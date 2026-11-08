@@ -33,6 +33,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from backtesting.calendar import FederalReserveH15Calendar
 from data.db.engine import make_engine, make_session_factory
 from data.repository import Repository
 from simulation.monte_carlo import (
@@ -59,6 +60,7 @@ from simulation.monte_carlo import (
     generate_phase_4_1_2_1_research_report,
     generate_phase_4_1_2_2_research_report,
     generate_phase_4_1_2_2_1_research_report,
+    generate_phase_4_1_2_2_2_research_report,
     resolve_initial_market_levels,
     split_calibration_holdout,
     validate_market_calendar_evidence,
@@ -114,12 +116,12 @@ def run_monte_carlo_laboratory(
     pit_mode: str | PITMode = PITMode.ESTIMATED_LAG,
 ) -> None:
     """Execute complete Phase 4.1.2.1 Monte Carlo simulation and reproducibility closure suite."""
-    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2_2")
+    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2_2_2")
     out_dir.mkdir(parents=True, exist_ok=True)
     mode = PITMode(pit_mode) if isinstance(pit_mode, str) else pit_mode
 
     print("=" * 85)
-    print(" PHASE 4.1.2.2 — RESIDUAL CONSISTENCY & EXECUTION ASSUMPTIONS CLOSURE")
+    print(" PHASE 4.1.2.2.2 — CANONICAL FX PANEL INTEGRITY & ARTIFACT RECONCILIATION")
     print(f" Paths: {num_paths:,} | Horizon: {horizon_steps} steps | Seed: {random_seed} | PIT Mode: {mode.value}")
     print(f" Output Directory: {out_dir}")
     print("=" * 85)
@@ -477,6 +479,18 @@ def run_monte_carlo_laboratory(
         "predictive_sample_size": 1000,
         "calendar_implementation": "JointTarget2FedCalendar (TARGET2 + Federal Reserve holiday settlement calendar; Federal Reserve H.15 release calendar at 4:15 PM Eastern Time)",
         "h15_release_schedule": "4:15 PM Eastern Time on next Federal Reserve business day (ZoneInfo('America/New_York'))",
+        "aligned_level_count": calib_panel.aligned_level_count,
+        "transition_count": calib_panel.transition_count,
+        "first_level_date": str(calib_panel.first_level_date) if calib_panel.first_level_date else None,
+        "last_level_date": str(calib_panel.last_level_date) if calib_panel.last_level_date else None,
+        "first_transition_date": str(calib_panel.first_transition_date) if calib_panel.first_transition_date else None,
+        "last_transition_date": str(calib_panel.last_transition_date) if calib_panel.last_transition_date else None,
+        "h15_exceptional_closures": {str(k): v for k, v in FederalReserveH15Calendar.get_exceptional_closures().items()},
+        "checkpoint_stability_summary": {
+            "total_models": len(model_comparisons),
+            "achieved_count": sum(1 for mc in model_comparisons if getattr(mc, "checkpoint_stability_status", "") == "CHECKPOINT_STABILITY_ACHIEVED"),
+            "not_achieved_count": sum(1 for mc in model_comparisons if getattr(mc, "checkpoint_stability_status", "") != "CHECKPOINT_STABILITY_ACHIEVED"),
+        },
         "correlation_stress_config": {
             "method": "zero_off_diagonal_decoupling",
             "variance_reduction": "common_random_numbers",
@@ -485,7 +499,24 @@ def run_monte_carlo_laboratory(
         "initial_market_levels": initial_levels.model_dump(mode="json"),
     }
 
-    if "4_1_2_2_1" in out_dir.name:
+    if "4_1_2_2_2" in out_dir.name:
+        report_md = generate_phase_4_1_2_2_2_research_report(
+            avail_audit=avail_audit,
+            model_comparisons=model_comparisons,
+            factor_diag=factor_diag,
+            port_diag=port_diag,
+            corr_stress=corr_stress,
+            cal_val=cal_val,
+            funding_sens=funding_sens,
+            bootstrap_result=mc_mb,
+            student_t_result=mc_t,
+            regime_result=mc_reg,
+            gaussian_result=mc_gauss,
+            manifest_info=manifest_metadata,
+            initial_levels=initial_levels,
+            calibration_report=calib_report,
+        )
+    elif "4_1_2_2_1" in out_dir.name:
         report_md = generate_phase_4_1_2_2_1_research_report(
             avail_audit=avail_audit,
             model_comparisons=model_comparisons,
@@ -599,11 +630,23 @@ def run_monte_carlo_laboratory(
         "calibration_window": {
             "start": "2020-01-01",
             "end": "2023-12-31",
+            "aligned_level_count": calib_panel.aligned_level_count,
+            "transition_count": calib_panel.transition_count,
+            "first_level_date": str(calib_panel.first_level_date) if calib_panel.first_level_date else None,
+            "last_level_date": str(calib_panel.last_level_date) if calib_panel.last_level_date else None,
+            "first_transition_date": str(calib_panel.first_transition_date) if calib_panel.first_transition_date else None,
+            "last_transition_date": str(calib_panel.last_transition_date) if calib_panel.last_transition_date else None,
             "trading_days": calib_panel.effective_sample_size,
         },
         "holdout_window": {
             "start": "2024-01-01",
             "end": "2024-12-31",
+            "aligned_level_count": holdout_panel.aligned_level_count,
+            "transition_count": holdout_panel.transition_count,
+            "first_level_date": str(holdout_panel.first_level_date) if holdout_panel else None,
+            "last_level_date": str(holdout_panel.last_level_date) if holdout_panel else None,
+            "first_transition_date": str(holdout_panel.first_transition_date) if holdout_panel else None,
+            "last_transition_date": str(holdout_panel.last_transition_date) if holdout_panel else None,
             "trading_days": holdout_panel.effective_sample_size,
         },
         "simulation_parameters": {
@@ -643,11 +686,11 @@ def run_monte_carlo_laboratory(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 4.1.2.2.1 Monte Carlo Research Integrity & Reproducibility Closure Runner")
+    parser = argparse.ArgumentParser(description="Phase 4.1.2.2.2 Monte Carlo Research Integrity & Reproducibility Closure Runner")
     parser.add_argument("--paths", type=int, default=1000, help="Number of simulation paths per model (default: 1000)")
     parser.add_argument("--horizon", type=int, default=252, help="Simulation horizon in trading days (default: 252)")
     parser.add_argument("--seed", type=int, default=42, help="Random number generator seed (default: 42)")
-    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2_2_1", help="Output directory for simulation results")
+    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2_2_2", help="Output directory for simulation results")
     parser.add_argument("--pit-mode", type=str, default="ESTIMATED_LAG", choices=["STRICT_VERIFIED", "ESTIMATED_LAG", "RESEARCH_ONLY"], help="Point-in-time enforcement mode (default: ESTIMATED_LAG)")
     parser.add_argument("--smoke", action="store_true", help="Run fast smoke test with 50 paths over 30 steps")
     args = parser.parse_args()

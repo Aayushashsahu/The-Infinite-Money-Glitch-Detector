@@ -377,6 +377,19 @@ def get_settlement_calendar(curr_a: str, curr_b: str) -> JointCurrencySettlement
 DEFAULT_FX_CALENDAR = MarketCalendar()
 
 
+class _HybridMethod:
+    """Descriptor enabling a method to be called either on the class or an instance."""
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, owner):
+        target = instance if instance is not None else owner._get_default_instance()
+        def wrapper(*args, **kwargs):
+            return self.func(target, *args, **kwargs)
+        return wrapper
+
+
 class FederalReserveH15Calendar:
     """Federal Reserve Statistical Release H.15 Availability Calendar.
 
@@ -389,31 +402,97 @@ class FederalReserveH15Calendar:
       Columbus Day, Veterans Day, Thanksgiving Day, and Christmas Day.
     - Weekend observance shifts: Sunday holidays are observed on Monday; Saturday holidays
       are observed on Friday.
+    - Exceptional closures: models unscheduled Federal Reserve Board closures (e.g. National
+      Days of Mourning, severe weather emergencies like Hurricane Sandy).
+    - Release date overrides: allows explicit inspection and recording of authoritative historical
+      release timestamps from ALFRED/H.15 records.
     - Timezone conversion evaluates Eastern Standard Time (UTC-5, 21:15 UTC) and Eastern
       Daylight Time (UTC-4, 20:15 UTC) accurately via zoneinfo.ZoneInfo("America/New_York").
     """
 
+    # Authoritative unscheduled Federal Reserve Board and financial market closures
+    HISTORICAL_EXCEPTIONAL_CLOSURES: dict[date, str] = {
+        date(2018, 12, 5): "National Day of Mourning for President George H.W. Bush (Executive Order 13854)",
+        date(2012, 10, 29): "Emergency Market & Federal Reserve Closure - Hurricane Sandy",
+        date(2012, 10, 30): "Emergency Market & Federal Reserve Closure - Hurricane Sandy",
+        date(2007, 1, 2): "National Day of Mourning for President Gerald R. Ford (Executive Order 13421)",
+        date(2004, 6, 11): "National Day of Mourning for President Ronald Reagan (Executive Order 13343)",
+        date(2001, 9, 11): "Emergency Closure - September 11 Terrorist Attacks",
+    }
+
+    _default_inst: FederalReserveH15Calendar | None = None
+
+    @classmethod
+    def _get_default_instance(cls) -> FederalReserveH15Calendar:
+        if cls._default_inst is None:
+            cls._default_inst = cls()
+        return cls._default_inst
+
     def __init__(self) -> None:
         self._holiday_cache: dict[int, set[date]] = {}
+        self._exceptional_closures: dict[date, str] = dict(self.HISTORICAL_EXCEPTIONAL_CLOSURES)
+        self._release_date_overrides: dict[date, date] = {}
+        self._release_timestamp_overrides: dict[date, datetime] = {}
 
+    @_HybridMethod
+    def register_exceptional_closure(self, d: date, reason: str = "") -> None:
+        """Register an exceptional, unscheduled Federal Reserve Board closure date."""
+        self._exceptional_closures[d] = reason or "Unscheduled Federal Reserve Board Closure"
+
+    @_HybridMethod
+    def register_release_override(self, obs_date: date, release_date: date, reason: str = "") -> None:
+        """Register an explicit release-date override for an observation date from authoritative records."""
+        self._release_date_overrides[obs_date] = release_date
+
+    @_HybridMethod
+    def register_release_timestamp_override(self, obs_date: date, release_ts: datetime, reason: str = "") -> None:
+        """Register an explicit exact release timestamp override for an observation date."""
+        ts_utc = release_ts.replace(tzinfo=timezone.utc) if release_ts.tzinfo is None else release_ts.astimezone(timezone.utc)
+        self._release_timestamp_overrides[obs_date] = ts_utc
+
+    @_HybridMethod
+    def is_exceptional_closure(self, d: date) -> bool:
+        """Check whether date is a registered exceptional Federal Reserve Board closure."""
+        return d in self._exceptional_closures
+
+    @_HybridMethod
+    def get_exceptional_closures(self) -> dict[date, str]:
+        """Return all inspectable exceptional Federal Reserve closures."""
+        return dict(self._exceptional_closures)
+
+    @_HybridMethod
+    def get_release_overrides(self) -> dict[date, date]:
+        """Return all inspectable release-date overrides."""
+        return dict(self._release_date_overrides)
+
+    @_HybridMethod
+    def get_release_timestamp_overrides(self) -> dict[date, datetime]:
+        """Return all inspectable release-timestamp overrides."""
+        return dict(self._release_timestamp_overrides)
+
+    @_HybridMethod
     def is_weekend(self, d: date) -> bool:
         """Saturday (5) and Sunday (6) are weekend closures."""
         return d.weekday() >= 5
 
+    @_HybridMethod
     def get_fed_holidays(self, year: int) -> set[date]:
         """Return scheduled Federal Reserve holidays for a given year."""
         if year not in self._holiday_cache:
             self._holiday_cache[year] = _us_fed_holidays(year)
         return self._holiday_cache[year]
 
+    @_HybridMethod
     def is_fed_holiday(self, d: date) -> bool:
         """Check whether date is an official Federal Reserve holiday."""
         return d in self.get_fed_holidays(d.year)
 
+    @_HybridMethod
     def is_fed_business_day(self, d: date) -> bool:
-        """Check whether date is an active Federal Reserve business day."""
-        return not self.is_weekend(d) and not self.is_fed_holiday(d)
+        """Check whether date is an active Federal Reserve business day (not weekend, not holiday, not exceptional closure)."""
+        return not self.is_weekend(d) and not self.is_fed_holiday(d) and not self.is_exceptional_closure(d)
 
+    @_HybridMethod
     def next_fed_business_day(self, d: date) -> date:
         """Earliest Federal Reserve business day strictly after date d."""
         curr = d + timedelta(days=1)
@@ -421,10 +500,12 @@ class FederalReserveH15Calendar:
             curr += timedelta(days=1)
         return curr
 
+    @_HybridMethod
     def get_next_business_day(self, d: date) -> date:
         """Alias for next_fed_business_day."""
         return self.next_fed_business_day(d)
 
+    @_HybridMethod
     def previous_fed_business_day(self, d: date) -> date:
         """Latest Federal Reserve business day strictly before date d."""
         curr = d - timedelta(days=1)
@@ -432,12 +513,22 @@ class FederalReserveH15Calendar:
             curr -= timedelta(days=1)
         return curr
 
+    @_HybridMethod
     def get_h15_release_timestamp(self, obs_date: date) -> datetime:
         """Compute the point-in-time H.15 availability timestamp in UTC for an observation date.
 
-        The rate for obs_date is released at 16:15 Eastern Time on the next Federal Reserve business day.
+        - If an exact release timestamp override is recorded, returns that timestamp.
+        - If an authoritative release date override is recorded, evaluates 16:15 ET on that date.
+        - Otherwise, the rate for obs_date is released at 16:15 Eastern Time on the next Federal Reserve business day.
         """
-        release_date = self.next_fed_business_day(obs_date)
+        if obs_date in self._release_timestamp_overrides:
+            return self._release_timestamp_overrides[obs_date]
+
+        if obs_date in self._release_date_overrides:
+            release_date = self._release_date_overrides[obs_date]
+        else:
+            release_date = self.next_fed_business_day(obs_date)
+
         et_dt = datetime(release_date.year, release_date.month, release_date.day, 16, 15, 0, tzinfo=EASTERN_TZ)
         return et_dt.astimezone(timezone.utc)
 

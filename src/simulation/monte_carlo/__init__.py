@@ -55,6 +55,7 @@ from simulation.monte_carlo.reporting import (
     generate_phase_4_1_2_1_research_report,
     generate_phase_4_1_2_2_research_report,
     generate_phase_4_1_2_2_1_research_report,
+    generate_phase_4_1_2_2_2_research_report,
     generate_research_report,
 )
 from simulation.monte_carlo.schemas import (
@@ -168,6 +169,7 @@ __all__ = [
     "generate_phase_4_1_2_1_research_report",
     "generate_phase_4_1_2_2_research_report",
     "generate_phase_4_1_2_2_1_research_report",
+    "generate_phase_4_1_2_2_2_research_report",
     "generate_research_report",
     "generate_simulated_trading_sessions",
     "get_effective_availability_timestamp",

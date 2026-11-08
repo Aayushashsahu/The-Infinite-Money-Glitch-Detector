@@ -140,7 +140,12 @@ class FactorRowProvenance(BaseModel):
     source_id: str
     series_id: str
     raw_value: float
+    raw_unit: str | None = None
+    normalized_level: float | None = None
     transformed_value: float
+    pair: str | None = None
+    base_currency: str | None = None
+    quote_currency: str | None = None
     data_classification: DataClassification = DataClassification.REAL_VERIFIED
     availability_evidence: str | None = None
     revision: int | None = None
@@ -165,15 +170,29 @@ class FactorPanel(BaseModel):
     """A synchronized, calendar-aligned panel of market factors."""
 
     factors: list[MarketFactor]
-    dates: list[date]
+    dates: list[date] = Field(description="Factor transition dates (length == N - 1)")
+    level_dates: list[date] = Field(
+        default_factory=list,
+        description="All aligned level observation dates (length == N)",
+    )
     values: dict[str, list[float]] = Field(
         description="Factor ID -> transformed factor time series (length == len(dates))"
     )
     raw_levels: dict[str, list[float]] = Field(
-        description="Factor ID -> raw level time series (length == len(dates))"
+        description="Factor ID -> raw source level time series (length == len(dates))"
     )
+    canonical_levels: dict[str, list[float]] = Field(
+        default_factory=dict,
+        description="Factor ID -> normalized canonical level time series (length == len(dates))",
+    )
+    aligned_level_count: int = Field(default=0, description="Total number of aligned level observation dates (N)")
+    transition_count: int = Field(default=0, description="Total number of factor return/change transitions (N - 1)")
+    first_level_date: date | None = Field(default=None, description="First aligned level observation date")
+    last_level_date: date | None = Field(default=None, description="Last aligned level observation date")
+    first_transition_date: date | None = Field(default=None, description="First factor transition date")
+    last_transition_date: date | None = Field(default=None, description="Last factor transition date")
     calendar_name: str = Field(default="TARGET2_USFED_JOINT", description="Name of alignment calendar")
-    effective_sample_size: int = Field(description="Number of aligned observation dates")
+    effective_sample_size: int = Field(description="Number of aligned transition dates available for calibration")
     is_aligned: bool = Field(default=True, description="True if complete cases across all factors")
     alignment_audit: list[str] = Field(default_factory=list, description="Audit log of alignment operations")
     row_provenance: dict[str, list[FactorRowProvenance]] = Field(
@@ -456,6 +475,13 @@ class AvailabilityAuditReport(BaseModel):
     audit_scope_description: str = ""
     release_lag_policies: dict[str, str] = Field(default_factory=dict)
     factor_breakdown: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    complete_aligned_factor_days: int = 0
+    aligned_level_count: int = 0
+    transition_count: int = 0
+    first_level_date: date | None = None
+    last_level_date: date | None = None
+    first_transition_date: date | None = None
+    last_transition_date: date | None = None
 
 
 class FactorHoldoutDiagnostics(BaseModel):

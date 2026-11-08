@@ -136,32 +136,62 @@ def _normalize_rate_to_decimal(obs: DataObservation) -> float:
         )
 
 
+def _normalize_rate_to_percentage_points(obs: DataObservation) -> float:
+    """Convert an interest rate observation to percentage points (e.g. 4.5 for 4.5%) strictly via metadata."""
+    unit_str = (obs.unit or "").strip().lower()
+    if unit_str in ("percent", "percentage", "%", "pct"):
+        return obs.value
+    elif unit_str in ("decimal", "fraction", "ratio", "rate"):
+        return obs.value * 100.0
+    elif unit_str in ("basis_points", "bps"):
+        return obs.value / 100.0
+    else:
+        raise ValueError(
+            f"Cannot determine rate unit conversion for series '{obs.indicator_id or obs.entity_code}' "
+            f"with unknown unit '{obs.unit}'. Unit must be explicitly declared ('percent', 'decimal', etc.)."
+        )
+
+
 def _normalize_fx_quote_to_usd_per_eur(fx_obs: DataObservation) -> float:
-    """Normalize FX quote to canonical provider quote convention (USD per EUR) strictly via metadata."""
+    """Normalize FX quote to canonical provider quote convention (USD per EUR) strictly via metadata.
+
+    Rules:
+    - Declared unit 'usd_per_eur' / 'usd/eur' represents USD per 1 EUR (canonical); returns value as-is.
+    - Declared unit 'eur_per_usd' / 'eur/usd' represents EUR per 1 USD (reciprocal); returns 1.0 / value.
+    - If unit metadata is absent or generic, inspects quote_convention, base_currency, and quote_currency.
+    - Rejects missing, ambiguous, or unsupported quote metadata (fails closed).
+    - Never uses numerical magnitude heuristics.
+    """
     unit_str = (fx_obs.unit or "").strip().lower()
     convention = fx_obs.quote_convention
 
-    # Indirect quote conventions (EUR per USD): invert to get USD per EUR
-    if (
-        unit_str in ("eur_per_usd", "eur/usd")
-        or (fx_obs.base_currency == "USD" and fx_obs.quote_currency == "EUR")
-        or convention == QuoteConvention.BASE_PER_QUOTE
-    ):
+    # 1. Explicit unit metadata takes precedence
+    if unit_str in ("usd_per_eur", "usd/eur", "usd per eur"):
+        return fx_obs.value
+    if unit_str in ("eur_per_usd", "eur/usd", "eur per usd"):
         return 1.0 / fx_obs.value
 
-    # Direct quote conventions (USD per EUR): keep value
-    if (
-        unit_str in ("usd_per_eur", "usd/eur")
-        or (fx_obs.base_currency == "EUR" and fx_obs.quote_currency == "USD")
-        or convention == QuoteConvention.QUOTE_PER_BASE
-    ):
+    # 2. Quote convention and currencies
+    if fx_obs.base_currency == "EUR" and fx_obs.quote_currency == "USD":
+        if convention == QuoteConvention.BASE_PER_QUOTE:
+            return 1.0 / fx_obs.value
         return fx_obs.value
 
-    # Default fallback for canonical pair code if unit is not explicit
-    if fx_obs.entity_code == "EUR/USD":
-        return fx_obs.value
-    elif fx_obs.entity_code == "USD/EUR":
+    if fx_obs.base_currency == "USD" and fx_obs.quote_currency == "EUR":
+        if convention == QuoteConvention.BASE_PER_QUOTE:
+            return fx_obs.value
         return 1.0 / fx_obs.value
+
+    # 3. Canonical pair symbol fallback if currencies/units not specified
+    if not unit_str:
+        if fx_obs.entity_code == "EUR/USD":
+            if convention == QuoteConvention.BASE_PER_QUOTE:
+                return 1.0 / fx_obs.value
+            return fx_obs.value
+        elif fx_obs.entity_code == "USD/EUR":
+            if convention == QuoteConvention.BASE_PER_QUOTE:
+                return fx_obs.value
+            return 1.0 / fx_obs.value
 
     raise ValueError(
         f"Cannot determine quote convention for FX observation {fx_obs.entity_code} "
@@ -399,6 +429,7 @@ def build_fx_carry_factor_panel(
     strict_pit: bool = False,
     pit_mode: PITMode | str = PITMode.ESTIMATED_LAG,
     decision_time_utc: time = time(16, 0),
+    min_observations: int = 50,
 ) -> FactorPanel:
     """Build a synchronized, multi-factor panel for FX carry simulation.
 
@@ -476,9 +507,10 @@ def build_fx_carry_factor_panel(
     all_invest_candidates: list[DataObservation] = []
     all_sov_candidates: list[DataObservation] = []
 
+    fx_target_codes = {fx_entity, fx_entity.replace("/", "_"), fx_entity.replace("_", "/")}
     for o in valid_obs:
         d = o.observation_date
-        if o.kind == ObservationKind.EXCHANGE_RATE and o.entity_code == fx_entity:
+        if o.kind == ObservationKind.EXCHANGE_RATE and (o.entity_code in fx_target_codes or getattr(o, "pair", None) in fx_target_codes):
             fx_candidates_by_date[d].append(o)
         elif o.kind == ObservationKind.INTEREST_RATE:
             if o.indicator_id == borrowing_series_id:
@@ -491,10 +523,10 @@ def build_fx_carry_factor_panel(
                 all_sov_candidates.append(o)
 
     # 3. Complete common dates intersection across candidate series
-    # Option A: Common complete panel if sovereign yield series has sufficient observations (>= 50)
+    # Option A: Common complete panel if sovereign yield series has sufficient observations (>= min_observations)
     # Option B: Reduced 3-factor panel if sovereign yield series has insufficient observations
     # Never substitute missing values across series
-    has_sovereign = sovereign_yield_series_id is not None and len(sov_candidates_by_date) >= 50
+    has_sovereign = sovereign_yield_series_id is not None and len(sov_candidates_by_date) >= min_observations
     common_set = set(fx_candidates_by_date.keys()).intersection(set(invest_candidates_by_date.keys()))
     if has_sovereign:
         common_set = common_set.intersection(set(sov_candidates_by_date.keys()))
@@ -503,20 +535,24 @@ def build_fx_carry_factor_panel(
         if sovereign_yield_series_id is not None:
             audit_log.append(
                 f"Option B: Reduced research panel. Excluded optional factor '{sovereign_yield_series_id}' "
-                f"due to insufficient observations ({len(sov_candidates_by_date)} < 50). Retaining 3-factor panel without cross-series substitution."
+                f"due to insufficient observations ({len(sov_candidates_by_date)} < {min_observations}). Retaining 3-factor panel without cross-series substitution."
             )
 
     common_dates = sorted(common_set)
-    if len(common_dates) < 50:
+    if len(common_dates) < min_observations:
         raise ValueError(f"Insufficient aligned trading days across complete factor panel: {len(common_dates)}")
     audit_log.append(f"Synchronized complete common trading calendar with {len(common_dates)} active days.")
 
     # 4. Align raw level series across common trading dates with decision-time aware point-in-time availability
     aligned_dates: list[date] = []
     fx_raw: list[float] = []
+    fx_canonical: list[float] = []
     borrowing_raw: list[float] = []
+    borrowing_pts: list[float] = []
     invest_raw: list[float] = []
+    invest_pts: list[float] = []
     sov_raw: list[float] = []
+    sov_pts: list[float] = []
 
     # Keep track of corresponding DataObservation for provenance
     fx_aligned_obs: list[DataObservation] = []
@@ -589,30 +625,41 @@ def build_fx_carry_factor_panel(
         else:
             sov_o = None
 
+        fx_canon_val = _normalize_fx_quote_to_usd_per_eur(fx_o)
+        borrowing_pts_val = _normalize_rate_to_percentage_points(prevailing_borrowing_obs)
+        invest_pts_val = _normalize_rate_to_percentage_points(invest_o)
+
         aligned_dates.append(d)
         fx_raw.append(fx_o.value)
+        fx_canonical.append(fx_canon_val)
         borrowing_raw.append(prevailing_borrowing_obs.value)
+        borrowing_pts.append(borrowing_pts_val)
         invest_raw.append(invest_o.value)
+        invest_pts.append(invest_pts_val)
 
         fx_aligned_obs.append(fx_o)
         borrowing_aligned_obs.append(prevailing_borrowing_obs)
         invest_aligned_obs.append(invest_o)
 
         if has_sovereign and sov_o is not None:
+            sov_pts_val = _normalize_rate_to_percentage_points(sov_o)
             sov_raw.append(sov_o.value)
+            sov_pts.append(sov_pts_val)
             sov_aligned_obs.append(sov_o)
 
-    if len(aligned_dates) < 50:
+    if len(aligned_dates) < min_observations:
         raise ValueError(f"Insufficient aligned trading days across complete factor panel after PIT filtering: {len(aligned_dates)}")
 
 
     # 5. Compute mathematical factor transformations (differences & log returns)
     factor_dates = aligned_dates[1:]
 
-    fx_returns = compute_log_returns(fx_raw)
-    borrowing_diffs_bps = compute_differences(borrowing_raw, in_bps=True)
-    invest_diffs_bps = compute_differences(invest_raw, in_bps=True)
-    sov_diffs_bps = compute_differences(sov_raw, in_bps=True) if has_sovereign else []
+    # Log returns computed strictly from canonical USD per EUR levels
+    fx_returns = compute_log_returns(fx_canonical)
+    # Basis point differences computed from validated percentage points
+    borrowing_diffs_bps = compute_differences(borrowing_pts, in_bps=True)
+    invest_diffs_bps = compute_differences(invest_pts, in_bps=True)
+    sov_diffs_bps = compute_differences(sov_pts, in_bps=True) if has_sovereign else []
 
     # 6. Build row-level provenance records
     row_provenance: dict[str, list[FactorRowProvenance]] = defaultdict(list)
@@ -628,7 +675,12 @@ def build_fx_carry_factor_panel(
                 source_id=fx_o.source_id,
                 series_id=fx_o.entity_code,
                 raw_value=fx_raw[i],
+                raw_unit=fx_o.unit,
+                normalized_level=fx_canonical[i],
                 transformed_value=fx_returns[idx],
+                pair=fx_o.entity_code,
+                base_currency=fx_o.base_currency,
+                quote_currency=fx_o.quote_currency,
                 data_classification=fx_o.classification,
                 availability_evidence=fx_o.availability_evidence,
                 revision=fx_o.revision,
@@ -644,7 +696,12 @@ def build_fx_carry_factor_panel(
                 source_id=b_o.source_id,
                 series_id=b_o.indicator_id or borrowing_series_id,
                 raw_value=borrowing_raw[i],
+                raw_unit=b_o.unit,
+                normalized_level=borrowing_pts[i],
                 transformed_value=borrowing_diffs_bps[idx],
+                pair=None,
+                base_currency="EUR",
+                quote_currency=None,
                 data_classification=b_o.classification,
                 availability_evidence=b_o.availability_evidence,
                 revision=b_o.revision,
@@ -660,7 +717,12 @@ def build_fx_carry_factor_panel(
                 source_id=inv_o.source_id,
                 series_id=inv_o.indicator_id or investment_series_id,
                 raw_value=invest_raw[i],
+                raw_unit=inv_o.unit,
+                normalized_level=invest_pts[i],
                 transformed_value=invest_diffs_bps[idx],
+                pair=None,
+                base_currency="USD",
+                quote_currency=None,
                 data_classification=inv_o.classification,
                 availability_evidence=inv_o.availability_evidence,
                 revision=inv_o.revision,
@@ -677,7 +739,12 @@ def build_fx_carry_factor_panel(
                     source_id=s_o.source_id,
                     series_id=s_o.indicator_id or sovereign_yield_series_id,
                     raw_value=sov_raw[i],
+                    raw_unit=s_o.unit,
+                    normalized_level=sov_pts[i],
                     transformed_value=sov_diffs_bps[idx],
+                    pair=None,
+                    base_currency="USD",
+                    quote_currency=None,
                     data_classification=s_o.classification,
                     availability_evidence=s_o.availability_evidence,
                     revision=s_o.revision,
@@ -745,6 +812,12 @@ def build_fx_carry_factor_panel(
         "YIELD_DIFF_USD_1M_BPS": invest_raw[1:],
     }
 
+    canonical_levels = {
+        "FX_EUR_USD_LOGRET": fx_canonical[1:],
+        "RATE_DIFF_EUR_BORROW_BPS": borrowing_pts[1:],
+        "YIELD_DIFF_USD_1M_BPS": invest_pts[1:],
+    }
+
     if has_sovereign:
         factors.append(
             MarketFactor(
@@ -765,16 +838,25 @@ def build_fx_carry_factor_panel(
         )
         values["YIELD_DIFF_USD_3M_BPS"] = sov_diffs_bps
         raw_levels["YIELD_DIFF_USD_3M_BPS"] = sov_raw[1:]
+        canonical_levels["YIELD_DIFF_USD_3M_BPS"] = sov_pts[1:]
 
     audit_log.append(
-        f"Successfully constructed FactorPanel with {len(factors)} factors over {len(factor_dates)} transition days without cross-series substitution."
+        f"Successfully constructed FactorPanel with {len(factors)} factors over {len(factor_dates)} transition days ({len(aligned_dates)} aligned level days) without cross-series substitution."
     )
 
     return FactorPanel(
         factors=factors,
         dates=factor_dates,
+        level_dates=aligned_dates,
         values=values,
         raw_levels=raw_levels,
+        canonical_levels=canonical_levels,
+        aligned_level_count=len(aligned_dates),
+        transition_count=len(factor_dates),
+        first_level_date=aligned_dates[0],
+        last_level_date=aligned_dates[-1],
+        first_transition_date=factor_dates[0],
+        last_transition_date=factor_dates[-1],
         calendar_name="TARGET2_USFED_JOINT",
         effective_sample_size=len(factor_dates),
         is_aligned=True,
