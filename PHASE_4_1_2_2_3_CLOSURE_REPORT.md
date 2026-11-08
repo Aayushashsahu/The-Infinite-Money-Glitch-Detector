@@ -19,7 +19,7 @@ Phase 4.1.2.2.3 resolves the critical defect in the holdout predictive-path cons
 | Attribute | Phase 4.1.2.2.2 Predecessor | Phase 4.1.2.2.3 Current State |
 |---|---|---|
 | **Stage A Source Commit** | `f346131cb356881f44382a154c0323e55a476b68` | `790e1e1bae8b3e9ead0300cfc80abd897d89a746` |
-| **Stage B Results Commit** | `25941d76e3ad3b91cde012b84b9197209fbad133` | `PENDING_STAGE_B_COMMIT` |
+| **Stage B Results Commit** | `25941d76e3ad3b91cde012b84b9197209fbad133` | `c477023c94ea32bfd33d2bd3e06c156e96b2a7fd` |
 | **Test Suite Baseline** | 412 passed (Python 3.11 & 3.12) | **424 passed** (12 new tests, 0 failures) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 warnings, 0 errors) |
 | **Research Classification** | `SIMULATED_RESEARCH_PROXY` | `SIMULATED_RESEARCH_PROXY` |
