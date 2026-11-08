@@ -8,6 +8,17 @@ by default everywhere.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import sys
+
+if sys.platform == "win32":
+    try:
+        import ctypes
+        try:
+            ctypes.CDLL("ucrtbase.dll")._setmaxstdio(2048)
+        except Exception:
+            ctypes.cdll.msvcrt._setmaxstdio(2048)
+    except Exception:
+        pass
 
 import pytest
 
@@ -23,13 +34,15 @@ def make_obs(**overrides) -> DataObservation:
     arbitrary far-future observation dates stay schema-valid.
     """
     observation_date = overrides.get("observation_date", date(2020, 1, 1))
+    kind = overrides.get("kind", ObservationKind.MACRO_INDICATOR)
+    default_unit = "quote_per_base" if kind == ObservationKind.EXCHANGE_RATE else "percent"
     defaults = dict(
-        kind=ObservationKind.MACRO_INDICATOR,
+        kind=kind,
         source_id="test_source",
         indicator_id="TEST_IND",
         entity_code="TST",
         value=1.0,
-        unit="percent",
+        unit=default_unit,
         frequency=Frequency.ANNUAL,
         observation_date=observation_date,
         retrieved_at=datetime(2024, 1, 1, tzinfo=timezone.utc),

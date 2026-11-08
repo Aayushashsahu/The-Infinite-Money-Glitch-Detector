@@ -86,7 +86,7 @@ def make_test_obs(
         base_currency=base_curr,
         quote_currency=quote_curr,
         quote_convention=convention,
-        unit=quote_curr,
+        unit=quote_curr if convention == QuoteConvention.QUOTE_PER_BASE else base_curr,
         frequency=Frequency.DAILY,
         source_id=source_id,
         availability_evidence=evidence,

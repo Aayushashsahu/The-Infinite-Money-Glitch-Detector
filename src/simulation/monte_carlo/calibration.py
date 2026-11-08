@@ -161,6 +161,8 @@ def check_factor_variance(
     from near-zero variance (correlation is mathematically defined but treated as
     numerically unreliable under the declared threshold).
 
+    Rejects non-finite inputs (NaN, Inf) with ValueError.
+
     Returns:
         (std, is_exact_zero, is_near_zero)
         where:
@@ -169,6 +171,8 @@ def check_factor_variance(
         - is_near_zero: True if 0.0 < std < threshold (numerically unreliable correlation).
     """
     arr = np.asarray(series, dtype=np.float64)
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("Factor series contains non-finite values (NaN or Inf). Cannot compute variance.")
     std = float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0
     is_exact_zero = (std == 0.0)
     is_near_zero = (0.0 < std < threshold)
@@ -229,6 +233,8 @@ def calibrate_factor_panel(
         series = np.array(panel.values[fname], dtype=np.float64)
         if len(series) == 0:
             raise ValueError(f"Factor series {fname} is empty.")
+        if not np.all(np.isfinite(series)):
+            raise ValueError(f"Factor series '{fname}' contains non-finite values (NaN or Inf). Cannot calibrate.")
 
         std_val, is_exact_zero, is_near_zero = check_factor_variance(series, threshold=VARIANCE_DEGENERACY_THRESHOLD)
         variance_statuses[fname] = (std_val, is_exact_zero, is_near_zero)

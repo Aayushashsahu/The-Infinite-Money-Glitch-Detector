@@ -8,20 +8,18 @@ execution records).
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 import math
 from typing import Any, Sequence
 
 import numpy as np
 import scipy.stats as stats
 
-from core.currency import QuoteConvention
-from data.schemas import DataObservation, Frequency, ObservationKind
+from core.currency import validate_and_normalize_fx_metadata
 from simulation.monte_carlo.calibration import (
     VARIANCE_DEGENERACY_THRESHOLD,
     check_factor_variance,
 )
-from simulation.monte_carlo.factors import _normalize_fx_quote_to_usd_per_eur
 from simulation.monte_carlo.regimes import VolatilityRegimeClassifier
 from simulation.monte_carlo.schemas import (
     FactorCategory,
@@ -520,65 +518,7 @@ def resolve_canonical_initial_fx(
                 f"for factor '{fx_key}'."
             )
 
-        raw_unit = (prov.raw_unit or "").strip()
-        base_curr = prov.base_currency
-        quote_curr = prov.quote_currency
-        pair = prov.pair or "EUR/USD"
-
-        # Check for invalid / contradictory currencies if currencies are specified
-        currencies = {c for c in (base_curr, quote_curr) if c}
-        if currencies and not currencies.issubset({"USD", "EUR"}):
-            raise ValueError(
-                f"Contradictory FX currency metadata for factor '{fx_key}': "
-                f"currencies {currencies} do not match required EUR/USD factor pair."
-            )
-        if base_curr and quote_curr and base_curr == quote_curr:
-            raise ValueError(
-                f"Contradictory FX currency metadata for factor '{fx_key}': "
-                f"base_currency and quote_currency are identical ({base_curr})."
-            )
-        # Check pair metadata against currencies if pair is formatted as BASE/QUOTE
-        if pair and "/" in pair:
-            pair_parts = [p.strip().upper() for p in pair.split("/")]
-            if len(pair_parts) != 2 or not set(pair_parts).issubset({"USD", "EUR"}) or pair_parts[0] == pair_parts[1]:
-                raise ValueError(
-                    f"Contradictory FX pair metadata for factor '{fx_key}': "
-                    f"pair '{pair}' does not match required EUR/USD factor pair."
-                )
-            p_base, p_quote = pair_parts
-            if base_curr and base_curr != p_base:
-                raise ValueError(
-                    f"Contradictory FX pair and currency metadata for factor '{fx_key}': "
-                    f"pair '{pair}' contradicts base_currency='{base_curr}'."
-                )
-            if quote_curr and quote_curr != p_quote:
-                raise ValueError(
-                    f"Contradictory FX pair and currency metadata for factor '{fx_key}': "
-                    f"pair '{pair}' contradicts quote_currency='{quote_curr}'."
-                )
-
-        unit_str = raw_unit.lower()
-        convention_str = (prov.quote_convention or "").strip().lower()
-
-        # Check for generic quote_per_base units
-        is_quote_per_base = unit_str in ("quote_per_base", "quotation_per_base", "quote/base") or (
-            not unit_str and convention_str in ("quote_per_base", "quotation_per_base", "quote/base")
-        )
-
-        if is_quote_per_base:
-            if not base_curr or not quote_curr:
-                raise ValueError(
-                    f"Cannot resolve initial FX level from raw levels for factor '{fx_key}': "
-                    f"missing base or quote currency metadata with generic quote-per-base units "
-                    f"(base='{base_curr}', quote='{quote_curr}'). Fail closed."
-                )
-
-        supported_units = (
-            "quote_per_base", "quotation_per_base", "quote/base",
-            "usd_per_eur", "usd/eur", "usd per eur",
-            "eur_per_usd", "eur/usd", "eur per usd",
-        )
-        if not is_quote_per_base and unit_str not in supported_units:
+        if not prov.raw_unit or not str(prov.raw_unit).strip():
             raise ValueError(
                 f"Cannot resolve initial FX level from raw levels for factor '{fx_key}': "
                 f"observation-level raw unit '{prov.raw_unit}' is missing, ambiguous, or unsupported. "
@@ -586,36 +526,34 @@ def resolve_canonical_initial_fx(
                 "Inferring quote direction from numerical magnitude is strictly prohibited."
             )
 
-        # Enforce quotation convention: BASE/QUOTE = units of QUOTE per BASE
-        if base_curr and quote_curr:
-            if base_curr == "EUR" and quote_curr == "USD" and unit_str in ("eur_per_usd", "eur/usd", "eur per usd"):
+        try:
+            meta = validate_and_normalize_fx_metadata(
+                base_currency=prov.base_currency,
+                quote_currency=prov.quote_currency,
+                quote_convention=prov.quote_convention,
+                unit=prov.raw_unit,
+                pair=prov.pair,
+                entity_code=prov.pair or fx_key,
+                value=raw_val,
+                require_eur_usd_pair=True,
+            )
+        except ValueError as err:
+            err_msg = str(err)
+            if "Unsupported or ambiguous FX unit metadata" in err_msg:
                 raise ValueError(
-                    f"Contradictory FX metadata for factor '{fx_key}': explicit unit '{prov.raw_unit}' "
-                    f"contradicts base_currency='{base_curr}' and quote_currency='{quote_curr}'. "
-                    "Expected 'USD_per_EUR' under BASE/QUOTE convention."
-                )
-            if base_curr == "USD" and quote_curr == "EUR" and unit_str in ("usd_per_eur", "usd/eur", "usd per eur"):
-                raise ValueError(
-                    f"Contradictory FX metadata for factor '{fx_key}': explicit unit '{prov.raw_unit}' "
-                    f"contradicts base_currency='{base_curr}' and quote_currency='{quote_curr}'. "
-                    "Expected 'EUR_per_USD' under BASE/QUOTE convention."
-                )
+                    f"Cannot resolve initial FX level from raw levels for factor '{fx_key}': "
+                    f"observation-level raw unit '{prov.raw_unit}' is missing, ambiguous, or unsupported. "
+                    "Explicit quote metadata ('quote_per_base', 'USD_per_EUR', or 'EUR_per_USD') is required. "
+                    "Inferring quote direction from numerical magnitude is strictly prohibited."
+                ) from err
+            raise
 
-        obs = DataObservation(
-            kind=ObservationKind.EXCHANGE_RATE,
-            source_id=prov.source_id,
-            entity_code=pair,
-            indicator_id=None,
-            value=raw_val,
-            unit=raw_unit or "quote_per_base",
-            frequency=Frequency.DAILY,
-            base_currency=base_curr,
-            quote_currency=quote_curr,
-            quote_convention=QuoteConvention(prov.quote_convention) if prov.quote_convention else None,
-            observation_date=prov.observation_date,
-            retrieved_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
-        )
-        initial_fx = float(_normalize_fx_quote_to_usd_per_eur(obs))
+        if meta.canonical_usd_per_eur is None:
+            raise ValueError(
+                f"Cannot resolve initial FX level from raw levels for factor '{fx_key}': "
+                f"unable to determine canonical USD per EUR from value {raw_val}."
+            )
+        initial_fx = meta.canonical_usd_per_eur
     else:
         raise ValueError(
             f"Cannot resolve initial FX level from calibration panel factor '{fx_key}': "

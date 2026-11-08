@@ -56,7 +56,8 @@ def ensure_positive_semidefinite(
     if min_val >= min_eigenvalue:
         return sym, False, 0.0
 
-    clipped_eigvals = np.maximum(eigvals, min_eigenvalue)
+    # Add a tiny numerical safety buffer (1e-6 relative) so round-off during re-diagonalization doesn't dip below min_eigenvalue
+    clipped_eigvals = np.maximum(eigvals, min_eigenvalue * (1.0 + 1e-6))
     repaired = eigvecs @ np.diag(clipped_eigvals) @ eigvecs.T
     repaired = (repaired + repaired.T) / 2.0
 
