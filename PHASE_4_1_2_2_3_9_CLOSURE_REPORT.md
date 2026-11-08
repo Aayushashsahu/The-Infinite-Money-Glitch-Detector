@@ -59,10 +59,10 @@ Phase 4.1.2.2.3.9 completes the comprehensive hardening of currency and factor m
 |---|---|---|
 | **Stage A Source Commit** | `4ba002c5bda731d78e4f6df2dbca6d1dd9177531` | `1e2ca9dff2f1e6e835c2ea3c20077297d1b7129a` |
 | **Stage B Documentation Commit** | `e6476b128121b3eb7ec7f6630116006ceb1f8d5b` | `376398f60b5cb71e8afba478a92d0be0ca252288` |
-| **Stage B+ Update Commit** | `a15281499be2886efabe721d7de2f78d8bc00673` | *(To be verified upon push)* |
+| **Stage B+ Update Commit** | `a15281499be2886efabe721d7de2f78d8bc00673` | `5441cf90f7e6ea4203e06e044c4281e2ee4c6a29` |
 | **Stage A CI Run ID** | `42513771885` | **`42517996555`** (Both 3.11 & 3.12 passed) |
 | **Stage B CI Run ID** | `42514331670` | **`42518275430`** (Tested Stage B `376398f`; passed) |
-| **Stage B+ CI Run ID** | `42514788989` | *(To be verified upon push)* |
+| **Stage B+ CI Run ID** | `42514788989` | **`42518742035`** (Tested Stage B+ `5441cf9`; passed) |
 | **Test Suite Passed** | 734 passed | **884 passed** (150 new tests in 3_9 suite, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
 | **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** |
@@ -303,7 +303,8 @@ Execution follows strict dual-stage delivery:
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.9 closure report & reconcile Phase 4.1.2.2.3.8 lineage (Stage B)`
 
 - **Stage B+ (Documentation Lineage Final Sign-Off Commit)**:
-  * Commit SHA: *(Current commit)*
+  * Commit SHA: `5441cf90f7e6ea4203e06e044c4281e2ee4c6a29`
+  * CI Run ID: `42518742035` (Tested Stage B+ commit `5441cf9`; passed on Python 3.11 and 3.12)
   * Modified: `PHASE_4_1_2_2_3_9_CLOSURE_REPORT.md`
   * Commit message: `docs(results): record successful CI run ID 42518275430 in Phase 4.1.2.2.3.9 closure report`
   * Purpose: Recorded verified Stage B CI Run ID `42518275430`, completing formal dual-stage lineage sign-off.
