@@ -141,6 +141,7 @@ class FactorRowProvenance(BaseModel):
     series_id: str
     raw_value: float
     raw_unit: str | None = None
+    quote_convention: str | None = None
     normalized_level: float | None = None
     transformed_value: float
     pair: str | None = None

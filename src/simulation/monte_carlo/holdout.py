@@ -15,7 +15,12 @@ from typing import Any, Sequence
 import numpy as np
 import scipy.stats as stats
 
+from core.currency import QuoteConvention
 from data.schemas import DataObservation, Frequency, ObservationKind
+from simulation.monte_carlo.calibration import (
+    VARIANCE_DEGENERACY_THRESHOLD,
+    check_factor_variance,
+)
 from simulation.monte_carlo.factors import _normalize_fx_quote_to_usd_per_eur
 from simulation.monte_carlo.regimes import VolatilityRegimeClassifier
 from simulation.monte_carlo.schemas import (
@@ -157,6 +162,15 @@ def evaluate_factor_holdout_diagnostics(
         "but does NOT establish permanent forward-looking market predictability.",
     ]
 
+    # Assess factor variance in calibration and holdout panels using centralized threshold
+    calib_var_status: dict[str, tuple[float, bool, bool]] = {}
+    holdout_var_status: dict[str, tuple[float, bool, bool]] = {}
+    for f in holdout_fnames:
+        c_series = np.array(calibration_panel.values[f], dtype=np.float64)
+        h_series = np.array(holdout_panel.values[f], dtype=np.float64)
+        calib_var_status[f] = check_factor_variance(c_series, threshold=VARIANCE_DEGENERACY_THRESHOLD)
+        holdout_var_status[f] = check_factor_variance(h_series, threshold=VARIANCE_DEGENERACY_THRESHOLD)
+
     with np.errstate(divide="ignore", invalid="ignore"):
         corr_calib = np.corrcoef(calib_mat, rowvar=False)
         corr_holdout = np.corrcoef(holdout_mat, rowvar=False)
@@ -165,14 +179,31 @@ def evaluate_factor_holdout_diagnostics(
     for i, f1 in enumerate(holdout_fnames):
         for j, f2 in enumerate(holdout_fnames):
             if i < j:
+                c1_std, c1_exact, c1_near = calib_var_status[f1]
+                c2_std, c2_exact, c2_near = calib_var_status[f2]
+                h1_std, h1_exact, h1_near = holdout_var_status[f1]
+                h2_std, h2_exact, h2_near = holdout_var_status[f2]
+
                 c_calib = float(corr_calib[i, j]) if np.ndim(corr_calib) == 2 else float(corr_calib)
                 c_hold = float(corr_holdout[i, j]) if np.ndim(corr_holdout) == 2 else float(corr_holdout)
-                if np.isnan(c_calib) or np.isnan(c_hold):
+
+                has_exact_zero = c1_exact or c2_exact or h1_exact or h2_exact
+                has_near_zero = c1_near or c2_near or h1_near or h2_near
+                is_invalid = has_exact_zero or has_near_zero or np.isnan(c_calib) or np.isnan(c_hold)
+
+                if is_invalid:
                     corr_shifts[f"{f1}__vs__{f2}"] = float("nan")
-                    limitations.append(
-                        f"Correlation shift between '{f1}' and '{f2}' is mathematically undefined "
-                        "because at least one factor exhibits zero variance in calibration or holdout."
-                    )
+                    if has_exact_zero:
+                        limitations.append(
+                            f"Correlation shift between '{f1}' and '{f2}' is mathematically undefined "
+                            "because at least one factor exhibits exact zero variance in calibration or holdout."
+                        )
+                    else:
+                        limitations.append(
+                            f"Correlation shift between '{f1}' and '{f2}' is marked as NaN "
+                            f"because at least one factor exhibits near-zero variance (< {VARIANCE_DEGENERACY_THRESHOLD:.2e}) "
+                            "in calibration or holdout, rendering linear correlation numerically unreliable."
+                        )
                 else:
                     shift = float(c_hold - c_calib)
                     corr_shifts[f"{f1}__vs__{f2}"] = shift
@@ -337,15 +368,52 @@ def evaluate_holdout_diagnostics(
     calib_mat = np.column_stack([calibration_panel.values[f] for f in holdout_fnames])
     holdout_mat = np.column_stack([holdout_panel.values[f] for f in holdout_fnames])
 
-    corr_calib = np.corrcoef(calib_mat, rowvar=False)
-    corr_holdout = np.corrcoef(holdout_mat, rowvar=False)
+    # Assess factor variance in calibration and holdout panels using centralized threshold
+    calib_var_status: dict[str, tuple[float, bool, bool]] = {}
+    holdout_var_status: dict[str, tuple[float, bool, bool]] = {}
+    for f in holdout_fnames:
+        c_series = np.array(calibration_panel.values[f], dtype=np.float64)
+        h_series = np.array(holdout_panel.values[f], dtype=np.float64)
+        calib_var_status[f] = check_factor_variance(c_series, threshold=VARIANCE_DEGENERACY_THRESHOLD)
+        holdout_var_status[f] = check_factor_variance(h_series, threshold=VARIANCE_DEGENERACY_THRESHOLD)
 
+    with np.errstate(divide="ignore", invalid="ignore"):
+        corr_calib = np.corrcoef(calib_mat, rowvar=False)
+        corr_holdout = np.corrcoef(holdout_mat, rowvar=False)
+
+    extra_limitations: list[str] = []
     corr_shifts: dict[str, float] = {}
     for i, f1 in enumerate(holdout_fnames):
         for j, f2 in enumerate(holdout_fnames):
             if i < j:
-                shift = float(corr_holdout[i, j] - corr_calib[i, j])
-                corr_shifts[f"{f1}__vs__{f2}"] = shift
+                c1_std, c1_exact, c1_near = calib_var_status[f1]
+                c2_std, c2_exact, c2_near = calib_var_status[f2]
+                h1_std, h1_exact, h1_near = holdout_var_status[f1]
+                h2_std, h2_exact, h2_near = holdout_var_status[f2]
+
+                c_calib = float(corr_calib[i, j]) if np.ndim(corr_calib) == 2 else float(corr_calib)
+                c_hold = float(corr_holdout[i, j]) if np.ndim(corr_holdout) == 2 else float(corr_holdout)
+
+                has_exact_zero = c1_exact or c2_exact or h1_exact or h2_exact
+                has_near_zero = c1_near or c2_near or h1_near or h2_near
+                is_invalid = has_exact_zero or has_near_zero or np.isnan(c_calib) or np.isnan(c_hold)
+
+                if is_invalid:
+                    corr_shifts[f"{f1}__vs__{f2}"] = float("nan")
+                    if has_exact_zero:
+                        extra_limitations.append(
+                            f"Correlation shift between '{f1}' and '{f2}' is mathematically undefined "
+                            "because at least one factor exhibits exact zero variance in calibration or holdout."
+                        )
+                    else:
+                        extra_limitations.append(
+                            f"Correlation shift between '{f1}' and '{f2}' is marked as NaN "
+                            f"because at least one factor exhibits near-zero variance (< {VARIANCE_DEGENERACY_THRESHOLD:.2e}) "
+                            "in calibration or holdout, rendering linear correlation numerically unreliable."
+                        )
+                else:
+                    shift = float(c_hold - c_calib)
+                    corr_shifts[f"{f1}__vs__{f2}"] = shift
 
     h_days = len(holdout_panel.dates)
     h_start = min(holdout_panel.dates)
@@ -362,6 +430,7 @@ def evaluate_holdout_diagnostics(
         f"2024 realized volatility was {holdout_vol:.2%}, lying in the {vol_regime} regime ({thresh_low:.2%} to {thresh_high:.2%}).",
         "Out-of-sample diagnostics demonstrate model coverage over 2024 but do NOT establish permanent predictive reliability.",
     ]
+    limitations.extend(extra_limitations)
 
     return HoldoutDiagnosticReport(
         holdout_year=2024,
@@ -468,22 +537,69 @@ def resolve_canonical_initial_fx(
                 f"Contradictory FX currency metadata for factor '{fx_key}': "
                 f"base_currency and quote_currency are identical ({base_curr})."
             )
+        # Check pair metadata against currencies if pair is formatted as BASE/QUOTE
         if pair and "/" in pair:
-            pair_parts = {p.strip().upper() for p in pair.split("/")}
-            if not pair_parts.issubset({"USD", "EUR"}):
+            pair_parts = [p.strip().upper() for p in pair.split("/")]
+            if len(pair_parts) != 2 or not set(pair_parts).issubset({"USD", "EUR"}) or pair_parts[0] == pair_parts[1]:
                 raise ValueError(
                     f"Contradictory FX pair metadata for factor '{fx_key}': "
                     f"pair '{pair}' does not match required EUR/USD factor pair."
                 )
+            p_base, p_quote = pair_parts
+            if base_curr and base_curr != p_base:
+                raise ValueError(
+                    f"Contradictory FX pair and currency metadata for factor '{fx_key}': "
+                    f"pair '{pair}' contradicts base_currency='{base_curr}'."
+                )
+            if quote_curr and quote_curr != p_quote:
+                raise ValueError(
+                    f"Contradictory FX pair and currency metadata for factor '{fx_key}': "
+                    f"pair '{pair}' contradicts quote_currency='{quote_curr}'."
+                )
 
         unit_str = raw_unit.lower()
-        if not unit_str or unit_str not in ("usd_per_eur", "usd/eur", "usd per eur", "eur_per_usd", "eur/usd", "eur per usd"):
+        convention_str = (prov.quote_convention or "").strip().lower()
+
+        # Check for generic quote_per_base units
+        is_quote_per_base = unit_str in ("quote_per_base", "quotation_per_base", "quote/base") or (
+            not unit_str and convention_str in ("quote_per_base", "quotation_per_base", "quote/base")
+        )
+
+        if is_quote_per_base:
+            if not base_curr or not quote_curr:
+                raise ValueError(
+                    f"Cannot resolve initial FX level from raw levels for factor '{fx_key}': "
+                    f"missing base or quote currency metadata with generic quote-per-base units "
+                    f"(base='{base_curr}', quote='{quote_curr}'). Fail closed."
+                )
+
+        supported_units = (
+            "quote_per_base", "quotation_per_base", "quote/base",
+            "usd_per_eur", "usd/eur", "usd per eur",
+            "eur_per_usd", "eur/usd", "eur per usd",
+        )
+        if not is_quote_per_base and unit_str not in supported_units:
             raise ValueError(
                 f"Cannot resolve initial FX level from raw levels for factor '{fx_key}': "
                 f"observation-level raw unit '{prov.raw_unit}' is missing, ambiguous, or unsupported. "
-                "Explicit quote metadata ('USD_per_EUR' or 'EUR_per_USD') is required. "
+                "Explicit quote metadata ('quote_per_base', 'USD_per_EUR', or 'EUR_per_USD') is required. "
                 "Inferring quote direction from numerical magnitude is strictly prohibited."
             )
+
+        # Enforce quotation convention: BASE/QUOTE = units of QUOTE per BASE
+        if base_curr and quote_curr:
+            if base_curr == "EUR" and quote_curr == "USD" and unit_str in ("eur_per_usd", "eur/usd", "eur per usd"):
+                raise ValueError(
+                    f"Contradictory FX metadata for factor '{fx_key}': explicit unit '{prov.raw_unit}' "
+                    f"contradicts base_currency='{base_curr}' and quote_currency='{quote_curr}'. "
+                    "Expected 'USD_per_EUR' under BASE/QUOTE convention."
+                )
+            if base_curr == "USD" and quote_curr == "EUR" and unit_str in ("usd_per_eur", "usd/eur", "usd per eur"):
+                raise ValueError(
+                    f"Contradictory FX metadata for factor '{fx_key}': explicit unit '{prov.raw_unit}' "
+                    f"contradicts base_currency='{base_curr}' and quote_currency='{quote_curr}'. "
+                    "Expected 'EUR_per_USD' under BASE/QUOTE convention."
+                )
 
         obs = DataObservation(
             kind=ObservationKind.EXCHANGE_RATE,
@@ -491,10 +607,11 @@ def resolve_canonical_initial_fx(
             entity_code=pair,
             indicator_id=None,
             value=raw_val,
-            unit=raw_unit,
+            unit=raw_unit or "quote_per_base",
             frequency=Frequency.DAILY,
             base_currency=base_curr,
             quote_currency=quote_curr,
+            quote_convention=QuoteConvention(prov.quote_convention) if prov.quote_convention else None,
             observation_date=prov.observation_date,
             retrieved_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         )

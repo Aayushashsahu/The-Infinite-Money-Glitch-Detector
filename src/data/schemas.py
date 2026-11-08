@@ -382,7 +382,18 @@ class DataObservation(BaseModel):
         # Default price_type, quote_convention, and currency pair metadata for exchange rates
         if self.kind == ObservationKind.EXCHANGE_RATE:
             if self.base_currency is None or self.quote_currency is None:
-                if "/" in self.entity_code:
+                unit_clean = (self.unit or "").strip().lower()
+                if unit_clean in ("usd_per_eur", "usd/eur", "usd per eur"):
+                    if self.base_currency is None:
+                        self.base_currency = "EUR"
+                    if self.quote_currency is None:
+                        self.quote_currency = "USD"
+                elif unit_clean in ("eur_per_usd", "eur/usd", "eur per usd"):
+                    if self.base_currency is None:
+                        self.base_currency = "USD"
+                    if self.quote_currency is None:
+                        self.quote_currency = "EUR"
+                elif "/" in self.entity_code:
                     b_part, q_part = self.entity_code.split("/", 1)
                     if self.base_currency is None:
                         self.base_currency = b_part.upper()
@@ -391,6 +402,20 @@ class DataObservation(BaseModel):
 
             if self.quote_convention is None:
                 self.quote_convention = QuoteConvention.QUOTE_PER_BASE
+
+            # Check for contradiction between explicit unit and base/quote currencies
+            if self.base_currency and self.quote_currency and self.quote_convention != QuoteConvention.BASE_PER_QUOTE:
+                unit_clean = (self.unit or "").strip().lower()
+                if self.base_currency == "EUR" and self.quote_currency == "USD" and unit_clean in ("eur_per_usd", "eur/usd", "eur per usd"):
+                    raise ValueError(
+                        f"Explicit unit '{self.unit}' contradicts base_currency='{self.base_currency}' "
+                        f"and quote_currency='{self.quote_currency}'. Expected 'USD_per_EUR' under BASE/QUOTE convention."
+                    )
+                if self.base_currency == "USD" and self.quote_currency == "EUR" and unit_clean in ("usd_per_eur", "usd/eur", "usd per eur"):
+                    raise ValueError(
+                        f"Explicit unit '{self.unit}' contradicts base_currency='{self.base_currency}' "
+                        f"and quote_currency='{self.quote_currency}'. Expected 'EUR_per_USD' under BASE/QUOTE convention."
+                    )
 
             if self.bid is not None and self.bid <= 0:
                 raise ValueError(f"Bid rate must be strictly positive, got {self.bid}")

@@ -148,11 +148,38 @@ def split_calibration_holdout(
     return calib_panel, holdout_panel
 
 
+VARIANCE_DEGENERACY_THRESHOLD: float = 1e-12
+
+
+def check_factor_variance(
+    series: np.ndarray | Any,
+    threshold: float = VARIANCE_DEGENERACY_THRESHOLD,
+) -> tuple[float, bool, bool]:
+    """Check standard deviation of a factor series against numerical threshold.
+
+    Distinguishes exact zero variance (Pearson correlation is mathematically undefined)
+    from near-zero variance (correlation is mathematically defined but treated as
+    numerically unreliable under the declared threshold).
+
+    Returns:
+        (std, is_exact_zero, is_near_zero)
+        where:
+        - std: Sample standard deviation (ddof=1) or 0.0 if length <= 1.
+        - is_exact_zero: True if std == 0.0 (mathematically undefined correlation).
+        - is_near_zero: True if 0.0 < std < threshold (numerically unreliable correlation).
+    """
+    arr = np.asarray(series, dtype=np.float64)
+    std = float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0
+    is_exact_zero = (std == 0.0)
+    is_near_zero = (0.0 < std < threshold)
+    return std, is_exact_zero, is_near_zero
+
+
 def compute_quantiles(arr: np.ndarray) -> DistributionQuantiles:
     """Compute standard percentiles and higher moments for a 1D array."""
     mean_val = float(np.mean(arr))
     std_val = float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0
-    if std_val < 1e-12:
+    if std_val < VARIANCE_DEGENERACY_THRESHOLD:
         skew_val = 0.0
         kurt_val = 0.0
     else:
@@ -196,13 +223,20 @@ def calibrate_factor_panel(
     factor_names = list(panel.values.keys())
     summaries: dict[str, FactorSummary] = {}
     matrix_data: list[np.ndarray] = []
+    variance_statuses: dict[str, tuple[float, bool, bool]] = {}
 
     for fname in factor_names:
         series = np.array(panel.values[fname], dtype=np.float64)
         if len(series) == 0:
             raise ValueError(f"Factor series {fname} is empty.")
-        if np.std(series) < 1e-12:
-            notes.append(f"Warning: Factor {fname} has near-zero variance ({np.std(series):.2e}).")
+
+        std_val, is_exact_zero, is_near_zero = check_factor_variance(series, threshold=VARIANCE_DEGENERACY_THRESHOLD)
+        variance_statuses[fname] = (std_val, is_exact_zero, is_near_zero)
+
+        if is_exact_zero:
+            notes.append(f"Warning: Factor {fname} has exact zero variance (0.00e+00).")
+        elif is_near_zero:
+            notes.append(f"Warning: Factor {fname} has near-zero variance ({std_val:.2e} < {VARIANCE_DEGENERACY_THRESHOLD:.2e}).")
 
         q = compute_quantiles(series)
         summ = FactorSummary(
@@ -220,17 +254,27 @@ def calibrate_factor_panel(
         matrix_data.append(series)
 
     # Identify factors with zero or near-zero variance
-    zero_var_indices = {i for i, fname in enumerate(factor_names) if summaries[fname].std < 1e-12}
-    for idx in sorted(zero_var_indices):
+    degenerate_indices = {
+        i for i, fname in enumerate(factor_names)
+        if variance_statuses[fname][1] or variance_statuses[fname][2]
+    }
+    for idx in sorted(degenerate_indices):
         fname = factor_names[idx]
-        notes.append(
-            f"Factor '{fname}' has zero or near-zero variance ({summaries[fname].std:.2e}); "
-            f"pairwise linear correlations involving this factor are mathematically undefined."
-        )
+        std_val, is_exact_zero, is_near_zero = variance_statuses[fname]
+        if is_exact_zero:
+            notes.append(
+                f"Factor '{fname}' has exact zero variance (0.00e+00); "
+                f"pairwise linear correlations involving this factor are mathematically undefined."
+            )
+        else:
+            notes.append(
+                f"Factor '{fname}' has near-zero variance ({std_val:.2e} < {VARIANCE_DEGENERACY_THRESHOLD:.2e}); "
+                f"pairwise linear correlations involving this factor are treated as numerically unreliable."
+            )
 
     n_f = len(factor_names)
     correlation_validity_mask: list[list[bool]] = [
-        [i not in zero_var_indices and j not in zero_var_indices for j in range(n_f)]
+        [i not in degenerate_indices and j not in degenerate_indices for j in range(n_f)]
         for i in range(n_f)
     ]
 
@@ -243,7 +287,7 @@ def calibrate_factor_panel(
     # Handle single factor edge-case
     if len(factor_names) == 1:
         cov_mat = np.array([[cov_mat]])
-        corr_mat = np.array([[np.nan if 0 in zero_var_indices else 1.0]])
+        corr_mat = np.array([[np.nan if 0 in degenerate_indices else 1.0]])
     else:
         validity_arr = np.array(correlation_validity_mask, dtype=bool)
         corr_mat = np.where(validity_arr, raw_corr, np.nan)

@@ -180,13 +180,13 @@ class TestWorkstreamAFXRawProvenance:
         prov = FactorRowProvenance(
             observation_date=date(2023, 12, 29),
             source_id="frankfurter",
-            series_id="EUR/USD",
+            series_id="USD/EUR",
             raw_value=0.91274,
             raw_unit="EUR_per_USD",
             transformed_value=0.0,
-            pair="EUR/USD",
-            base_currency="EUR",
-            quote_currency="USD",
+            pair="USD/EUR",
+            base_currency="USD",
+            quote_currency="EUR",
             data_classification=DataClassification.REAL_VERIFIED,
         )
         panel = make_dummy_panel(
@@ -217,13 +217,13 @@ class TestWorkstreamAFXRawProvenance:
         prov = FactorRowProvenance(
             observation_date=date(2023, 12, 29),
             source_id="ecb",
-            series_id="USD/EUR",
+            series_id="EUR/USD",
             raw_value=1.1049968,
             raw_unit="USD_per_EUR",
             transformed_value=0.0,
-            pair="USD/EUR",
-            base_currency="USD",
-            quote_currency="EUR",
+            pair="EUR/USD",
+            base_currency="EUR",
+            quote_currency="USD",
             data_classification=DataClassification.REAL_VERIFIED,
         )
         panel = make_dummy_panel(
@@ -310,13 +310,13 @@ class TestWorkstreamAFXRawProvenance:
         prov = FactorRowProvenance(
             observation_date=date(2023, 12, 29),
             source_id="ecb",
-            series_id="EUR/USD",
+            series_id="USD/EUR",
             raw_value=0.91274,
             raw_unit="EUR_per_USD",
             transformed_value=0.0,
-            pair="EUR/USD",
-            base_currency="EUR",
-            quote_currency="USD",
+            pair="USD/EUR",
+            base_currency="USD",
+            quote_currency="EUR",
             data_classification=DataClassification.REAL_VERIFIED,
         )
         panel_mismatch = make_dummy_panel(
@@ -345,13 +345,13 @@ class TestWorkstreamAFXRawProvenance:
         prov = FactorRowProvenance(
             observation_date=date(2023, 12, 28),  # 2023-12-28 instead of 2023-12-29
             source_id="ecb",
-            series_id="EUR/USD",
+            series_id="USD/EUR",
             raw_value=0.91274,
             raw_unit="EUR_per_USD",
             transformed_value=0.0,
-            pair="EUR/USD",
-            base_currency="EUR",
-            quote_currency="USD",
+            pair="USD/EUR",
+            base_currency="USD",
+            quote_currency="EUR",
             data_classification=DataClassification.REAL_VERIFIED,
         )
         panel = make_dummy_panel(

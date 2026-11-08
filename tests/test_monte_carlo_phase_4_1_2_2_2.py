@@ -83,10 +83,23 @@ def _make_obs(
     if unit is None:
         unit = "percent" if kind == ObservationKind.INTEREST_RATE else "USD_per_EUR"
     if kind == ObservationKind.EXCHANGE_RATE:
-        if base_currency is None and ("EUR" in entity_code or "EUR" in (unit or "")):
-            base_currency = "EUR"
-        if quote_currency is None and ("USD" in entity_code or "USD" in (unit or "")):
-            quote_currency = "USD"
+        if base_currency is None and quote_currency is None:
+            unit_norm = (unit or "").strip().lower()
+            if unit_norm in ("eur_per_usd", "eur/usd", "eur per usd"):
+                base_currency = "USD"
+                quote_currency = "EUR"
+                if entity_code in ("EUR_USD", "EUR/USD"):
+                    entity_code = "USD_EUR" if "_" in entity_code else "USD/EUR"
+            elif unit_norm in ("usd_per_eur", "usd/eur", "usd per eur"):
+                base_currency = "EUR"
+                quote_currency = "USD"
+                if entity_code in ("USD_EUR", "USD/EUR"):
+                    entity_code = "EUR_USD" if "_" in entity_code else "EUR/USD"
+            elif "/" in entity_code or "_" in entity_code:
+                parts = entity_code.replace("-", "/").replace("_", "/").split("/")
+                if len(parts) >= 2 and parts[0] in ("EUR", "USD") and parts[1] in ("EUR", "USD"):
+                    base_currency = parts[0]
+                    quote_currency = parts[1]
     return DataObservation(
         kind=kind,
         source_id=source_id,
@@ -275,9 +288,9 @@ class TestCanonicalFXNormalization:
         assert len(panel.row_provenance["FX_EUR_USD_LOGRET"]) == 2
         for obs_prov in panel.row_provenance["FX_EUR_USD_LOGRET"]:
             assert obs_prov.raw_unit == "EUR_per_USD"
-            assert obs_prov.pair in ("EUR/USD", "EUR_USD")
-            assert obs_prov.base_currency == "EUR"
-            assert obs_prov.quote_currency == "USD"
+            assert obs_prov.pair in ("USD/EUR", "USD_EUR")
+            assert obs_prov.base_currency == "USD"
+            assert obs_prov.quote_currency == "EUR"
             assert pytest.approx(obs_prov.normalized_level, rel=1e-5) in expected_canon
 
 

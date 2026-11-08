@@ -156,9 +156,11 @@ def _normalize_fx_quote_to_usd_per_eur(fx_obs: DataObservation) -> float:
     """Normalize FX quote to canonical provider quote convention (USD per EUR) strictly via metadata.
 
     Rules:
+    - Platform quotation convention: BASE/QUOTE = units of QUOTE per BASE.
     - Declared unit 'usd_per_eur' / 'usd/eur' represents USD per 1 EUR (canonical); returns value as-is.
     - Declared unit 'eur_per_usd' / 'eur/usd' represents EUR per 1 USD (reciprocal); returns 1.0 / value.
-    - If unit metadata is absent or generic, inspects quote_convention, base_currency, and quote_currency.
+    - Supports genuine provider metadata: unit="quote_per_base" with explicit base/quote currencies.
+    - Rejects contradictory unit declarations (e.g. unit="EUR_per_USD" with base="EUR", quote="USD").
     - Rejects missing, ambiguous, or unsupported quote metadata (fails closed).
     - Never uses numerical magnitude heuristics.
     """
@@ -169,37 +171,82 @@ def _normalize_fx_quote_to_usd_per_eur(fx_obs: DataObservation) -> float:
     if not math.isfinite(fx_obs.value) or fx_obs.value <= 0:
         raise ValueError(f"FX observation value must be finite and positive: {fx_obs.value}")
 
+    # Resolve base and quote currencies
+    base = fx_obs.base_currency
+    quote = fx_obs.quote_currency
+    if not base and not quote and "/" in fx_obs.entity_code:
+        parts = fx_obs.entity_code.split("/", 1)
+        base = parts[0].strip().upper()
+        quote = parts[1].strip().upper()
+
     # Check for invalid / contradictory currencies if currencies are specified
-    currencies = {c for c in (fx_obs.base_currency, fx_obs.quote_currency) if c}
+    currencies = {c for c in (base, quote) if c}
     if currencies and not currencies.issubset({"USD", "EUR"}):
         raise ValueError(
             f"Contradictory FX currency metadata for {fx_obs.entity_code}: "
             f"currencies {currencies} do not match required EUR/USD factor pair."
         )
-    if fx_obs.base_currency and fx_obs.quote_currency and fx_obs.base_currency == fx_obs.quote_currency:
+    if base and quote and base == quote:
         raise ValueError(
             f"Contradictory FX currency metadata for {fx_obs.entity_code}: "
-            f"base_currency and quote_currency are identical ({fx_obs.base_currency})."
+            f"base_currency and quote_currency are identical ({base})."
         )
 
-    # 1. Explicit unit metadata takes precedence
+    # Enforce quotation convention: BASE/QUOTE = units of QUOTE per BASE
+    # An explicit unit declaration contradictory to base/quote must fail closed
+    if base and quote and convention != QuoteConvention.BASE_PER_QUOTE:
+        if base == "EUR" and quote == "USD" and unit_str in ("eur_per_usd", "eur/usd", "eur per usd"):
+            raise ValueError(
+                f"Contradictory FX metadata for {fx_obs.entity_code}: explicit unit '{fx_obs.unit}' "
+                f"contradicts base_currency='{base}' and quote_currency='{quote}'. "
+                "Expected 'USD_per_EUR' under BASE/QUOTE convention."
+            )
+        if base == "USD" and quote == "EUR" and unit_str in ("usd_per_eur", "usd/eur", "usd per eur"):
+            raise ValueError(
+                f"Contradictory FX metadata for {fx_obs.entity_code}: explicit unit '{fx_obs.unit}' "
+                f"contradicts base_currency='{base}' and quote_currency='{quote}'. "
+                "Expected 'EUR_per_USD' under BASE/QUOTE convention."
+            )
+
+    # 1. Genuine provider metadata: unit="quote_per_base"
+    if unit_str in ("quote_per_base", "quotation_per_base", "quote/base"):
+        if not base or not quote:
+            raise ValueError(
+                f"Missing base or quote currency metadata for FX observation {fx_obs.entity_code} "
+                f"with generic quote-per-base units '{fx_obs.unit}'. Fail closed."
+            )
+        if base == "EUR" and quote == "USD":
+            return fx_obs.value
+        elif base == "USD" and quote == "EUR":
+            return 1.0 / fx_obs.value
+        else:
+            raise ValueError(
+                f"Unsupported currency pair for FX normalization: base='{base}', quote='{quote}'."
+            )
+
+    # 2. Explicit unit metadata (already validated against base/quote)
     if unit_str in ("usd_per_eur", "usd/eur", "usd per eur"):
         return fx_obs.value
     if unit_str in ("eur_per_usd", "eur/usd", "eur per usd"):
         return 1.0 / fx_obs.value
 
-    # 2. Quote convention and currencies
-    if fx_obs.base_currency == "EUR" and fx_obs.quote_currency == "USD":
-        if convention == QuoteConvention.BASE_PER_QUOTE:
+    # 3. Quote convention and currencies when unit is absent or generic
+    if convention == QuoteConvention.BASE_PER_QUOTE:
+        if not base or not quote:
+            raise ValueError(
+                f"Missing base or quote currency metadata for BASE_PER_QUOTE observation {fx_obs.entity_code}."
+            )
+        if base == "EUR" and quote == "USD":
             return 1.0 / fx_obs.value
-        return fx_obs.value
-
-    if fx_obs.base_currency == "USD" and fx_obs.quote_currency == "EUR":
-        if convention == QuoteConvention.BASE_PER_QUOTE:
+        elif base == "USD" and quote == "EUR":
             return fx_obs.value
+
+    if base == "EUR" and quote == "USD":
+        return fx_obs.value
+    if base == "USD" and quote == "EUR":
         return 1.0 / fx_obs.value
 
-    # 3. Canonical pair symbol fallback if currencies/units not specified
+    # 4. Canonical pair symbol fallback if currencies/units not specified
     if not unit_str:
         if fx_obs.entity_code == "EUR/USD":
             if convention == QuoteConvention.BASE_PER_QUOTE:
@@ -213,7 +260,7 @@ def _normalize_fx_quote_to_usd_per_eur(fx_obs: DataObservation) -> float:
     raise ValueError(
         f"Cannot determine quote convention for FX observation {fx_obs.entity_code} "
         f"with unit='{fx_obs.unit}', quote_convention={fx_obs.quote_convention}, "
-        f"base={fx_obs.base_currency}, quote={fx_obs.quote_currency}."
+        f"base={base}, quote={quote}."
     )
 
 
@@ -525,6 +572,12 @@ def build_fx_carry_factor_panel(
     all_sov_candidates: list[DataObservation] = []
 
     fx_target_codes = {fx_entity, fx_entity.replace("/", "_"), fx_entity.replace("_", "/")}
+    if "/" in fx_entity:
+        p1, p2 = fx_entity.split("/", 1)
+        fx_target_codes.update({f"{p2}/{p1}", f"{p2}_{p1}"})
+    elif "_" in fx_entity:
+        p1, p2 = fx_entity.split("_", 1)
+        fx_target_codes.update({f"{p2}_{p1}", f"{p2}/{p1}"})
     for o in valid_obs:
         d = o.observation_date
         if o.kind == ObservationKind.EXCHANGE_RATE and (o.entity_code in fx_target_codes or getattr(o, "pair", None) in fx_target_codes):
@@ -693,6 +746,7 @@ def build_fx_carry_factor_panel(
                 series_id=fx_o.entity_code,
                 raw_value=fx_raw[i],
                 raw_unit=fx_o.unit,
+                quote_convention=fx_o.quote_convention.value if fx_o.quote_convention else None,
                 normalized_level=fx_canonical[i],
                 transformed_value=fx_returns[idx],
                 pair=fx_o.entity_code,
