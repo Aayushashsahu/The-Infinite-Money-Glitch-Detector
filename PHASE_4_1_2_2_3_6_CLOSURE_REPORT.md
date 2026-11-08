@@ -53,7 +53,7 @@ Key achievements:
 |---|---|---|
 | **Stage A Source Commit** | `b38a227dfc0e8faaacbb8ce27df117fcdd2d03d8` | `3e43403f2e807811eb846102651d4e0e0a73cca8` |
 | **Stage B Documentation Commit** | `6bf751cc22f96867ad53d79a6366a3858c8a4990` | `e0492f710adae8a8db1d32adbb39a23be9b6b274` |
-| **Prior CI Run ID** | `42487376183` | Scheduled upon push |
+| **CI Run ID** | `42487376183` | **`42497349211`** (Both 3.11 & 3.12 passed) |
 | **Test Suite Passed** | 530 passed | **572 passed** (42 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
 | **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** |
