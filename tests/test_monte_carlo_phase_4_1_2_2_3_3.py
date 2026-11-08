@@ -74,6 +74,7 @@ def real_data_panels():
         panel=full_panel,
         calibration_end=date(2023, 12, 31),
     )
+    engine.dispose()
     return calib_panel, holdout_panel
 
 
@@ -107,6 +108,7 @@ def make_dummy_panel(
 # ==============================================================================
 # Workstream A: Strict FX Unit / Currency Consistency Tests (11 Tests)
 # ==============================================================================
+
 
 class TestWorkstreamAStrictFXQuotationConsistency:
     """A.3: Tests proving that contradictory metadata fails closed and genuine conventions resolve correctly."""
@@ -503,20 +505,33 @@ class TestWorkstreamAStrictFXQuotationConsistency:
 # Workstream B: Unified Near-Zero Correlation Semantics Tests (9 Tests)
 # ==============================================================================
 
+
 class TestWorkstreamBNearZeroCorrelationSemantics:
     """B.4: Comprehensive regression tests for near-zero variance policy and exact zero distinction."""
 
     def test_1_exact_constant_calibration_factor(self):
         """Test 1: Exact constant calibration factor (sigma=0.0) is mathematically undefined."""
         f_norm = MarketFactor(
-            factor_id="F_NORM", category=FactorCategory.FX_RETURN, asset_or_currency="EUR/USD",
-            frequency=Frequency.DAILY, original_unit="USD_per_EUR", normalized_unit="log_return",
-            source_id="s", series_id="s", transformation=TransformationMethod.LOG_RETURN,
+            factor_id="F_NORM",
+            category=FactorCategory.FX_RETURN,
+            asset_or_currency="EUR/USD",
+            frequency=Frequency.DAILY,
+            original_unit="USD_per_EUR",
+            normalized_unit="log_return",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.LOG_RETURN,
         )
         f_const = MarketFactor(
-            factor_id="F_CONST", category=FactorCategory.BORROWING_RATE_CHANGE, asset_or_currency="EUR",
-            frequency=Frequency.DAILY, original_unit="percent", normalized_unit="basis_points",
-            source_id="s", series_id="s", transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
+            factor_id="F_CONST",
+            category=FactorCategory.BORROWING_RATE_CHANGE,
+            asset_or_currency="EUR",
+            frequency=Frequency.DAILY,
+            original_unit="percent",
+            normalized_unit="basis_points",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
         )
         np.random.seed(42)
         n_obs = 300
@@ -540,38 +555,63 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
         assert math.isnan(report.correlation_matrix[1][0])
         assert report.correlation_validity_mask[0][1] is False
         assert report.correlation_validity_mask[1][0] is False
-        assert any("F_CONST" in n and "exact zero variance" in n and "mathematically undefined" in n for n in report.sufficiency_notes)
+        assert any(
+            "F_CONST" in n and "exact zero variance" in n and "mathematically undefined" in n
+            for n in report.sufficiency_notes
+        )
 
     def test_2_exact_constant_holdout_factor(self):
         """Test 2: Exact constant holdout factor marks correlation shift as NaN with mathematically undefined note."""
         f1 = MarketFactor(
-            factor_id="FX_EUR_USD_LOGRET", category=FactorCategory.FX_RETURN, asset_or_currency="EUR/USD",
-            frequency=Frequency.DAILY, original_unit="USD_per_EUR", normalized_unit="log_return",
-            source_id="s", series_id="s", transformation=TransformationMethod.LOG_RETURN,
+            factor_id="FX_EUR_USD_LOGRET",
+            category=FactorCategory.FX_RETURN,
+            asset_or_currency="EUR/USD",
+            frequency=Frequency.DAILY,
+            original_unit="USD_per_EUR",
+            normalized_unit="log_return",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.LOG_RETURN,
         )
         f2 = MarketFactor(
-            factor_id="RATE_DIFF_EUR_BORROW_BPS", category=FactorCategory.BORROWING_RATE_CHANGE, asset_or_currency="EUR",
-            frequency=Frequency.DAILY, original_unit="percent", normalized_unit="basis_points",
-            source_id="s", series_id="s", transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
+            factor_id="RATE_DIFF_EUR_BORROW_BPS",
+            category=FactorCategory.BORROWING_RATE_CHANGE,
+            asset_or_currency="EUR",
+            frequency=Frequency.DAILY,
+            original_unit="percent",
+            normalized_unit="basis_points",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
         )
         np.random.seed(42)
         calib_panel = FactorPanel(
             factors=[f1, f2],
             dates=[date(2023, 1, 1)] * 300,
             level_dates=[date(2023, 1, 1)] * 301,
-            values={"FX_EUR_USD_LOGRET": list(np.random.normal(0, 1, 300)), "RATE_DIFF_EUR_BORROW_BPS": list(np.random.normal(0, 1, 300))},
+            values={
+                "FX_EUR_USD_LOGRET": list(np.random.normal(0, 1, 300)),
+                "RATE_DIFF_EUR_BORROW_BPS": list(np.random.normal(0, 1, 300)),
+            },
             raw_levels={"FX_EUR_USD_LOGRET": [1.0] * 300, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 300},
             canonical_levels={"FX_EUR_USD_LOGRET": [1.0] * 300, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 300},
-            effective_sample_size=300, aligned_level_count=301, transition_count=300,
+            effective_sample_size=300,
+            aligned_level_count=301,
+            transition_count=300,
         )
         holdout_panel = FactorPanel(
             factors=[f1, f2],
             dates=[date(2024, 1, 1)] * 200,
             level_dates=[date(2024, 1, 1)] * 201,
-            values={"FX_EUR_USD_LOGRET": list(np.random.normal(0, 1, 200)), "RATE_DIFF_EUR_BORROW_BPS": [4.0] * 200},  # Exact zero variance in holdout!
+            values={
+                "FX_EUR_USD_LOGRET": list(np.random.normal(0, 1, 200)),
+                "RATE_DIFF_EUR_BORROW_BPS": [4.0] * 200,
+            },  # Exact zero variance in holdout!
             raw_levels={"FX_EUR_USD_LOGRET": [1.0] * 200, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 200},
             canonical_levels={"FX_EUR_USD_LOGRET": [1.0] * 200, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 200},
-            effective_sample_size=200, aligned_level_count=201, transition_count=200,
+            effective_sample_size=200,
+            aligned_level_count=201,
+            transition_count=200,
         )
         diag = evaluate_factor_holdout_diagnostics(calib_panel, holdout_panel)
         pair_key = "FX_EUR_USD_LOGRET__vs__RATE_DIFF_EUR_BORROW_BPS"
@@ -581,14 +621,26 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
     def test_3_near_constant_calibration_factor_below_threshold(self):
         """Test 3: Near-constant calibration factor (0 < sigma < 1e-12) is treated as numerically unreliable."""
         f_norm = MarketFactor(
-            factor_id="F_NORM", category=FactorCategory.FX_RETURN, asset_or_currency="EUR/USD",
-            frequency=Frequency.DAILY, original_unit="USD_per_EUR", normalized_unit="log_return",
-            source_id="s", series_id="s", transformation=TransformationMethod.LOG_RETURN,
+            factor_id="F_NORM",
+            category=FactorCategory.FX_RETURN,
+            asset_or_currency="EUR/USD",
+            frequency=Frequency.DAILY,
+            original_unit="USD_per_EUR",
+            normalized_unit="log_return",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.LOG_RETURN,
         )
         f_near = MarketFactor(
-            factor_id="F_NEAR", category=FactorCategory.BORROWING_RATE_CHANGE, asset_or_currency="EUR",
-            frequency=Frequency.DAILY, original_unit="percent", normalized_unit="basis_points",
-            source_id="s", series_id="s", transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
+            factor_id="F_NEAR",
+            category=FactorCategory.BORROWING_RATE_CHANGE,
+            asset_or_currency="EUR",
+            frequency=Frequency.DAILY,
+            original_unit="percent",
+            normalized_unit="basis_points",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
         )
         np.random.seed(42)
         n_obs = 300
@@ -608,7 +660,9 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
             values={"F_NORM": norm_series, "F_NEAR": near_series},
             raw_levels={"F_NORM": norm_series, "F_NEAR": near_series},
             canonical_levels={"F_NORM": norm_series, "F_NEAR": near_series},
-            effective_sample_size=n_obs, aligned_level_count=n_obs + 1, transition_count=n_obs,
+            effective_sample_size=n_obs,
+            aligned_level_count=n_obs + 1,
+            transition_count=n_obs,
         )
         report = calibrate_factor_panel(panel, min_observations=250)
         assert math.isnan(report.correlation_matrix[0][1])
@@ -620,24 +674,41 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
     def test_4_near_constant_holdout_factor_below_threshold(self):
         """Test 4: Near-constant holdout factor (0 < sigma < 1e-12) reports shift as NaN with numerically unreliable note."""
         f1 = MarketFactor(
-            factor_id="FX_EUR_USD_LOGRET", category=FactorCategory.FX_RETURN, asset_or_currency="EUR/USD",
-            frequency=Frequency.DAILY, original_unit="USD_per_EUR", normalized_unit="log_return",
-            source_id="s", series_id="s", transformation=TransformationMethod.LOG_RETURN,
+            factor_id="FX_EUR_USD_LOGRET",
+            category=FactorCategory.FX_RETURN,
+            asset_or_currency="EUR/USD",
+            frequency=Frequency.DAILY,
+            original_unit="USD_per_EUR",
+            normalized_unit="log_return",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.LOG_RETURN,
         )
         f2 = MarketFactor(
-            factor_id="RATE_DIFF_EUR_BORROW_BPS", category=FactorCategory.BORROWING_RATE_CHANGE, asset_or_currency="EUR",
-            frequency=Frequency.DAILY, original_unit="percent", normalized_unit="basis_points",
-            source_id="s", series_id="s", transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
+            factor_id="RATE_DIFF_EUR_BORROW_BPS",
+            category=FactorCategory.BORROWING_RATE_CHANGE,
+            asset_or_currency="EUR",
+            frequency=Frequency.DAILY,
+            original_unit="percent",
+            normalized_unit="basis_points",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
         )
         np.random.seed(42)
         calib_panel = FactorPanel(
             factors=[f1, f2],
             dates=[date(2023, 1, 1)] * 300,
             level_dates=[date(2023, 1, 1)] * 301,
-            values={"FX_EUR_USD_LOGRET": list(np.random.normal(0, 1, 300)), "RATE_DIFF_EUR_BORROW_BPS": list(np.random.normal(0, 1, 300))},
+            values={
+                "FX_EUR_USD_LOGRET": list(np.random.normal(0, 1, 300)),
+                "RATE_DIFF_EUR_BORROW_BPS": list(np.random.normal(0, 1, 300)),
+            },
             raw_levels={"FX_EUR_USD_LOGRET": [1.0] * 300, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 300},
             canonical_levels={"FX_EUR_USD_LOGRET": [1.0] * 300, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 300},
-            effective_sample_size=300, aligned_level_count=301, transition_count=300,
+            effective_sample_size=300,
+            aligned_level_count=301,
+            transition_count=300,
         )
         near_holdout = [1.0 + (1e-14 if i % 2 == 0 else -1e-14) for i in range(200)]
         holdout_panel = FactorPanel(
@@ -647,25 +718,41 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
             values={"FX_EUR_USD_LOGRET": list(np.random.normal(0, 1, 200)), "RATE_DIFF_EUR_BORROW_BPS": near_holdout},
             raw_levels={"FX_EUR_USD_LOGRET": [1.0] * 200, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 200},
             canonical_levels={"FX_EUR_USD_LOGRET": [1.0] * 200, "RATE_DIFF_EUR_BORROW_BPS": [1.0] * 200},
-            effective_sample_size=200, aligned_level_count=201, transition_count=200,
+            effective_sample_size=200,
+            aligned_level_count=201,
+            transition_count=200,
         )
         diag = evaluate_factor_holdout_diagnostics(calib_panel, holdout_panel)
         pair_key = "FX_EUR_USD_LOGRET__vs__RATE_DIFF_EUR_BORROW_BPS"
         assert math.isnan(diag.correlation_shifts[pair_key])
         assert any("RATE_DIFF_EUR_BORROW_BPS" in n and "numerically unreliable" in n for n in diag.limitations_notes)
-        assert not any("RATE_DIFF_EUR_BORROW_BPS" in n and "mathematically undefined" in n for n in diag.limitations_notes)
+        assert not any(
+            "RATE_DIFF_EUR_BORROW_BPS" in n and "mathematically undefined" in n for n in diag.limitations_notes
+        )
 
     def test_5_nonzero_factor_variance_safely_above_threshold(self):
         """Test 5: Non-zero factor variance safely above threshold produces finite valid correlations."""
         f1 = MarketFactor(
-            factor_id="F1", category=FactorCategory.FX_RETURN, asset_or_currency="EUR/USD",
-            frequency=Frequency.DAILY, original_unit="USD_per_EUR", normalized_unit="log_return",
-            source_id="s", series_id="s", transformation=TransformationMethod.LOG_RETURN,
+            factor_id="F1",
+            category=FactorCategory.FX_RETURN,
+            asset_or_currency="EUR/USD",
+            frequency=Frequency.DAILY,
+            original_unit="USD_per_EUR",
+            normalized_unit="log_return",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.LOG_RETURN,
         )
         f2 = MarketFactor(
-            factor_id="F2", category=FactorCategory.BORROWING_RATE_CHANGE, asset_or_currency="EUR",
-            frequency=Frequency.DAILY, original_unit="percent", normalized_unit="basis_points",
-            source_id="s", series_id="s", transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
+            factor_id="F2",
+            category=FactorCategory.BORROWING_RATE_CHANGE,
+            asset_or_currency="EUR",
+            frequency=Frequency.DAILY,
+            original_unit="percent",
+            normalized_unit="basis_points",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
         )
         np.random.seed(42)
         n_obs = 300
@@ -680,7 +767,9 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
             values={"F1": s1, "F2": s2},
             raw_levels={"F1": s1, "F2": s2},
             canonical_levels={"F1": s1, "F2": s2},
-            effective_sample_size=n_obs, aligned_level_count=n_obs + 1, transition_count=n_obs,
+            effective_sample_size=n_obs,
+            aligned_level_count=n_obs + 1,
+            transition_count=n_obs,
         )
         report = calibrate_factor_panel(panel, min_observations=250)
         assert all(all(row) for row in report.correlation_validity_mask)
@@ -688,15 +777,39 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
 
     def test_6_pairwise_validity_masks(self):
         """Test 6: Pairwise validity mask correctly isolates degenerate factors while preserving valid pairs."""
-        f1 = MarketFactor(factor_id="F1", category=FactorCategory.FX_RETURN, asset_or_currency="EUR/USD",
-                          frequency=Frequency.DAILY, original_unit="USD_per_EUR", normalized_unit="log_return",
-                          source_id="s", series_id="s", transformation=TransformationMethod.LOG_RETURN)
-        f2 = MarketFactor(factor_id="F2_CONST", category=FactorCategory.BORROWING_RATE_CHANGE, asset_or_currency="EUR",
-                          frequency=Frequency.DAILY, original_unit="percent", normalized_unit="basis_points",
-                          source_id="s", series_id="s", transformation=TransformationMethod.FIRST_DIFFERENCE_BPS)
-        f3 = MarketFactor(factor_id="F3", category=FactorCategory.SOVEREIGN_YIELD_CHANGE, asset_or_currency="USD",
-                          frequency=Frequency.DAILY, original_unit="percent", normalized_unit="basis_points",
-                          source_id="s", series_id="s", transformation=TransformationMethod.FIRST_DIFFERENCE_BPS)
+        f1 = MarketFactor(
+            factor_id="F1",
+            category=FactorCategory.FX_RETURN,
+            asset_or_currency="EUR/USD",
+            frequency=Frequency.DAILY,
+            original_unit="USD_per_EUR",
+            normalized_unit="log_return",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.LOG_RETURN,
+        )
+        f2 = MarketFactor(
+            factor_id="F2_CONST",
+            category=FactorCategory.BORROWING_RATE_CHANGE,
+            asset_or_currency="EUR",
+            frequency=Frequency.DAILY,
+            original_unit="percent",
+            normalized_unit="basis_points",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
+        )
+        f3 = MarketFactor(
+            factor_id="F3",
+            category=FactorCategory.SOVEREIGN_YIELD_CHANGE,
+            asset_or_currency="USD",
+            frequency=Frequency.DAILY,
+            original_unit="percent",
+            normalized_unit="basis_points",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.FIRST_DIFFERENCE_BPS,
+        )
         np.random.seed(42)
         n_obs = 300
         s1 = list(np.random.normal(0, 1, n_obs))
@@ -704,11 +817,15 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
         s3 = list(np.random.normal(0, 1, n_obs))
         dates = [date(2023, 1, 1)] * n_obs
         panel = FactorPanel(
-            factors=[f1, f2, f3], dates=dates, level_dates=dates + [date(2023, 1, 1)],
+            factors=[f1, f2, f3],
+            dates=dates,
+            level_dates=dates + [date(2023, 1, 1)],
             values={"F1": s1, "F2_CONST": s2, "F3": s3},
             raw_levels={"F1": s1, "F2_CONST": s2, "F3": s3},
             canonical_levels={"F1": s1, "F2_CONST": s2, "F3": s3},
-            effective_sample_size=n_obs, aligned_level_count=n_obs + 1, transition_count=n_obs,
+            effective_sample_size=n_obs,
+            aligned_level_count=n_obs + 1,
+            transition_count=n_obs,
         )
         report = calibrate_factor_panel(panel, min_observations=250)
         mask = report.correlation_validity_mask
@@ -730,15 +847,28 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
 
     def test_7_single_factor_zero_variance_behavior(self):
         """Test 7: Single factor panel with zero or near-zero variance yields [[NaN]] and [[False]]."""
-        f = MarketFactor(factor_id="F_SOLO", category=FactorCategory.FX_RETURN, asset_or_currency="EUR/USD",
-                         frequency=Frequency.DAILY, original_unit="USD_per_EUR", normalized_unit="log_return",
-                         source_id="s", series_id="s", transformation=TransformationMethod.LOG_RETURN)
+        f = MarketFactor(
+            factor_id="F_SOLO",
+            category=FactorCategory.FX_RETURN,
+            asset_or_currency="EUR/USD",
+            frequency=Frequency.DAILY,
+            original_unit="USD_per_EUR",
+            normalized_unit="log_return",
+            source_id="s",
+            series_id="s",
+            transformation=TransformationMethod.LOG_RETURN,
+        )
         dates = [date(2023, 1, 1)] * 300
         panel = FactorPanel(
-            factors=[f], dates=dates, level_dates=dates + [date(2023, 1, 1)],
-            values={"F_SOLO": [0.0] * 300}, raw_levels={"F_SOLO": [0.0] * 300},
+            factors=[f],
+            dates=dates,
+            level_dates=dates + [date(2023, 1, 1)],
+            values={"F_SOLO": [0.0] * 300},
+            raw_levels={"F_SOLO": [0.0] * 300},
             canonical_levels={"F_SOLO": [0.0] * 300},
-            effective_sample_size=300, aligned_level_count=301, transition_count=300,
+            effective_sample_size=300,
+            aligned_level_count=301,
+            transition_count=300,
         )
         report = calibrate_factor_panel(panel, min_observations=250)
         assert math.isnan(report.correlation_matrix[0][0])
@@ -749,7 +879,8 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
         # Ensure RuntimeWarning is not globally ignored
         active_filters = warnings.filters
         global_runtime_ignores = [
-            f for f in active_filters
+            f
+            for f in active_filters
             if f[0] == "ignore" and f[2] is not None and issubclass(RuntimeWarning, f[2]) and f[3] is None
         ]
         assert len(global_runtime_ignores) == 0, f"Found global RuntimeWarning suppression: {global_runtime_ignores}"
@@ -769,6 +900,7 @@ class TestWorkstreamBNearZeroCorrelationSemantics:
 # ==============================================================================
 # Workstream C: Research Result Invariance Evidence & Baseline Reconciliation
 # ==============================================================================
+
 
 class TestWorkstreamCResearchResultInvarianceEvidence:
     """Verifies numerical invariance of genuine research outputs against baseline artifacts."""

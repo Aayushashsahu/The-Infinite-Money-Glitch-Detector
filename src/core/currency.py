@@ -37,9 +37,7 @@ def validate_currency_code(code: str) -> str:
         ValueError: if the code is not a 3-letter alphabetic code.
     """
     if not isinstance(code, str) or not _CURRENCY_CODE.match(code):
-        raise ValueError(
-            f"Invalid currency code: {code!r}. Expected a 3-letter ISO 4217 style code, e.g. 'USD'."
-        )
+        raise ValueError(f"Invalid currency code: {code!r}. Expected a 3-letter ISO 4217 style code, e.g. 'USD'.")
     return code.upper()
 
 
@@ -117,6 +115,43 @@ class NormalizedFXMetadata:
     canonical_usd_per_eur: float | None = None
 
 
+def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str, str] | None:
+    """Extract (base, quote) currency codes from a pair representation string.
+
+    Supported formats:
+    - 'BASE/QUOTE' (e.g. 'EUR/USD')
+    - 'BASE_QUOTE' where both are 3 alphabetic chars (e.g. 'EUR_USD')
+    """
+    if not text:
+        return None
+    s = text.strip()
+    if "/" in s:
+        parts = s.split("/")
+        if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+            b, q = parts[0].strip().upper(), parts[1].strip().upper()
+            if len(b) == 3 and b.isalpha() and len(q) == 3 and q.isalpha():
+                return b, q
+            if strict:
+                raise ValueError(
+                    f"Invalid currency codes in pair '{text}': '{b}/{q}'. Must be 3-letter ISO-4217 alphabetic codes."
+                )
+    elif "_" in s:
+        parts = s.split("_")
+        if (
+            len(parts) == 2
+            and len(parts[0].strip()) == 3
+            and parts[0].strip().isalpha()
+            and len(parts[1].strip()) == 3
+            and parts[1].strip().isalpha()
+        ):
+            return parts[0].strip().upper(), parts[1].strip().upper()
+        if strict and len(parts) == 2:
+            raise ValueError(f"Invalid currency codes in pair '{text}'. Must be 3-letter ISO-4217 alphabetic codes.")
+    elif strict:
+        raise ValueError(f"Malformed FX pair metadata: '{text}'. Must be a currency pair like 'EUR/USD' or 'EUR_USD'.")
+    return None
+
+
 def validate_and_normalize_fx_metadata(
     *,
     base_currency: str | None = None,
@@ -138,86 +173,186 @@ def validate_and_normalize_fx_metadata(
       (e.g., EUR/USD = 0.91 EUR per USD; USD/EUR = 1.09 USD per EUR)
 
     Requirements:
-    1. Explicit units must agree with both the currency pair and declared quote convention.
-    2. Generic units ('quote_per_base', 'base_per_quote') must agree with declared quote_convention.
-    3. Missing, contradictory, ambiguous, or unsupported metadata fails closed (ValueError).
-    4. Explicit units never silently override contradictory quote_convention.
-    5. If value is positive and finite, computes canonical USD per EUR for EUR/USD factor pipeline.
+    1. Validate pair and entity_code independently whenever either contains a recognizable currency pair.
+    2. Explicit base/quote currencies must agree with both pair representations.
+    3. Never ignore a contradictory entity code merely because base and quote currencies were already supplied.
+    4. Explicit units must agree with both the currency pair and declared quote convention.
+    5. Generic units ('quote_per_base', 'base_per_quote') must agree with declared quote_convention.
+    6. Missing, contradictory, ambiguous, or unsupported metadata fails closed (ValueError).
+    7. Partial metadata policy: Never silently overwrite an explicitly declared quote_convention.
+    8. In lenient schema-validation mode, missing metadata is tolerated only where intended; invalid supplied
+       currency codes fail closed.
+    9. If value is positive and finite, computes canonical USD per EUR for EUR/USD factor pipeline.
     """
-    base = base_currency.strip().upper() if base_currency else None
-    quote = quote_currency.strip().upper() if quote_currency else None
-    pair_explicit = (pair or "").strip()
-    pair_symbol = (pair or entity_code or "").strip()
-
     unit_raw = (unit or "").strip()
     unit_str = unit_raw.lower()
 
-    # 1. Infer currencies from explicit unit if currencies absent
+    # 3. Explicitly supplied currency codes must be valid 3-letter codes even in lenient mode
+    base_explicit = base_currency.strip().upper() if base_currency else None
+    quote_explicit = quote_currency.strip().upper() if quote_currency else None
+    base = base_explicit
+    quote = quote_explicit
+    if base is not None:
+        base = validate_currency_code(base)
+    if quote is not None:
+        quote = validate_currency_code(quote)
+
+    # 4. Extract pair representations from pair and entity_code independently
+    pair_explicit = (pair or "").strip()
+    pair_tuple: tuple[str, str] | None = None
+    if pair_explicit:
+        pair_tuple = _extract_pair_codes(pair_explicit, strict=True)
+
+    entity_explicit = (entity_code or "").strip()
+    entity_tuple: tuple[str, str] | None = None
+    if entity_explicit:
+        entity_tuple = _extract_pair_codes(entity_explicit, strict=False)
+
+    # 1. Resolve quote_convention if explicitly provided (never silently overwrite)
+    conv: QuoteConvention
+    if quote_convention is not None:
+        if isinstance(quote_convention, str):
+            qc_str = quote_convention.strip().lower()
+            if qc_str in ("quote_per_base", "quotation_per_base", "quote/base"):
+                conv = QuoteConvention.QUOTE_PER_BASE
+            elif qc_str in ("base_per_quote", "base/quote"):
+                conv = QuoteConvention.BASE_PER_QUOTE
+            else:
+                raise ValueError(
+                    f"Unsupported quote convention: '{quote_convention}'. Must be QUOTE_PER_BASE or BASE_PER_QUOTE."
+                )
+        elif isinstance(quote_convention, QuoteConvention):
+            conv = quote_convention
+        else:
+            raise ValueError(f"Invalid quote_convention type: {type(quote_convention)}")
+    else:
+        # Default convention when not explicitly declared:
+        if unit_str in ("base_per_quote", "base/quote"):
+            conv = QuoteConvention.BASE_PER_QUOTE
+        elif unit_str in ("quote_per_base", "quotation_per_base", "quote/base"):
+            conv = QuoteConvention.QUOTE_PER_BASE
+        elif (
+            base_explicit is None
+            and quote_explicit is None
+            and entity_tuple is not None
+            and unit_str in ("usd_per_eur", "usd/eur", "usd per eur")
+        ):
+            e_b, e_q = entity_tuple
+            if e_b == "USD" and e_q == "EUR":
+                conv = QuoteConvention.BASE_PER_QUOTE
+            else:
+                conv = QuoteConvention.QUOTE_PER_BASE
+        elif (
+            base_explicit is None
+            and quote_explicit is None
+            and entity_tuple is not None
+            and unit_str in ("eur_per_usd", "eur/usd", "eur per usd")
+        ):
+            e_b, e_q = entity_tuple
+            if e_b == "EUR" and e_q == "USD":
+                conv = QuoteConvention.BASE_PER_QUOTE
+            else:
+                conv = QuoteConvention.QUOTE_PER_BASE
+        else:
+            conv = QuoteConvention.QUOTE_PER_BASE
+
+    # 2. Generic quote units must agree with declared/inferred convention immediately
+    if unit_str in ("quote_per_base", "quotation_per_base", "quote/base"):
+        if conv != QuoteConvention.QUOTE_PER_BASE:
+            raise ValueError(
+                f"Contradictory FX metadata: generic unit '{unit}' contradicts "
+                f"declared quote_convention='{conv.value}'."
+            )
+    elif unit_str in ("base_per_quote", "base/quote"):
+        if conv != QuoteConvention.BASE_PER_QUOTE:
+            raise ValueError(
+                f"Contradictory FX metadata: generic unit '{unit}' contradicts "
+                f"declared quote_convention='{conv.value}'."
+            )
+
+    # 5. Independent validation and cross-check
+    if pair_tuple is not None and entity_tuple is not None:
+        p_b, p_q = pair_tuple
+        e_b, e_q = entity_tuple
+        if p_b != e_b or p_q != e_q:
+            raise ValueError(
+                f"Contradictory FX pair and entity_code metadata: pair '{pair_explicit}' ({p_b}/{p_q}) "
+                f"contradicts entity_code '{entity_explicit}' ({e_b}/{e_q})."
+            )
+
+    if pair_tuple is not None:
+        p_b, p_q = pair_tuple
+        if base is not None and base != p_b:
+            raise ValueError(
+                f"Contradictory FX pair metadata: pair '{pair_explicit}' implies {p_b}/{p_q} "
+                f"which contradicts base_currency='{base}' and quote_currency='{quote}'."
+            )
+        if quote is not None and quote != p_q:
+            raise ValueError(
+                f"Contradictory FX pair metadata: pair '{pair_explicit}' implies {p_b}/{p_q} "
+                f"which contradicts base_currency='{base}' and quote_currency='{quote}'."
+            )
+        if base is None and quote is None:
+            base = p_b
+            quote = p_q
+
+    if entity_tuple is not None:
+        e_b, e_q = entity_tuple
+        if base_explicit is not None and base_explicit != e_b:
+            raise ValueError(
+                f"Contradictory FX entity_code metadata: entity_code '{entity_explicit}' implies {e_b}/{e_q} "
+                f"which contradicts base_currency='{base_explicit}' and quote_currency='{quote_explicit}'."
+            )
+        if quote_explicit is not None and quote_explicit != e_q:
+            raise ValueError(
+                f"Contradictory FX entity_code metadata: entity_code '{entity_explicit}' implies {e_b}/{e_q} "
+                f"which contradicts base_currency='{base_explicit}' and quote_currency='{quote_explicit}'."
+            )
+        if base is None and quote is None:
+            base = e_b
+            quote = e_q
+
+    # 6. Infer currencies from explicit unit if currencies absent
     if base is None and quote is None:
         if unit_str in ("usd_per_eur", "usd/eur", "usd per eur"):
-            if quote_convention in (QuoteConvention.BASE_PER_QUOTE, "base_per_quote"):
+            if conv == QuoteConvention.BASE_PER_QUOTE:
                 base, quote = "USD", "EUR"
             else:
                 base, quote = "EUR", "USD"
         elif unit_str in ("eur_per_usd", "eur/usd", "eur per usd"):
-            if quote_convention in (QuoteConvention.BASE_PER_QUOTE, "base_per_quote"):
+            if conv == QuoteConvention.BASE_PER_QUOTE:
                 base, quote = "EUR", "USD"
             else:
                 base, quote = "USD", "EUR"
 
-    # 2. Extract currency components from pair or entity_code if currencies still absent
-    p_b, p_q = None, None
-    if "/" in pair_symbol:
-        parts = pair_symbol.split("/", 1)
-        if len(parts) == 2 and parts[0].strip() and parts[1].strip():
-            p_b, p_q = parts[0].strip().upper(), parts[1].strip().upper()
-    elif "_" in pair_symbol:
-        parts = pair_symbol.split("_")
-        if len(parts) == 2 and len(parts[0].strip()) == 3 and len(parts[1].strip()) == 3:
-            p_b, p_q = parts[0].strip().upper(), parts[1].strip().upper()
-
-    if base is None and p_b:
-        base = p_b
-    if quote is None and p_q:
-        quote = p_q
-
-    # Generic quote units require currencies to be identifiable
+    # 7. Generic quote units require currencies to be identifiable
     if unit_str in ("quote_per_base", "quotation_per_base", "quote/base", "base_per_quote", "base/quote"):
         if base is None or quote is None:
-            raise ValueError(
-                f"Cannot determine quote convention: missing base or quote currency metadata for FX observation: "
-                f"base='{base}', quote='{quote}', unit='{unit}', pair='{pair_symbol}'. Fail closed."
-            )
+            if require_currencies or require_eur_usd_pair:
+                raise ValueError(
+                    f"Cannot determine quote convention: missing base or quote currency metadata for FX observation: "
+                    f"base='{base}', quote='{quote}', unit='{unit}', pair='{pair_explicit or entity_explicit}'. Fail closed."
+                )
 
+    # 8. Missing currency policy
     if base is None or quote is None:
         if not require_currencies and not require_eur_usd_pair:
             return NormalizedFXMetadata(
                 base_currency=base or "",
                 quote_currency=quote or "",
-                quote_convention=QuoteConvention.QUOTE_PER_BASE,
+                quote_convention=conv,
                 unit=unit_raw,
-                pair=pair_symbol,
+                pair=pair_explicit
+                or (f"{base}/{quote}" if base and quote else (entity_explicit if "/" in entity_explicit else "")),
                 canonical_usd_per_eur=None,
             )
         raise ValueError(
             f"Cannot determine quote convention: missing base or quote currency metadata for FX observation: "
-            f"base='{base}', quote='{quote}', unit='{unit}', pair='{pair_symbol}'. Fail closed."
+            f"base='{base}', quote='{quote}', unit='{unit}', pair='{pair_explicit or entity_explicit}'. Fail closed."
         )
 
-    if require_currencies:
-        base = validate_currency_code(base)
-        quote = validate_currency_code(quote)
-    else:
-        try:
-            if base:
-                base = validate_currency_code(base)
-        except ValueError:
-            pass
-        try:
-            if quote:
-                quote = validate_currency_code(quote)
-        except ValueError:
-            pass
+    base = validate_currency_code(base)
+    quote = validate_currency_code(quote)
 
     if base == quote:
         raise ValueError(
@@ -231,48 +366,6 @@ def validate_and_normalize_fx_metadata(
                 f"Cannot determine quote convention: Contradictory FX currency metadata: currencies {currencies} "
                 f"do not match required EUR/USD factor pair."
             )
-
-    # Re-verify explicit pair parameter against resolved currencies
-    if pair_explicit:
-        ep_b, ep_q = None, None
-        if "/" in pair_explicit:
-            parts = pair_explicit.split("/", 1)
-            if len(parts) == 2 and parts[0].strip() and parts[1].strip():
-                ep_b, ep_q = parts[0].strip().upper(), parts[1].strip().upper()
-        elif "_" in pair_explicit:
-            parts = pair_explicit.split("_", 1)
-            if len(parts) == 2 and parts[0].strip() and parts[1].strip():
-                ep_b, ep_q = parts[0].strip().upper(), parts[1].strip().upper()
-        if ep_b and ep_q:
-            if ep_b != base or ep_q != quote:
-                raise ValueError(
-                    f"Contradictory FX pair metadata: pair '{pair_explicit}' implies {ep_b}/{ep_q} "
-                    f"which contradicts base_currency='{base}' and quote_currency='{quote}'."
-                )
-
-    # Resolve and validate quote_convention
-    if quote_convention is not None:
-        if isinstance(quote_convention, str):
-            qc_str = quote_convention.strip().lower()
-            if qc_str in ("quote_per_base", "quotation_per_base", "quote/base"):
-                conv = QuoteConvention.QUOTE_PER_BASE
-            elif qc_str in ("base_per_quote", "base/quote"):
-                conv = QuoteConvention.BASE_PER_QUOTE
-            else:
-                raise ValueError(
-                    f"Unsupported quote convention: '{quote_convention}'. "
-                    "Must be QUOTE_PER_BASE or BASE_PER_QUOTE."
-                )
-        elif isinstance(quote_convention, QuoteConvention):
-            conv = quote_convention
-        else:
-            raise ValueError(f"Invalid quote_convention type: {type(quote_convention)}")
-    else:
-        # Platform default convention is QUOTE_PER_BASE unless generic base_per_quote unit is declared
-        if unit_str in ("base_per_quote", "base/quote"):
-            conv = QuoteConvention.BASE_PER_QUOTE
-        else:
-            conv = QuoteConvention.QUOTE_PER_BASE
 
     # Validate unit against declared/inferred convention and currencies
     if unit_str in ("quote_per_base", "quotation_per_base", "quote/base"):
@@ -443,9 +536,7 @@ def get_rate_a_per_b(
         # We need A per B (USD per EUR) -> directly s_quote_per_base.
         return s_quote_per_base
     else:
-        raise ValueError(
-            f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}."
-        )
+        raise ValueError(f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}.")
 
 
 def get_two_way_quote_a_per_b(
@@ -494,9 +585,7 @@ def get_two_way_quote_a_per_b(
         # Already A per B:
         return bid, ask
     else:
-        raise ValueError(
-            f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}."
-        )
+        raise ValueError(f"Observation currencies {b_obs}/{q_obs} do not match strategy pair {curr_a}/{curr_b}.")
 
 
 @dataclass(frozen=True)
@@ -664,4 +753,3 @@ def normalize_directional_quote(
         borrowing_currency=curr_a,
         investment_currency=curr_b,
     )
-

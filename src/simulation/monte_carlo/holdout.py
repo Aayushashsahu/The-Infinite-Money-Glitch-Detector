@@ -341,7 +341,11 @@ def evaluate_holdout_diagnostics(
     pred_dd_quantile = 0.50
 
     if predictive_paths and len(predictive_paths) > 0:
-        sim_returns = [float((p.fx_rates[-1] / p.fx_rates[0]) - 1.0) for p in predictive_paths if len(p.fx_rates) > 1 and p.fx_rates[0] > 0]
+        sim_returns = [
+            float((p.fx_rates[-1] / p.fx_rates[0]) - 1.0)
+            for p in predictive_paths
+            if len(p.fx_rates) > 1 and p.fx_rates[0] > 0
+        ]
         sim_dds = []
         for p in predictive_paths:
             rates = np.array(p.fx_rates, dtype=np.float64)
@@ -481,8 +485,10 @@ def resolve_canonical_initial_fx(
     fx_key = "FX_EUR_USD_LOGRET"
     if fx_key not in calibration_panel.canonical_levels and fx_key not in calibration_panel.raw_levels:
         matched_fx = [
-            f.factor_id for f in calibration_panel.factors
-            if f.category == FactorCategory.FX_RETURN and ("EUR" in f.asset_or_currency and "USD" in f.asset_or_currency)
+            f.factor_id
+            for f in calibration_panel.factors
+            if f.category == FactorCategory.FX_RETURN
+            and ("EUR" in f.asset_or_currency and "USD" in f.asset_or_currency)
         ]
         if len(matched_fx) == 1:
             fx_key = matched_fx[0]
@@ -533,7 +539,7 @@ def resolve_canonical_initial_fx(
                 quote_convention=prov.quote_convention,
                 unit=prov.raw_unit,
                 pair=prov.pair,
-                entity_code=prov.pair or fx_key,
+                entity_code=prov.series_id or prov.pair or fx_key,
                 value=raw_val,
                 require_eur_usd_pair=True,
             )
@@ -587,8 +593,10 @@ def resolve_canonical_initial_borrowing_rate(
     borrow_key = "RATE_DIFF_EUR_BORROW_BPS"
     if borrow_key not in calibration_panel.canonical_levels and borrow_key not in calibration_panel.raw_levels:
         matched_borrow = [
-            f.factor_id for f in calibration_panel.factors
-            if f.category == FactorCategory.BORROWING_RATE_CHANGE and ("EUR" in f.factor_id or "EUR" in f.asset_or_currency)
+            f.factor_id
+            for f in calibration_panel.factors
+            if f.category == FactorCategory.BORROWING_RATE_CHANGE
+            and ("EUR" in f.factor_id or "EUR" in f.asset_or_currency)
         ]
         if len(matched_borrow) == 1:
             borrow_key = matched_borrow[0]
@@ -678,7 +686,8 @@ def resolve_canonical_initial_investment_rate(
     invest_key = "YIELD_DIFF_USD_1M_BPS"
     if invest_key not in calibration_panel.canonical_levels and invest_key not in calibration_panel.raw_levels:
         matched_invest = [
-            f.factor_id for f in calibration_panel.factors
+            f.factor_id
+            for f in calibration_panel.factors
             if f.category == FactorCategory.SOVEREIGN_YIELD_CHANGE
             and (f.series_id == "DGS1MO" or ("1M" in f.factor_id and "3M" not in f.factor_id))
         ]
@@ -885,5 +894,3 @@ def generate_holdout_predictive_paths(
             )
 
     return paths
-
-

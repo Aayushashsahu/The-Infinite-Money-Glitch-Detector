@@ -44,9 +44,9 @@ Phase 4.1.2.2.3.4 addresses the final FX metadata consistency gaps identified du
 | Attribute | Phase 4.1.2.2.3.3 Predecessor | Phase 4.1.2.2.3.4 Current Closure |
 |---|---|---|
 | **Stage A Source Commit** | `ce15f0beaf7de9d95eddc36f284bc255c66c36f2` | `d1cb043788ca0134e2cfa79b6dea54000616ef26` |
-| **Stage B Documentation Commit** | `3bb0d9703f8a4271891b9f69ceb4ec8b65287f3f` | `b8a10b8a342310c277585a84ea719e06acab8e84` |
+| **Stage B Documentation Commit** | `ff632b1e8d66cd9b551e2c58c281a01c9cfec347` | `3658587815bfd3e8b844474af766277ddaed9721` |
 | **Research Artifacts Baseline** | `data/results/phase_4_1_2_2_3/` | `data/results/phase_4_1_2_2_3/` (Invariant) |
-| **Predecessor CI Run ID** | `42461935667` | *Pending remote CI run* |
+| **CI Run ID** | `42468331243` | `42480238073` |
 | **Test Suite Baseline** | 485 passed | **512 passed** (27 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean (0 errors) | **Ruff clean** (0 errors, 0 warnings) |
 | **Data Classification** | `SIMULATED_RESEARCH_PROXY` | `SIMULATED_RESEARCH_PROXY` |
@@ -260,7 +260,7 @@ In accordance with repository closure protocol, Phase 4.1.2.2.3.4 was executed a
   `d1cb043788ca0134e2cfa79b6dea54000616ef26`
   `feat(simulation): Phase 4.1.2.2.3.4 complete FX metadata coherence & numerical correlation policy (Stage A)`
 - **Stage B (Documentation & Closure Report)**:
-  `b8a10b8a342310c277585a84ea719e06acab8e84`
+  `3658587815bfd3e8b844474af766277ddaed9721`
   `docs(results): publish Phase 4.1.2.2.3.4 closure report (Stage B)`
 
 ---

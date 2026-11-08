@@ -13,10 +13,11 @@ import sys
 if sys.platform == "win32":
     try:
         import ctypes
+
         try:
-            ctypes.CDLL("ucrtbase.dll")._setmaxstdio(2048)
+            ctypes.CDLL("ucrtbase.dll")._setmaxstdio(8192)
         except Exception:
-            ctypes.cdll.msvcrt._setmaxstdio(2048)
+            ctypes.cdll.msvcrt._setmaxstdio(8192)
     except Exception:
         pass
 
@@ -51,9 +52,7 @@ def make_obs(**overrides) -> DataObservation:
     if "publication_date" in overrides:
         defaults["publication_date"] = overrides["publication_date"]
     else:
-        defaults["publication_date"] = date(
-            observation_date.year + 1, observation_date.month, observation_date.day
-        )
+        defaults["publication_date"] = date(observation_date.year + 1, observation_date.month, observation_date.day)
     defaults.update({k: v for k, v in overrides.items() if k != "publication_date"})
     return DataObservation(**defaults)
 
