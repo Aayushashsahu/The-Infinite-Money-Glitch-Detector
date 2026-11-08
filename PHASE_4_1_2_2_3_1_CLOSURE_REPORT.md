@@ -31,7 +31,9 @@ Each function prefers verified canonical levels, permits fallback only under exp
 | Attribute | Phase 4.1.2.2.3 Predecessor | Phase 4.1.2.2.3.1 Current State |
 |---|---|---|
 | **Stage A Source Commit** | `790e1e1bae8b3e9ead0300cfc80abd897d89a746` | `b115393216be53da61be58dabfaf3fae42582161` |
-| **Stage B Results Commit** | `c477023c94ea32bfd33d2bd3e06c156e96b2a7fd` | `47ae7e66795f590130be82f4da99b244d56d1194` |
+| **Stage B Documentation Commit** | `c477023c94ea32bfd33d2bd3e06c156e96b2a7fd` | `78a8c5d789acb3cac079f5f984b8c48c8daefbc4` |
+| **Research Outputs Commit** | `c477023c94ea32bfd33d2bd3e06c156e96b2a7fd` | *None (Phase 4.1.2.2.3 artifacts invariant & preserved)* |
+| **CI Run ID** | `42453531306` | `42458413071` ([Run URL](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector/actions/runs/42458413071)) |
 | **Test Suite Baseline** | 424 passed (Python 3.11 & 3.12) | **440 passed** (16 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean (0 errors) | **Ruff clean** (0 errors, 0 warnings) |
 | **Research Classification** | `SIMULATED_RESEARCH_PROXY` | `SIMULATED_RESEARCH_PROXY` |

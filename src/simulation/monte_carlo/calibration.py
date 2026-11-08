@@ -61,6 +61,10 @@ class CalibrationReport(BaseModel):
     factor_names: list[str]
     correlation_matrix: list[list[float]]
     covariance_matrix: list[list[float]]
+    correlation_validity_mask: list[list[bool]] = Field(
+        default_factory=list,
+        description="Pairwise correlation validity mask: True if both factors have non-zero variance, False if undefined.",
+    )
     is_sufficient: bool = True
     sufficiency_notes: list[str] = Field(default_factory=list)
     availability_summary: CalibrationAvailabilitySummary | None = None
@@ -215,16 +219,34 @@ def calibrate_factor_panel(
         summaries[fname] = summ
         matrix_data.append(series)
 
+    # Identify factors with zero or near-zero variance
+    zero_var_indices = {i for i, fname in enumerate(factor_names) if summaries[fname].std < 1e-12}
+    for idx in sorted(zero_var_indices):
+        fname = factor_names[idx]
+        notes.append(
+            f"Factor '{fname}' has zero or near-zero variance ({summaries[fname].std:.2e}); "
+            f"pairwise linear correlations involving this factor are mathematically undefined."
+        )
+
+    n_f = len(factor_names)
+    correlation_validity_mask: list[list[bool]] = [
+        [i not in zero_var_indices and j not in zero_var_indices for j in range(n_f)]
+        for i in range(n_f)
+    ]
+
     # Compute joint covariance and correlation matrices
     joint_array = np.vstack(matrix_data)  # shape: (n_factors, n_obs)
     cov_mat = np.cov(joint_array, ddof=1)
     with np.errstate(divide="ignore", invalid="ignore"):
-        corr_mat = np.nan_to_num(np.corrcoef(joint_array), nan=0.0)
+        raw_corr = np.corrcoef(joint_array)
 
     # Handle single factor edge-case
     if len(factor_names) == 1:
         cov_mat = np.array([[cov_mat]])
-        corr_mat = np.array([[1.0]])
+        corr_mat = np.array([[np.nan if 0 in zero_var_indices else 1.0]])
+    else:
+        validity_arr = np.array(correlation_validity_mask, dtype=bool)
+        corr_mat = np.where(validity_arr, raw_corr, np.nan)
 
     calib_start = min(panel.dates)
     calib_end = max(panel.dates)
@@ -315,6 +337,7 @@ def calibrate_factor_panel(
         factor_names=factor_names,
         correlation_matrix=corr_mat.tolist(),
         covariance_matrix=cov_mat.tolist(),
+        correlation_validity_mask=correlation_validity_mask,
         is_sufficient=is_sufficient,
         sufficiency_notes=notes,
         availability_summary=avail_summary,

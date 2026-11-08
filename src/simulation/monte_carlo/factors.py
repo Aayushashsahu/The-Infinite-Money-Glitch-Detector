@@ -165,6 +165,23 @@ def _normalize_fx_quote_to_usd_per_eur(fx_obs: DataObservation) -> float:
     unit_str = (fx_obs.unit or "").strip().lower()
     convention = fx_obs.quote_convention
 
+    # Validate finite positivity
+    if not math.isfinite(fx_obs.value) or fx_obs.value <= 0:
+        raise ValueError(f"FX observation value must be finite and positive: {fx_obs.value}")
+
+    # Check for invalid / contradictory currencies if currencies are specified
+    currencies = {c for c in (fx_obs.base_currency, fx_obs.quote_currency) if c}
+    if currencies and not currencies.issubset({"USD", "EUR"}):
+        raise ValueError(
+            f"Contradictory FX currency metadata for {fx_obs.entity_code}: "
+            f"currencies {currencies} do not match required EUR/USD factor pair."
+        )
+    if fx_obs.base_currency and fx_obs.quote_currency and fx_obs.base_currency == fx_obs.quote_currency:
+        raise ValueError(
+            f"Contradictory FX currency metadata for {fx_obs.entity_code}: "
+            f"base_currency and quote_currency are identical ({fx_obs.base_currency})."
+        )
+
     # 1. Explicit unit metadata takes precedence
     if unit_str in ("usd_per_eur", "usd/eur", "usd per eur"):
         return fx_obs.value
