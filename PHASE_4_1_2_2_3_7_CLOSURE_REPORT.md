@@ -50,10 +50,10 @@ Key achievements:
 | Attribute | Phase 4.1.2.2.3.6 Verified | Phase 4.1.2.2.3.7 Current Closure |
 |---|---|---|
 | **Stage A Source Commit** | `3e43403f2e807811eb846102651d4e0e0a73cca8` | `ecfed0886da5ea19dba0b7918977b58c9c52bcb3` |
-| **Stage B Documentation Commit** | `ff0da82cca3180314b2de4a4c4285423aaa59d14` | `6ff3c6f921171cb4152cdee91bbb7fbce5f125ad` |
+| **Stage B Documentation Commit** | `ff0da82cca3180314b2de4a4c4285423aaa59d14` | `1a0210f54ecf932b894583102166c20ef60c1c73` |
 | **Stage B+ Update Commit** | `fcd331e3901c8744b630a565ae385dc1a0b1074f` | — |
-| **Stage B CI Run ID** | `42497349211` | Scheduled upon push |
-| **Main-Head CI Run ID** | `42497628977` | Scheduled upon push |
+| **Stage B CI Run ID** | `42497349211` | **`42500364722`** (Both 3.11 & 3.12 passed) |
+| **Main-Head CI Run ID** | `42497628977` | **`42500364722`** (Verified main-head commit) |
 | **Test Suite Passed** | 572 passed | **616 passed** (44 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
 | **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** |
@@ -230,7 +230,8 @@ Execution follows strict dual-stage delivery:
   * Commit message: `feat(simulation): Phase 4.1.2.2.3.7 slash pair precedence & test fixture scoping (Stage A)`
 
 - **Stage B (Closure Documentation & Historical Lineage Reconciliation)**:
-  * Commit SHA: `6ff3c6f921171cb4152cdee91bbb7fbce5f125ad`
+  * Commit SHA: `1a0210f54ecf932b894583102166c20ef60c1c73`
+  * CI Run ID: `42500364722` (Both Python 3.11 and 3.12 passed)
   * Modified: `PHASE_4_1_2_2_3_6_CLOSURE_REPORT.md`
   * Added: `PHASE_4_1_2_2_3_7_CLOSURE_REPORT.md`
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.7 closure report & reconcile Phase 4.1.2.2.3.6 lineage (Stage B)`
