@@ -52,8 +52,10 @@ Key achievements:
 | Attribute | Phase 4.1.2.2.3.5 Baseline | Phase 4.1.2.2.3.6 Current Closure |
 |---|---|---|
 | **Stage A Source Commit** | `b38a227dfc0e8faaacbb8ce27df117fcdd2d03d8` | `3e43403f2e807811eb846102651d4e0e0a73cca8` |
-| **Stage B Documentation Commit** | `6bf751cc22f96867ad53d79a6366a3858c8a4990` | `e0492f710adae8a8db1d32adbb39a23be9b6b274` |
-| **CI Run ID** | `42487376183` | **`42497349211`** (Both 3.11 & 3.12 passed) |
+| **Stage B Documentation Commit** | `6bf751cc22f96867ad53d79a6366a3858c8a4990` | `ff0da82cca3180314b2de4a4c4285423aaa59d14` |
+| **Stage B+ Lineage Update Commit**| — | `fcd331e3901c8744b630a565ae385dc1a0b1074f` |
+| **Stage B CI Run ID** | `42487376183` | `42497349211` (Both 3.11 & 3.12 passed) |
+| **Latest Main-Head CI Run ID** | — | `42497628977` (Verified main-head commit) |
 | **Test Suite Passed** | 530 passed | **572 passed** (42 new tests, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
 | **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** |
@@ -223,10 +225,17 @@ Execution follows strict dual-stage delivery:
   * Commit message: `feat(simulation): Phase 4.1.2.2.3.6 strict pair-like FX entity-code rejection & regression suite (Stage A)`
 
 - **Stage B (Closure Reports & Research Baseline Reconciliation)**:
-  * Commit SHA: `e0492f710adae8a8db1d32adbb39a23be9b6b274`
+  * Commit SHA: `ff0da82cca3180314b2de4a4c4285423aaa59d14`
+  * CI Run ID: `42497349211` (Both Python 3.11 and 3.12 passed)
   * Modified: `PHASE_4_1_2_2_3_5_CLOSURE_REPORT.md`
   * Added: `PHASE_4_1_2_2_3_6_CLOSURE_REPORT.md`
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.6 closure report & reconcile Phase 4.1.2.2.3.5 baseline (Stage B)`
+
+- **Stage B+ (Documentation Lineage Reconciliation)**:
+  * Commit SHA: `fcd331e3901c8744b630a565ae385dc1a0b1074f`
+  * CI Run ID: `42497628977` (Verified current main-head commit on Python 3.11 and 3.12)
+  * Modified: `PHASE_4_1_2_2_3_6_CLOSURE_REPORT.md`
+  * Commit message: `docs(results): record successful CI run ID 42497349211 in closure report`
 
 ---
 
