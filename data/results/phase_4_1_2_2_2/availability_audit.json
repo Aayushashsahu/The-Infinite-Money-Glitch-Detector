@@ -1,0 +1,95 @@
+{
+  "total_source_observations": 8908,
+  "genuine_observations_included": 8900,
+  "synthetic_observations_excluded": 8,
+  "date_window_exclusions": 1910,
+  "classification_exclusions": 0,
+  "factor_alignment_exclusions": 1056,
+  "exact_timestamp_verified_count": 0,
+  "estimated_availability_count": 8724,
+  "retrospective_count": 176,
+  "missing_evidence_count": 0,
+  "unrecognized_evidence_count": 0,
+  "is_reconciled": true,
+  "data_classification_label": "SIMULATED_RESEARCH_PROXY",
+  "pit_mode": "ESTIMATED_LAG",
+  "audit_scope_description": "Source database contains 8,908 total records. After isolating 8 synthetic test records, 8,900 genuine historical observations were evaluated across 4 factor series. Point-in-time classifications reconcile with 100% mutual exclusivity.",
+  "release_lag_policies": {
+    "FX_EUR_USD": "ECB daily reference rate published ~16:00 CET / ~15:00-16:00 UTC on observation date; available for decision at 16:00 UTC.",
+    "DGS1MO": "Federal Reserve H.15 Selected Interest Rates release published at 4:15 PM Eastern Time on next Federal Reserve business day (accounting for EST/EDT daylight saving and Federal Reserve holidays).",
+    "DGS3MO": "Federal Reserve H.15 Selected Interest Rates release published at 4:15 PM Eastern Time on next Federal Reserve business day (accounting for EST/EDT daylight saving and Federal Reserve holidays).",
+    "EUR_BORROW_RATE": "ECB Main Refinancing Operations / Deposit Facility Rate; piecewise-constant effective from 00:00 UTC on announcement/effective date."
+  },
+  "factor_breakdown": {
+    "FP.CPI.TOTL.ZG": {
+      "total_observations": 176,
+      "exact_verified": 0,
+      "estimated": 0,
+      "retrospective": 176,
+      "missing": 0,
+      "min_date": "1960-01-01",
+      "max_date": "2025-01-01"
+    },
+    "DGS3MO": {
+      "total_observations": 1251,
+      "exact_verified": 0,
+      "estimated": 1251,
+      "retrospective": 0,
+      "missing": 0,
+      "min_date": "2020-01-02",
+      "max_date": "2024-12-31"
+    },
+    "DGS1MO": {
+      "total_observations": 1251,
+      "exact_verified": 0,
+      "estimated": 1251,
+      "retrospective": 0,
+      "missing": 0,
+      "min_date": "2020-01-02",
+      "max_date": "2024-12-31"
+    },
+    "KR.DFR.LEV": {
+      "total_observations": 1827,
+      "exact_verified": 0,
+      "estimated": 1827,
+      "retrospective": 0,
+      "missing": 0,
+      "min_date": "2020-01-01",
+      "max_date": "2024-12-31"
+    },
+    "KR.MRR_FR.LEV": {
+      "total_observations": 1827,
+      "exact_verified": 0,
+      "estimated": 1827,
+      "retrospective": 0,
+      "missing": 0,
+      "min_date": "2020-01-01",
+      "max_date": "2024-12-31"
+    },
+    "USD/EUR": {
+      "total_observations": 1284,
+      "exact_verified": 0,
+      "estimated": 1284,
+      "retrospective": 0,
+      "missing": 0,
+      "min_date": "2019-12-31",
+      "max_date": "2024-12-31"
+    },
+    "EUR/USD": {
+      "total_observations": 1284,
+      "exact_verified": 0,
+      "estimated": 1284,
+      "retrospective": 0,
+      "missing": 0,
+      "min_date": "2019-12-31",
+      "max_date": "2024-12-31"
+    }
+  },
+  "complete_aligned_factor_days": 989,
+  "aligned_level_count": 990,
+  "transition_count": 989,
+  "first_level_date": "2020-01-06",
+  "last_level_date": "2023-12-29",
+  "first_transition_date": "2020-01-07",
+  "last_transition_date": "2023-12-29"
+}

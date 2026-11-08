@@ -1,0 +1,72 @@
+{
+  "baseline_borrowing_rate": 0.02,
+  "funding_conventions": [
+    "fixed_rate_funding",
+    "floating_rate_reset_funding"
+  ],
+  "shocks_bps": [
+    0,
+    100,
+    300,
+    500
+  ],
+  "scenarios": [
+    {
+      "scenario_name": "Baseline (0 bps)",
+      "shock_bps": 0,
+      "fixed_total_return": 0.0028666457287631055,
+      "floating_total_return": 0.0028666457287631055,
+      "return_difference": 0.0,
+      "fixed_financing_cost_a": 116.79903683977318,
+      "floating_financing_cost_a": 116.79903683977318,
+      "financing_cost_difference_a": 0.0,
+      "fixed_net_profit_a": 286.66457287631056,
+      "floating_net_profit_a": 286.66457287631056,
+      "net_profit_difference_a": 0.0
+    },
+    {
+      "scenario_name": "Borrowing Rate +100 bps",
+      "shock_bps": 100,
+      "fixed_total_return": 0.002692384513079596,
+      "floating_total_return": 0.0023842109425012315,
+      "return_difference": -0.00030817357057836463,
+      "fixed_financing_cost_a": 134.22515840812412,
+      "floating_financing_cost_a": 165.007108732927,
+      "financing_cost_difference_a": 30.781950324802892,
+      "fixed_net_profit_a": 269.2384513079596,
+      "floating_net_profit_a": 238.42109425012313,
+      "net_profit_difference_a": -30.81735705783649
+    },
+    {
+      "scenario_name": "Borrowing Rate +300 bps",
+      "shock_bps": 300,
+      "fixed_total_return": 0.0023487036126395105,
+      "floating_total_return": 0.0014328175505204125,
+      "return_difference": -0.0009158860621190979,
+      "fixed_financing_cost_a": 168.59324845213268,
+      "floating_financing_cost_a": 260.07659044028696,
+      "financing_cost_difference_a": 91.48334198815428,
+      "fixed_net_profit_a": 234.87036126395105,
+      "floating_net_profit_a": 143.28175505204126,
+      "net_profit_difference_a": -91.58860621190979
+    },
+    {
+      "scenario_name": "Borrowing Rate +500 bps",
+      "shock_bps": 500,
+      "fixed_total_return": 0.0020112787843533445,
+      "floating_total_return": 0.000498836556484166,
+      "return_difference": -0.0015124422278691785,
+      "fixed_financing_cost_a": 202.33573128074931,
+      "floating_financing_cost_a": 353.406068173761,
+      "financing_cost_difference_a": 151.0703368930117,
+      "fixed_net_profit_a": 201.12787843533442,
+      "floating_net_profit_a": 49.88365564841661,
+      "net_profit_difference_a": -151.24422278691782
+    }
+  ],
+  "notes": [
+    "Fixed-rate funding locks borrowing costs at position inception; intermediate rate shocks do NOT reprice the open liability.",
+    "Floating-rate funding resets borrowing rates at each transition, passing post-entry rate increases directly into financing expenses.",
+    "In the presence of an adverse borrowing rate shock (+500 bps), floating funding reduces net portfolio return compared to fixed funding."
+  ]
+}
