@@ -130,21 +130,21 @@ $$\lambda_2 \approx 15.39780$$
 $$\lambda_3 \approx 25.24979$$
 $$\lambda_4 \approx 51.36663$$
 
-Since $\lambda_{\min} \approx 2.529 \times 10^{-5} \gg 10^{-8}$ ($>2500\times$ higher), `ensure_positive_semidefinite` returns `(sym, False, 0.0)`. The safety buffer is an exact mathematical identity on calibration outputs.
+Since $\lambda_{\min} \approx 2.529 \times 10^{-5} \gg 10^{-8}$ ($>2500\times$ higher), `ensure_positive_semidefinite` returns `(sym, False, 0.0)`. The safety buffer is an exact mathematical identity specifically on the empirical calibration factor covariance matrix.
 
 ---
 
 ## 5. Workstream C: Research Output Reconciliation
 
-### 5.1 Sample Counts
+### 5.1 Sample Counts & Window Boundaries
 
 - **Calibration Sample**:
-  * Level dates: 990 aligned trading days (`2020-01-02` to `2023-12-29`).
-  * Return / difference transitions: 989 daily observations (`2020-01-03` to `2023-12-29`).
+  * Level dates: 990 aligned trading days (first level: `2020-01-06`, last level: `2023-12-29`).
+  * Return / difference transitions: 989 daily observations (first transition: `2020-01-07`, last transition: `2023-12-29`).
 - **Holdout Sample**:
-  * Level dates: 248 aligned trading days (`2024-01-02` to `2024-12-31`).
-  * Return / difference transitions: 247 daily observations (`2024-01-03` to `2024-12-31`).
-- **Total Combined Sample**: 1,236 transitions across 1,238 trading days.
+  * Level dates: 248 aligned trading days (first level: `2023-12-29`, last level: `2024-12-31`).
+  * Return / difference transitions: 247 daily observations (first transition: `2024-01-02`, last transition: `2024-12-31`).
+- **Total Combined Sample**: 1,236 transitions across 1,237 unique aligned level dates (accounting for the shared `2023-12-29` boundary date).
 
 ### 5.2 Initial Conditions Separation
 
@@ -157,20 +157,24 @@ Since $\lambda_{\min} \approx 2.529 \times 10^{-5} \gg 10^{-8}$ ($>2500\times$ h
    * Borrowing Rate ($r_b$): $4.5000\%$ (prevailing ECB MRO rate)
    * Investment Rate ($r_i$): $5.5500\%$ (US Treasury 1-Month yield)
 
-### 5.3 Numerical Invariance Evidence
+### 5.3 Numerical Parity & Invariance Evidence
 
 Comparing current runtime outputs against committed baseline research artifacts in `data/results/phase_4_1_2_2_3/`:
 
-| Quantity | Baseline Artifact | Runtime Output | Maximum Absolute Difference | Status |
-|---|---|---|---|---|
-| **Calibration Covariance Matrix** | `calibration_report.json` | Recomputed from panel | $8.88 \times 10^{-16}$ (MSVC) / $1.95 \times 10^{-13}$ (OpenBLAS) | **Invariant** ($\le 10^{-9}$ tolerance) |
-| **Calibration Correlation Matrix** | `calibration_report.json` | Recomputed from panel | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
-| **Holdout Correlation Shifts** | `factor_holdout_diagnostics.json` | Recomputed diagnostics | $1.39 \times 10^{-17}$ (MSVC) / $1.92 \times 10^{-15}$ (OpenBLAS) | **Invariant** ($\le 10^{-9}$ tolerance) |
-| **Initial FX Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
-| **Initial Borrowing Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
-| **Initial Investment Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | **Exact Match** ($0.00$) |
+The declared cross-platform research parity tolerance is $\le 10^{-9}$. Measured differences are reported separately from test tolerances; exact equality is claimed only where identical floating-point bitwise representations or exact integer/zero differences occur.
 
-Cross-platform numerical analysis: On Windows x86_64 with MSVC C runtime, differences against the committed JSON artifacts are $\le 8.88 \times 10^{-16}$. On Ubuntu Linux x86_64 CI runners with OpenBLAS / AVX2 FMA vector reduction ordering, covariance differences are $1.95 \times 10^{-13}$ and correlation shift differences are $1.92 \times 10^{-15}$. Both platforms satisfy the canonical $\le 10^{-9}$ numerical invariance tolerance by four to seven orders of magnitude.
+| Quantity | Baseline Artifact | Runtime Output | Measured Difference | Declared Tolerance | Status |
+|---|---|---|---|---|---|
+| **Calibration Covariance Matrix** | `calibration_report.json` | Recomputed from panel | $8.88 \times 10^{-16}$ (MSVC) / $1.95 \times 10^{-13}$ (OpenBLAS) | $\le 10^{-9}$ | **Within Parity Tolerance** |
+| **Calibration Correlation Matrix** | `calibration_report.json` | Recomputed from panel | $0.00\text{e}+00$ | $\le 10^{-9}$ | **Exact Match** ($0.00$) |
+| **Holdout Correlation Shifts** | `factor_holdout_diagnostics.json` | Recomputed diagnostics | $1.39 \times 10^{-17}$ (MSVC) / $1.92 \times 10^{-15}$ (OpenBLAS) | $\le 10^{-9}$ | **Within Parity Tolerance** |
+| **Initial FX Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | $\le 10^{-9}$ | **Exact Match** ($0.00$) |
+| **Initial Borrowing Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | $\le 10^{-9}$ | **Exact Match** ($0.00$) |
+| **Initial Investment Rate** | `simulation_manifest.json` | Recomputed levels | $0.00\text{e}+00$ | $\le 10^{-9}$ | **Exact Match** ($0.00$) |
+
+Cross-platform numerical analysis: On Windows x86_64 with MSVC C runtime, measured differences against the committed JSON artifacts are $\le 8.88 \times 10^{-16}$. On Ubuntu Linux x86_64 CI runners with OpenBLAS / AVX2 FMA vector reduction ordering, covariance differences are $1.95 \times 10^{-13}$ and correlation shift differences are $1.92 \times 10^{-15}$. Both platforms strictly satisfy the declared research parity tolerance $\le 10^{-9}$.
+
+For positive semi-definite matrix guarantees, spectral decomposition confirms that for the empirical calibration factor covariance matrix, all eigenvalues satisfy $\lambda \ge 2.529 \times 10^{-5} \gg 10^{-8}$. This property is verified specifically on this empirical factor covariance matrix.
 
 ### 5.4 Portfolio Holdout Diagnostics Status
 
@@ -182,13 +186,16 @@ Cross-platform numerical analysis: On Windows x86_64 with MSVC C runtime, differ
 
 ## 6. Verification & Test Suite Summary
 
-- **Total Tests Passed:** **530** (0 failures, 0 regressions, 0 warnings).
+- **Test Matrix Execution**:
+  * **Python 3.11 Environment:** 530 passed (0 failures, 0 warnings).
+  * **Python 3.12 Environment:** 530 passed (0 failures, 6 deprecation warnings from Pydantic `datetime.utcnow()`).
+  * **Matrix Warning Status:** Note that while Python 3.11 passes warning-free, the overall test matrix is not warning-free due to Pydantic v2 deprecation warnings under Python 3.12.
 - **Phase 4.1.2.2.3.5 Test Suite:** `tests/test_monte_carlo_phase_4_1_2_2_3_5.py` — 18 passed in 15.52s.
 - **Phase 4.1.2.2.3.4 Test Suite:** `tests/test_monte_carlo_phase_4_1_2_2_3_4.py` — 27 passed in 15.41s.
 - **Phase 4.1.2.2.3.3 Test Suite:** `tests/test_monte_carlo_phase_4_1_2_2_3_3.py` — 25 passed in 15.51s.
 - **Non-Monte-Carlo Test Suite:** 273 passed in 45.15s.
-- **Linter Status:** `ruff check .` clean (All checks passed).
-- **Code Formatter:** `ruff format --check` clean.
+- **Linter Status:** `ruff check .` clean (All checks passed, 0 errors, 0 warnings).
+- **Code Formatter:** `ruff format --check .` clean.
 
 ---
 
