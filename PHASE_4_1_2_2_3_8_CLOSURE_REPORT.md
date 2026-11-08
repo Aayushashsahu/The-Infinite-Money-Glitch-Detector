@@ -57,11 +57,11 @@ Key achievements:
 | Attribute | Phase 4.1.2.2.3.7 Verified | Phase 4.1.2.2.3.8 Current Closure |
 |---|---|---|
 | **Stage A Source Commit** | `ecfed0886da5ea19dba0b7918977b58c9c52bcb3` | `4ba002c5bda731d78e4f6df2dbca6d1dd9177531` |
-| **Stage B Documentation Commit** | `1a0210f54ecf932b894583102166c20ef60c1c73` | *(Pending Stage B commit)* |
-| **Stage B+ Update Commit** | `a33e2ebe7e655d0c8c447d34c2683d82b5a40f9b` | — |
+| **Stage B Documentation Commit** | `1a0210f54ecf932b894583102166c20ef60c1c73` | `e6476b128121b3eb7ec7f6630116006ceb1f8d5b` |
+| **Stage B+ Update Commit** | `a33e2ebe7e655d0c8c447d34c2683d82b5a40f9b` | *(Current documentation follow-up)* |
 | **Stage A CI Run ID** | — | **`42513771885`** (Both 3.11 & 3.12 passed) |
-| **Stage B CI Run ID** | `42500364722` (Tested Stage B `1a0210f`) | *(To be recorded after Stage B push)* |
-| **Stage B+ CI Run ID** | `42500711496` (Tested Stage B+ `a33e2eb`) | — |
+| **Stage B CI Run ID** | `42500364722` (Tested Stage B `1a0210f`) | **`42514331670`** (Tested Stage B `e6476b1`; passed) |
+| **Stage B+ CI Run ID** | `42500711496` (Tested Stage B+ `a33e2eb`) | *(To be verified upon push)* |
 | **Test Suite Passed** | 616 passed | **734 passed** (118 new tests in 3_8 suite, 0 failures, 0 regressions) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
 | **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** |
@@ -222,10 +222,17 @@ Execution follows strict dual-stage delivery:
   * Commit message: `feat(simulation): Phase 4.1.2.2.3.8 namespace grammar validation & regression suite (Stage A)`
 
 - **Stage B (Closure Documentation & Historical Lineage Reconciliation)**:
-  * Commit SHA: *(To be populated upon Stage B commit)*
+  * Commit SHA: `e6476b128121b3eb7ec7f6630116006ceb1f8d5b`
+  * CI Run ID: `42514331670` (Tested Stage B commit `e6476b1`; both Python 3.11 and 3.12 passed)
   * Modified: `PHASE_4_1_2_2_3_7_CLOSURE_REPORT.md`
   * Added: `PHASE_4_1_2_2_3_8_CLOSURE_REPORT.md`
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.8 closure report & reconcile Phase 4.1.2.2.3.7 lineage (Stage B)`
+
+- **Stage B+ (Documentation Lineage Final Sign-Off Commit)**:
+  * Commit SHA: *(Current commit)*
+  * Modified: `PHASE_4_1_2_2_3_8_CLOSURE_REPORT.md`
+  * Commit message: `docs(results): record successful CI run ID 42514331670 in Phase 4.1.2.2.3.8 closure report`
+  * Purpose: Recorded verified CI run ID `42514331670` for Stage B, completing formal lineage sign-off.
 
 ---
 
