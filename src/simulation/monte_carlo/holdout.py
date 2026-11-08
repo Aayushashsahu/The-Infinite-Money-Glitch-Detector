@@ -9,13 +9,14 @@ execution records).
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 import scipy.stats as stats
 
 from simulation.monte_carlo.regimes import VolatilityRegimeClassifier
 from simulation.monte_carlo.schemas import (
+    FactorCategory,
     FactorHoldoutDiagnostics,
     FactorPanel,
     HoldoutDiagnosticReport,
@@ -371,4 +372,161 @@ def evaluate_holdout_diagnostics(
         diagnostic_summary=summary,
         limitations_notes=limitations,
     )
+
+
+def generate_holdout_predictive_paths(
+    model: Any,
+    calibration_panel: FactorPanel,
+    holdout_panel: FactorPanel,
+    num_paths: int = 1000,
+) -> list[ScenarioPath]:
+    """Generate predictive scenario paths over the holdout window anchored at the calibration boundary.
+
+    Enforces scenario-date and calibration-boundary integrity (Phase 4.1.2.2.3):
+    1. Level Dates vs Transitions:
+       - Uses holdout_panel.level_dates (length == N, e.g. 248), starting on the
+         final calibration-boundary date (2023-12-29) and ending on holdout end (2024-12-31).
+       - Sets horizon = len(holdout_panel.dates) (length == N - 1, e.g. 247 transitions).
+       - Because the path generator reconstructs N = horizon + 1 levels, the date count exactly
+         equals the level count (248 dates == 248 levels), satisfying ScenarioPath calendar validation.
+    2. Calibration Boundary Anchoring:
+       - Rather than allowing the model to use arbitrary default initial values (e.g. 1.09, 0.04, 0.05),
+         the path is anchored strictly at the genuine final in-sample calibration levels as of 2023-12-29:
+         * initial_fx: Canonical USD_per_EUR level from calibration_panel.canonical_levels["FX_EUR_USD_LOGRET"][-1]
+         * initial_borrowing_rate: Annual decimal borrowing rate from calibration_panel.canonical_levels["RATE_DIFF_EUR_BORROW_BPS"][-1] / 100.0
+         * initial_investment_rate: Annual decimal investment yield from calibration_panel.canonical_levels["YIELD_DIFF_USD_1M_BPS"][-1] / 100.0
+    3. Chronological Continuity:
+       - Path step 0 is dated 2023-12-29 with the boundary levels.
+       - Path step 1 is dated 2024-01-02, representing the first holdout transition from 2023-12-29 to 2024-01-02.
+       - No extra or missing transitions are introduced.
+    4. Calendar & Shape Validation:
+       - Verifies that every generated ScenarioPath satisfies len(dates) == len(fx_rates) == len(borrowing_rates) == len(investment_rates) == horizon + 1.
+    """
+    if not holdout_panel.dates:
+        raise ValueError("Holdout panel has no transition dates.")
+    horizon = len(holdout_panel.dates)
+
+    # 1. Resolve holdout scenario dates
+    if holdout_panel.level_dates and len(holdout_panel.level_dates) == horizon + 1:
+        dates = holdout_panel.level_dates
+    elif holdout_panel.level_dates:
+        raise ValueError(
+            f"Holdout level dates length ({len(holdout_panel.level_dates)}) does not match expected horizon + 1 ({horizon + 1})."
+        )
+    else:
+        # Fallback if level_dates was not pre-populated: prepend calibration boundary date
+        if calibration_panel.dates:
+            boundary_date = calibration_panel.dates[-1]
+        elif calibration_panel.level_dates:
+            boundary_date = calibration_panel.level_dates[-1]
+        else:
+            raise ValueError("Cannot determine calibration boundary date from calibration panel.")
+        dates = [boundary_date] + list(holdout_panel.dates)
+
+    # Verify boundary date matches calibration end
+    calib_last_date = (
+        calibration_panel.last_level_date
+        or (calibration_panel.level_dates[-1] if calibration_panel.level_dates else None)
+        or (calibration_panel.dates[-1] if calibration_panel.dates else None)
+    )
+    if calib_last_date is not None and dates[0] != calib_last_date:
+        raise ValueError(
+            f"Holdout scenario initial date ({dates[0]}) does not match calibration boundary date ({calib_last_date})."
+        )
+
+    # 2. Resolve calibration-boundary initial levels
+    # Factor ID resolution
+    fx_key = "FX_EUR_USD_LOGRET"
+    if fx_key not in calibration_panel.canonical_levels:
+        for f in calibration_panel.factors:
+            if getattr(f, "category", None) == FactorCategory.FX_RETURN or "FX" in f.factor_id:
+                fx_key = f.factor_id
+                break
+
+    borrow_key = "RATE_DIFF_EUR_BORROW_BPS"
+    if borrow_key not in calibration_panel.canonical_levels:
+        for f in calibration_panel.factors:
+            if getattr(f, "category", None) == FactorCategory.BORROWING_RATE_CHANGE or "BORROW" in f.factor_id:
+                borrow_key = f.factor_id
+                break
+
+    invest_key = "YIELD_DIFF_USD_1M_BPS"
+    if invest_key not in calibration_panel.canonical_levels:
+        for f in calibration_panel.factors:
+            if getattr(f, "category", None) == FactorCategory.SOVEREIGN_YIELD_CHANGE or "1M" in f.factor_id or "INVEST" in f.factor_id:
+                invest_key = f.factor_id
+                break
+
+    # Extract initial FX (USD per EUR)
+    if fx_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[fx_key]:
+        initial_fx = float(calibration_panel.canonical_levels[fx_key][-1])
+    elif fx_key in calibration_panel.raw_levels and calibration_panel.raw_levels[fx_key]:
+        initial_fx = float(calibration_panel.raw_levels[fx_key][-1])
+    else:
+        raise ValueError(f"Cannot resolve initial FX level from calibration panel factor '{fx_key}'.")
+
+    # Extract initial borrowing rate (percentage points / 100.0 -> annual decimal)
+    if borrow_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[borrow_key]:
+        initial_borrow = float(calibration_panel.canonical_levels[borrow_key][-1]) / 100.0
+    elif borrow_key in calibration_panel.raw_levels and calibration_panel.raw_levels[borrow_key]:
+        initial_borrow = float(calibration_panel.raw_levels[borrow_key][-1]) / 100.0
+    else:
+        raise ValueError(f"Cannot resolve initial borrowing rate from calibration panel factor '{borrow_key}'.")
+
+    # Extract initial investment yield (percentage points / 100.0 -> annual decimal)
+    if invest_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[invest_key]:
+        initial_invest = float(calibration_panel.canonical_levels[invest_key][-1]) / 100.0
+    elif invest_key in calibration_panel.raw_levels and calibration_panel.raw_levels[invest_key]:
+        initial_invest = float(calibration_panel.raw_levels[invest_key][-1]) / 100.0
+    else:
+        raise ValueError(f"Cannot resolve initial investment yield from calibration panel factor '{invest_key}'.")
+
+    # 3. Generate paths via sampler
+    paths = model.generate_paths(
+        num_paths=num_paths,
+        horizon=horizon,
+        initial_fx=initial_fx,
+        initial_borrowing_rate=initial_borrow,
+        initial_investment_rate=initial_invest,
+        dates=dates,
+    )
+
+    # 4. Strict post-condition assertions on every generated path
+    expected_levels = horizon + 1
+    for p in paths:
+        if p.dates is None or len(p.dates) != expected_levels:
+            raise ValueError(
+                f"Generated scenario path date count mismatch: received {len(p.dates) if p.dates else 0}, expected {expected_levels}."
+            )
+        if len(p.fx_rates) != expected_levels:
+            raise ValueError(
+                f"Generated scenario path FX levels count mismatch: received {len(p.fx_rates)}, expected {expected_levels}."
+            )
+        if len(p.borrowing_rates) != expected_levels:
+            raise ValueError(
+                f"Generated scenario path borrowing rate count mismatch: received {len(p.borrowing_rates)}, expected {expected_levels}."
+            )
+        if len(p.investment_rates) != expected_levels:
+            raise ValueError(
+                f"Generated scenario path investment rate count mismatch: received {len(p.investment_rates)}, expected {expected_levels}."
+            )
+        if p.dates[0] != dates[0]:
+            raise ValueError(
+                f"Generated path start date ({p.dates[0]}) does not match calibration boundary date ({dates[0]})."
+            )
+        if abs(p.fx_rates[0] - initial_fx) > 1e-9:
+            raise ValueError(
+                f"Generated path initial FX ({p.fx_rates[0]}) does not match calibration boundary FX ({initial_fx})."
+            )
+        if abs(p.borrowing_rates[0] - initial_borrow) > 1e-9:
+            raise ValueError(
+                f"Generated path initial borrowing rate ({p.borrowing_rates[0]}) does not match calibration boundary rate ({initial_borrow})."
+            )
+        if abs(p.investment_rates[0] - initial_invest) > 1e-9:
+            raise ValueError(
+                f"Generated path initial investment rate ({p.investment_rates[0]}) does not match calibration boundary rate ({initial_invest})."
+            )
+
+    return paths
+
 

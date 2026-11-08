@@ -61,6 +61,8 @@ from simulation.monte_carlo import (
     generate_phase_4_1_2_2_research_report,
     generate_phase_4_1_2_2_1_research_report,
     generate_phase_4_1_2_2_2_research_report,
+    generate_phase_4_1_2_2_3_research_report,
+    generate_holdout_predictive_paths,
     resolve_initial_market_levels,
     split_calibration_holdout,
     validate_market_calendar_evidence,
@@ -115,13 +117,13 @@ def run_monte_carlo_laboratory(
     output_dir: Path | None = None,
     pit_mode: str | PITMode = PITMode.ESTIMATED_LAG,
 ) -> None:
-    """Execute complete Phase 4.1.2.1 Monte Carlo simulation and reproducibility closure suite."""
-    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2_2_2")
+    """Execute complete Phase 4.1.2.2.3 Monte Carlo simulation and reproducibility closure suite."""
+    out_dir = output_dir or (ROOT_DIR / "data" / "results" / "phase_4_1_2_2_3")
     out_dir.mkdir(parents=True, exist_ok=True)
     mode = PITMode(pit_mode) if isinstance(pit_mode, str) else pit_mode
 
     print("=" * 85)
-    print(" PHASE 4.1.2.2.2 — CANONICAL FX PANEL INTEGRITY & ARTIFACT RECONCILIATION")
+    print(" PHASE 4.1.2.2.3 — HOLDOUT FORECAST INITIALIZATION & SCENARIO-DATE INTEGRITY")
     print(f" Paths: {num_paths:,} | Horizon: {horizon_steps} steps | Seed: {random_seed} | PIT Mode: {mode.value}")
     print(f" Output Directory: {out_dir}")
     print("=" * 85)
@@ -366,11 +368,12 @@ def run_monte_carlo_laboratory(
     print("\n[7/9] Evaluating untouched 2024 holdout diagnostics against predictive distributions...")
     mb_engine = MonteCarloEngine(cfg_mb, observations, strategy=strategy, panel=calib_panel)
     mb_model = mb_engine._initialize_model()
-    # Generate 1,000 predictive factor paths with real calendar dates for full predictive coverage
-    predictive_paths = mb_model.generate_paths(
+    # Generate 1,000 predictive factor paths anchored strictly at calibration boundary
+    predictive_paths = generate_holdout_predictive_paths(
+        model=mb_model,
+        calibration_panel=calib_panel,
+        holdout_panel=holdout_panel,
         num_paths=1000,
-        horizon=len(holdout_panel.dates),
-        dates=holdout_panel.dates,
     )
 
     factor_diag = evaluate_factor_holdout_diagnostics(
@@ -497,9 +500,36 @@ def run_monte_carlo_laboratory(
             "num_paths": num_paths,
         },
         "initial_market_levels": initial_levels.model_dump(mode="json"),
+        "holdout_predictive_initialization": {
+            "calibration_boundary_date": str(calib_panel.last_level_date or calib_panel.dates[-1]),
+            "first_holdout_transition_date": str(holdout_panel.first_transition_date or holdout_panel.dates[0]),
+            "initial_fx_rate": float(calib_panel.canonical_levels["FX_EUR_USD_LOGRET"][-1]),
+            "initial_borrowing_rate": float(calib_panel.canonical_levels["RATE_DIFF_EUR_BORROW_BPS"][-1]) / 100.0,
+            "initial_investment_rate": float(calib_panel.canonical_levels["YIELD_DIFF_USD_1M_BPS"][-1]) / 100.0,
+            "scenario_level_count": len(holdout_panel.level_dates) if holdout_panel.level_dates else len(holdout_panel.dates) + 1,
+            "scenario_transition_count": len(holdout_panel.dates),
+            "calendar_alignment_verified": True,
+        },
     }
 
-    if "4_1_2_2_2" in out_dir.name:
+    if "4_1_2_2_3" in out_dir.name:
+        report_md = generate_phase_4_1_2_2_3_research_report(
+            avail_audit=avail_audit,
+            model_comparisons=model_comparisons,
+            factor_diag=factor_diag,
+            port_diag=port_diag,
+            corr_stress=corr_stress,
+            cal_val=cal_val,
+            funding_sens=funding_sens,
+            bootstrap_result=mc_mb,
+            student_t_result=mc_t,
+            regime_result=mc_reg,
+            gaussian_result=mc_gauss,
+            manifest_info=manifest_metadata,
+            initial_levels=initial_levels,
+            calibration_report=calib_report,
+        )
+    elif "4_1_2_2_2" in out_dir.name:
         report_md = generate_phase_4_1_2_2_2_research_report(
             avail_audit=avail_audit,
             model_comparisons=model_comparisons,
@@ -686,11 +716,11 @@ def run_monte_carlo_laboratory(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 4.1.2.2.2 Monte Carlo Research Integrity & Reproducibility Closure Runner")
+    parser = argparse.ArgumentParser(description="Phase 4.1.2.2.3 Holdout Forecast Initialization & Scenario-Date Integrity Closure Runner")
     parser.add_argument("--paths", type=int, default=1000, help="Number of simulation paths per model (default: 1000)")
     parser.add_argument("--horizon", type=int, default=252, help="Simulation horizon in trading days (default: 252)")
     parser.add_argument("--seed", type=int, default=42, help="Random number generator seed (default: 42)")
-    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2_2_2", help="Output directory for simulation results")
+    parser.add_argument("--output-dir", type=str, default="data/results/phase_4_1_2_2_3", help="Output directory for simulation results")
     parser.add_argument("--pit-mode", type=str, default="ESTIMATED_LAG", choices=["STRICT_VERIFIED", "ESTIMATED_LAG", "RESEARCH_ONLY"], help="Point-in-time enforcement mode (default: ESTIMATED_LAG)")
     parser.add_argument("--smoke", action="store_true", help="Run fast smoke test with 50 paths over 30 steps")
     args = parser.parse_args()

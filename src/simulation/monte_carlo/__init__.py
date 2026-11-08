@@ -39,6 +39,7 @@ from simulation.monte_carlo.holdout import (
     evaluate_factor_holdout_diagnostics,
     evaluate_holdout_diagnostics,
     evaluate_portfolio_holdout_diagnostics,
+    generate_holdout_predictive_paths,
 )
 from simulation.monte_carlo.metrics import calculate_distribution_metrics
 from simulation.monte_carlo.regimes import (
@@ -56,6 +57,7 @@ from simulation.monte_carlo.reporting import (
     generate_phase_4_1_2_2_research_report,
     generate_phase_4_1_2_2_1_research_report,
     generate_phase_4_1_2_2_2_research_report,
+    generate_phase_4_1_2_2_3_research_report,
     generate_research_report,
 )
 from simulation.monte_carlo.schemas import (
@@ -164,12 +166,14 @@ __all__ = [
     "export_json",
     "export_markdown",
     "generate_correlation_breakdown_path",
+    "generate_holdout_predictive_paths",
     "generate_phase_4_1_1_research_report",
     "generate_phase_4_1_2_research_report",
     "generate_phase_4_1_2_1_research_report",
     "generate_phase_4_1_2_2_research_report",
     "generate_phase_4_1_2_2_1_research_report",
     "generate_phase_4_1_2_2_2_research_report",
+    "generate_phase_4_1_2_2_3_research_report",
     "generate_research_report",
     "generate_simulated_trading_sessions",
     "get_effective_availability_timestamp",

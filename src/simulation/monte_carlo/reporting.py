@@ -716,4 +716,41 @@ def generate_phase_4_1_2_2_2_research_report(
     )
 
 
+def generate_phase_4_1_2_2_3_research_report(
+    avail_audit: AvailabilityAuditReport,
+    model_comparisons: list[ModelComparisonEntry],
+    factor_diag: FactorHoldoutDiagnostics,
+    port_diag: PortfolioHoldoutDiagnostics,
+    corr_stress: CorrelationStressComparison,
+    cal_val: CalendarValidationReport,
+    funding_sens: FundingSensitivityReport,
+    bootstrap_result: MonteCarloResult,
+    student_t_result: MonteCarloResult,
+    regime_result: MonteCarloResult,
+    gaussian_result: MonteCarloResult | None = None,
+    manifest_info: dict[str, Any] | None = None,
+    initial_levels: InitialMarketLevelsReport | None = None,
+    calibration_report: CalibrationReport | None = None,
+) -> str:
+    """Generate the authoritative Phase 4.1.2.2.3 holdout forecast initialization & scenario-date integrity closure report."""
+    return _generate_monte_carlo_closure_report(
+        phase_title="Phase 4.1.2.2.3 — Holdout Forecast Initialization & Scenario-Date Integrity Closure Report",
+        avail_audit=avail_audit,
+        model_comparisons=model_comparisons,
+        factor_diag=factor_diag,
+        port_diag=port_diag,
+        corr_stress=corr_stress,
+        cal_val=cal_val,
+        funding_sens=funding_sens,
+        bootstrap_result=bootstrap_result,
+        student_t_result=student_t_result,
+        regime_result=regime_result,
+        gaussian_result=gaussian_result,
+        manifest_info=manifest_info,
+        initial_levels=initial_levels,
+        calibration_report=calibration_report,
+    )
+
+
+
 
