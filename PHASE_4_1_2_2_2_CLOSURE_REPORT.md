@@ -19,7 +19,7 @@ Phase 4.1.2.2.2 completes the canonical FX normalization audit, sample counts re
 | Attribute | Phase 4.1.2.2.1 Predecessor | Phase 4.1.2.2.2 Current State |
 |---|---|---|
 | **Stage A Source Commit** | `2e7a0e28f11b6cb1e4d77051772648fb43c08182` | `f346131cb356881f44382a154c0323e55a476b68` |
-| **Stage B Results Commit** | `6e7ab2b60cc3848ac877ff6a3895323a1ff3f979` | *Pending Stage B commit* |
+| **Stage B Results Commit** | `6e7ab2b60cc3848ac877ff6a3895323a1ff3f979` | `25941d76e3ad3b91cde012b84b9197209fbad133` |
 | **Test Suite Baseline** | 391 passed (Python 3.11 & 3.12) | **412 passed** (21 new tests, 0 failures) |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 warnings, 0 errors) |
 | **Research Classification** | `SIMULATED_RESEARCH_PROXY` | `SIMULATED_RESEARCH_PROXY` |
