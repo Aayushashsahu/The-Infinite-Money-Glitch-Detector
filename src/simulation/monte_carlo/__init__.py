@@ -40,6 +40,9 @@ from simulation.monte_carlo.holdout import (
     evaluate_holdout_diagnostics,
     evaluate_portfolio_holdout_diagnostics,
     generate_holdout_predictive_paths,
+    resolve_canonical_initial_borrowing_rate,
+    resolve_canonical_initial_fx,
+    resolve_canonical_initial_investment_rate,
 )
 from simulation.monte_carlo.metrics import calculate_distribution_metrics
 from simulation.monte_carlo.regimes import (
@@ -181,6 +184,9 @@ __all__ = [
     "is_observation_available_as_of",
     "reconstruct_price_levels",
     "reconstruct_rate_levels",
+    "resolve_canonical_initial_borrowing_rate",
+    "resolve_canonical_initial_fx",
+    "resolve_canonical_initial_investment_rate",
     "resolve_initial_market_levels",
     "resolve_observation_as_of",
     "split_calibration_holdout",

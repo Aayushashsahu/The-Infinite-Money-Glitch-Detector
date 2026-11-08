@@ -8,12 +8,18 @@ execution records).
 
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
 import math
 from typing import Any, Sequence
 
 import numpy as np
 import scipy.stats as stats
 
+from data.schemas import DataObservation, Frequency, ObservationKind
+from simulation.monte_carlo.factors import (
+    _normalize_fx_quote_to_usd_per_eur,
+    _normalize_rate_to_decimal,
+)
 from simulation.monte_carlo.regimes import VolatilityRegimeClassifier
 from simulation.monte_carlo.schemas import (
     FactorCategory,
@@ -146,8 +152,9 @@ def evaluate_factor_holdout_diagnostics(
     calib_mat = np.column_stack([calibration_panel.values[f] for f in holdout_fnames])
     holdout_mat = np.column_stack([holdout_panel.values[f] for f in holdout_fnames])
 
-    corr_calib = np.corrcoef(calib_mat, rowvar=False)
-    corr_holdout = np.corrcoef(holdout_mat, rowvar=False)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        corr_calib = np.nan_to_num(np.corrcoef(calib_mat, rowvar=False), nan=0.0)
+        corr_holdout = np.nan_to_num(np.corrcoef(holdout_mat, rowvar=False), nan=0.0)
 
     corr_shifts: dict[str, float] = {}
     for i, f1 in enumerate(holdout_fnames):
@@ -374,6 +381,250 @@ def evaluate_holdout_diagnostics(
     )
 
 
+def resolve_canonical_initial_fx(
+    calibration_panel: FactorPanel,
+    boundary_date: date | None = None,
+) -> float:
+    """Resolve initial FX level in canonical USD per EUR from calibration panel at the boundary date.
+
+    Rules:
+    - Target exact factor ID: 'FX_EUR_USD_LOGRET'.
+    - If exact factor ID is not in canonical_levels or raw_levels, search calibration_panel.factors
+      for an unambiguous EUR/USD factor (category=FX_RETURN, pair contains 'EUR' and 'USD').
+    - Prefer canonical level if present in calibration_panel.canonical_levels.
+    - If canonical level is absent, fallback to calibration_panel.raw_levels ONLY when explicit,
+      verified quote convention metadata is authorized (via row_provenance or factor definition).
+    - Invert EUR_per_USD quotes using _normalize_fx_quote_to_usd_per_eur.
+    - Preserve USD_per_EUR quotes.
+    - Strictly reject missing, ambiguous, or unsupported quote conventions (fail closed).
+    - Never infer quote direction from numerical magnitude.
+    - Enforce finite positivity (initial_fx > 0).
+    """
+    fx_key = "FX_EUR_USD_LOGRET"
+    if fx_key not in calibration_panel.canonical_levels and fx_key not in calibration_panel.raw_levels:
+        matched_fx = [
+            f.factor_id for f in calibration_panel.factors
+            if f.category == FactorCategory.FX_RETURN and ("EUR" in f.asset_or_currency and "USD" in f.asset_or_currency)
+        ]
+        if len(matched_fx) == 1:
+            fx_key = matched_fx[0]
+        else:
+            raise ValueError(
+                f"Cannot resolve initial FX level: required EUR/USD factor ('FX_EUR_USD_LOGRET') is missing or ambiguous "
+                f"in calibration panel factors: {[f.factor_id for f in calibration_panel.factors]}."
+            )
+
+    if fx_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[fx_key]:
+        initial_fx = float(calibration_panel.canonical_levels[fx_key][-1])
+    elif fx_key in calibration_panel.raw_levels and calibration_panel.raw_levels[fx_key]:
+        raw_val = float(calibration_panel.raw_levels[fx_key][-1])
+        prov = None
+        if fx_key in calibration_panel.row_provenance and calibration_panel.row_provenance[fx_key]:
+            prov = calibration_panel.row_provenance[fx_key][-1]
+        factor_meta = next((f for f in calibration_panel.factors if f.factor_id == fx_key), None)
+        raw_unit = (prov.raw_unit if prov and prov.raw_unit else None) or (factor_meta.original_unit if factor_meta else None)
+        base_curr = (prov.base_currency if prov and prov.base_currency else None)
+        quote_curr = (prov.quote_currency if prov and prov.quote_currency else None)
+        pair = (prov.pair if prov and prov.pair else None) or (factor_meta.asset_or_currency if factor_meta else None)
+
+        unit_str = (raw_unit or "").strip().lower()
+        valid_units = ("usd_per_eur", "usd/eur", "usd per eur", "eur_per_usd", "eur/usd", "eur per usd")
+        if not unit_str or unit_str not in valid_units:
+            if base_curr == "EUR" and quote_curr == "USD":
+                raw_unit = "USD_per_EUR"
+            elif base_curr == "USD" and quote_curr == "EUR":
+                raw_unit = "EUR_per_USD"
+            else:
+                raise ValueError(
+                    f"Cannot resolve initial FX level from raw levels for factor '{fx_key}': "
+                    f"raw unit '{raw_unit}' is missing, ambiguous, or unsupported. "
+                    "Explicit quote metadata ('USD_per_EUR' or 'EUR_per_USD') is required. "
+                    "Inferring quote direction from numerical magnitude is strictly prohibited."
+                )
+
+        obs_date = boundary_date or (prov.observation_date if prov else date(2023, 12, 29))
+        obs = DataObservation(
+            kind=ObservationKind.EXCHANGE_RATE,
+            source_id=prov.source_id if prov else (factor_meta.source_id if factor_meta else "fx"),
+            entity_code=pair or "EUR/USD",
+            indicator_id=prov.series_id if prov else (factor_meta.series_id or "FX"),
+            value=raw_val,
+            unit=raw_unit,
+            frequency=Frequency.DAILY,
+            base_currency=base_curr,
+            quote_currency=quote_curr,
+            observation_date=obs_date,
+            retrieved_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        )
+        initial_fx = float(_normalize_fx_quote_to_usd_per_eur(obs))
+    else:
+        raise ValueError(
+            f"Cannot resolve initial FX level from calibration panel factor '{fx_key}': "
+            "neither canonical nor valid raw levels available."
+        )
+
+    if not math.isfinite(initial_fx) or initial_fx <= 0:
+        raise ValueError(f"Initial FX level must be finite and positive: {initial_fx}")
+    return initial_fx
+
+
+def resolve_canonical_initial_borrowing_rate(
+    calibration_panel: FactorPanel,
+    boundary_date: date | None = None,
+) -> float:
+    """Resolve initial EUR borrowing rate (as annual decimal) from calibration panel at the boundary date.
+
+    Rules:
+    - Target exact factor ID: 'RATE_DIFF_EUR_BORROW_BPS'.
+    - If exact factor ID is not in canonical_levels or raw_levels, search calibration_panel.factors
+      for an unambiguous EUR borrowing factor (category=BORROWING_RATE_CHANGE, asset_or_currency or factor_id contains 'EUR').
+    - Canonical levels are stored as percentage points; converts to decimal via percentage_points / 100.
+    - If canonical level is absent, fallback to calibration_panel.raw_levels ONLY when explicit,
+      verified unit metadata is authorized ('percent', 'decimal', 'bps').
+    - Rejects missing, empty, or unknown raw rate units (fail closed).
+    - Enforces finite non-negativity (initial_borrow >= 0).
+    """
+    borrow_key = "RATE_DIFF_EUR_BORROW_BPS"
+    if borrow_key not in calibration_panel.canonical_levels and borrow_key not in calibration_panel.raw_levels:
+        matched_borrow = [
+            f.factor_id for f in calibration_panel.factors
+            if f.category == FactorCategory.BORROWING_RATE_CHANGE and ("EUR" in f.factor_id or "EUR" in f.asset_or_currency)
+        ]
+        if len(matched_borrow) == 1:
+            borrow_key = matched_borrow[0]
+        else:
+            raise ValueError(
+                f"Cannot resolve initial EUR borrowing rate: required borrowing factor ('RATE_DIFF_EUR_BORROW_BPS') is missing or ambiguous "
+                f"in calibration panel factors: {[f.factor_id for f in calibration_panel.factors]}."
+            )
+
+    if borrow_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[borrow_key]:
+        initial_borrow = float(calibration_panel.canonical_levels[borrow_key][-1]) / 100.0
+    elif borrow_key in calibration_panel.raw_levels and calibration_panel.raw_levels[borrow_key]:
+        raw_val = float(calibration_panel.raw_levels[borrow_key][-1])
+        prov = None
+        if borrow_key in calibration_panel.row_provenance and calibration_panel.row_provenance[borrow_key]:
+            prov = calibration_panel.row_provenance[borrow_key][-1]
+        factor_meta = next((f for f in calibration_panel.factors if f.factor_id == borrow_key), None)
+        raw_unit = (prov.raw_unit if prov and prov.raw_unit else None) or (factor_meta.original_unit if factor_meta else None)
+
+        if not raw_unit or not str(raw_unit).strip():
+            raise ValueError(
+                f"Cannot resolve initial borrowing rate from raw levels for factor '{borrow_key}': "
+                "unit metadata is missing. Explicit unit ('percent', 'decimal', 'bps') is required."
+            )
+
+        obs_date = boundary_date or (prov.observation_date if prov else date(2023, 12, 29))
+        obs = DataObservation(
+            kind=ObservationKind.INTEREST_RATE,
+            source_id=prov.source_id if prov else (factor_meta.source_id if factor_meta else "ecb"),
+            entity_code=prov.pair if prov and prov.pair else "EUR",
+            indicator_id=prov.series_id if prov else (factor_meta.series_id or "BORROW"),
+            value=raw_val,
+            unit=raw_unit,
+            frequency=Frequency.DAILY,
+            observation_date=obs_date,
+            retrieved_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        )
+        initial_borrow = float(_normalize_rate_to_decimal(obs))
+    else:
+        raise ValueError(
+            f"Cannot resolve initial borrowing rate from calibration panel factor '{borrow_key}': "
+            "neither canonical nor valid raw levels available."
+        )
+
+    if not math.isfinite(initial_borrow) or initial_borrow < 0:
+        raise ValueError(f"Initial borrowing rate must be finite and non-negative: {initial_borrow}")
+    return initial_borrow
+
+
+def resolve_canonical_initial_investment_rate(
+    calibration_panel: FactorPanel,
+    boundary_date: date | None = None,
+) -> float:
+    """Resolve initial USD investment yield (as annual decimal) from calibration panel at the boundary date.
+
+    Rules:
+    - Target exact factor ID: 'YIELD_DIFF_USD_1M_BPS'.
+    - If exact factor ID is not in canonical_levels or raw_levels, search calibration_panel.factors
+      strictly for the 1-month sovereign yield factor (series_id='DGS1MO' or '1M' in factor_id without '3M').
+    - Silent substitution of DGS3MO or other tenors is strictly prohibited.
+    - Canonical levels are stored as percentage points; converts to decimal via percentage_points / 100.
+    - If canonical level is absent, fallback to calibration_panel.raw_levels ONLY when explicit,
+      verified unit metadata is authorized ('percent', 'decimal', 'bps') and series is confirmed 1-month.
+    - Rejects missing, empty, or unknown raw rate units (fail closed).
+    - Enforces finite non-negativity (initial_invest >= 0).
+    """
+    invest_key = "YIELD_DIFF_USD_1M_BPS"
+    if invest_key not in calibration_panel.canonical_levels and invest_key not in calibration_panel.raw_levels:
+        matched_invest = [
+            f.factor_id for f in calibration_panel.factors
+            if f.category == FactorCategory.SOVEREIGN_YIELD_CHANGE
+            and (f.series_id == "DGS1MO" or ("1M" in f.factor_id and "3M" not in f.factor_id))
+        ]
+        if len(matched_invest) == 1:
+            invest_key = matched_invest[0]
+        else:
+            raise ValueError(
+                "Cannot resolve initial USD investment yield: required 1-month series ('YIELD_DIFF_USD_1M_BPS' / DGS1MO) "
+                "is missing from calibration panel. Silent substitution of DGS3MO or other sovereign yield tenors is strictly prohibited."
+            )
+
+    if invest_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[invest_key]:
+        # Validate that factor metadata does not specify DGS3MO
+        factor_meta = next((f for f in calibration_panel.factors if f.factor_id == invest_key), None)
+        if factor_meta and factor_meta.series_id:
+            if "3M" in factor_meta.series_id.upper() or "3MO" in factor_meta.series_id.upper():
+                raise ValueError(
+                    f"Cannot resolve initial USD investment yield for factor '{invest_key}': series '{factor_meta.series_id}' is a 3-month series. "
+                    "The strategy strictly requires the 1-month series (DGS1MO). Silent substitution is prohibited."
+                )
+        initial_invest = float(calibration_panel.canonical_levels[invest_key][-1]) / 100.0
+    elif invest_key in calibration_panel.raw_levels and calibration_panel.raw_levels[invest_key]:
+        raw_val = float(calibration_panel.raw_levels[invest_key][-1])
+        prov = None
+        if invest_key in calibration_panel.row_provenance and calibration_panel.row_provenance[invest_key]:
+            prov = calibration_panel.row_provenance[invest_key][-1]
+        factor_meta = next((f for f in calibration_panel.factors if f.factor_id == invest_key), None)
+        raw_unit = (prov.raw_unit if prov and prov.raw_unit else None) or (factor_meta.original_unit if factor_meta else None)
+
+        series_id = (prov.series_id if prov and prov.series_id else None) or (factor_meta.series_id if factor_meta else None) or ""
+        if "3M" in series_id.upper() or "3MO" in series_id.upper():
+            raise ValueError(
+                f"Cannot resolve initial USD investment yield for factor '{invest_key}': series '{series_id}' is a 3-month series. "
+                "The strategy strictly requires the 1-month series (DGS1MO). Silent substitution is prohibited."
+            )
+
+        if not raw_unit or not str(raw_unit).strip():
+            raise ValueError(
+                f"Cannot resolve initial investment yield from raw levels for factor '{invest_key}': "
+                "unit metadata is missing. Explicit unit ('percent', 'decimal', 'bps') is required."
+            )
+
+        obs_date = boundary_date or (prov.observation_date if prov else date(2023, 12, 29))
+        obs = DataObservation(
+            kind=ObservationKind.INTEREST_RATE,
+            source_id=prov.source_id if prov else (factor_meta.source_id if factor_meta else "us_treasury"),
+            entity_code="USD",
+            indicator_id=series_id or "DGS1MO",
+            value=raw_val,
+            unit=raw_unit,
+            frequency=Frequency.DAILY,
+            observation_date=obs_date,
+            retrieved_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        )
+        initial_invest = float(_normalize_rate_to_decimal(obs))
+    else:
+        raise ValueError(
+            f"Cannot resolve initial investment yield from calibration panel factor '{invest_key}': "
+            "neither canonical nor valid raw levels available."
+        )
+
+    if not math.isfinite(initial_invest) or initial_invest < 0:
+        raise ValueError(f"Initial investment yield must be finite and non-negative: {initial_invest}")
+    return initial_invest
+
+
 def generate_holdout_predictive_paths(
     model: Any,
     calibration_panel: FactorPanel,
@@ -382,19 +633,20 @@ def generate_holdout_predictive_paths(
 ) -> list[ScenarioPath]:
     """Generate predictive scenario paths over the holdout window anchored at the calibration boundary.
 
-    Enforces scenario-date and calibration-boundary integrity (Phase 4.1.2.2.3):
+    Enforces scenario-date and calibration-boundary integrity (Phase 4.1.2.2.3 / 4.1.2.2.3.1):
     1. Level Dates vs Transitions:
        - Uses holdout_panel.level_dates (length == N, e.g. 248), starting on the
          final calibration-boundary date (2023-12-29) and ending on holdout end (2024-12-31).
        - Sets horizon = len(holdout_panel.dates) (length == N - 1, e.g. 247 transitions).
        - Because the path generator reconstructs N = horizon + 1 levels, the date count exactly
          equals the level count (248 dates == 248 levels), satisfying ScenarioPath calendar validation.
-    2. Calibration Boundary Anchoring:
+    2. Calibration Boundary Anchoring & Fail-Closed Resolution:
        - Rather than allowing the model to use arbitrary default initial values (e.g. 1.09, 0.04, 0.05),
-         the path is anchored strictly at the genuine final in-sample calibration levels as of 2023-12-29:
-         * initial_fx: Canonical USD_per_EUR level from calibration_panel.canonical_levels["FX_EUR_USD_LOGRET"][-1]
-         * initial_borrowing_rate: Annual decimal borrowing rate from calibration_panel.canonical_levels["RATE_DIFF_EUR_BORROW_BPS"][-1] / 100.0
-         * initial_investment_rate: Annual decimal investment yield from calibration_panel.canonical_levels["YIELD_DIFF_USD_1M_BPS"][-1] / 100.0
+         the path is anchored strictly at the genuine final in-sample calibration levels as of 2023-12-29
+         via resolve_canonical_initial_fx, resolve_canonical_initial_borrowing_rate, and
+         resolve_canonical_initial_investment_rate.
+       - Enforces exact factor selection, validated unit conversion, and fail-closed behavior on missing
+         or ambiguous metadata.
     3. Chronological Continuity:
        - Path step 0 is dated 2023-12-29 with the boundary levels.
        - Path step 1 is dated 2024-01-02, representing the first holdout transition from 2023-12-29 to 2024-01-02.
@@ -434,52 +686,10 @@ def generate_holdout_predictive_paths(
             f"Holdout scenario initial date ({dates[0]}) does not match calibration boundary date ({calib_last_date})."
         )
 
-    # 2. Resolve calibration-boundary initial levels
-    # Factor ID resolution
-    fx_key = "FX_EUR_USD_LOGRET"
-    if fx_key not in calibration_panel.canonical_levels:
-        for f in calibration_panel.factors:
-            if getattr(f, "category", None) == FactorCategory.FX_RETURN or "FX" in f.factor_id:
-                fx_key = f.factor_id
-                break
-
-    borrow_key = "RATE_DIFF_EUR_BORROW_BPS"
-    if borrow_key not in calibration_panel.canonical_levels:
-        for f in calibration_panel.factors:
-            if getattr(f, "category", None) == FactorCategory.BORROWING_RATE_CHANGE or "BORROW" in f.factor_id:
-                borrow_key = f.factor_id
-                break
-
-    invest_key = "YIELD_DIFF_USD_1M_BPS"
-    if invest_key not in calibration_panel.canonical_levels:
-        for f in calibration_panel.factors:
-            if getattr(f, "category", None) == FactorCategory.SOVEREIGN_YIELD_CHANGE or "1M" in f.factor_id or "INVEST" in f.factor_id:
-                invest_key = f.factor_id
-                break
-
-    # Extract initial FX (USD per EUR)
-    if fx_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[fx_key]:
-        initial_fx = float(calibration_panel.canonical_levels[fx_key][-1])
-    elif fx_key in calibration_panel.raw_levels and calibration_panel.raw_levels[fx_key]:
-        initial_fx = float(calibration_panel.raw_levels[fx_key][-1])
-    else:
-        raise ValueError(f"Cannot resolve initial FX level from calibration panel factor '{fx_key}'.")
-
-    # Extract initial borrowing rate (percentage points / 100.0 -> annual decimal)
-    if borrow_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[borrow_key]:
-        initial_borrow = float(calibration_panel.canonical_levels[borrow_key][-1]) / 100.0
-    elif borrow_key in calibration_panel.raw_levels and calibration_panel.raw_levels[borrow_key]:
-        initial_borrow = float(calibration_panel.raw_levels[borrow_key][-1]) / 100.0
-    else:
-        raise ValueError(f"Cannot resolve initial borrowing rate from calibration panel factor '{borrow_key}'.")
-
-    # Extract initial investment yield (percentage points / 100.0 -> annual decimal)
-    if invest_key in calibration_panel.canonical_levels and calibration_panel.canonical_levels[invest_key]:
-        initial_invest = float(calibration_panel.canonical_levels[invest_key][-1]) / 100.0
-    elif invest_key in calibration_panel.raw_levels and calibration_panel.raw_levels[invest_key]:
-        initial_invest = float(calibration_panel.raw_levels[invest_key][-1]) / 100.0
-    else:
-        raise ValueError(f"Cannot resolve initial investment yield from calibration panel factor '{invest_key}'.")
+    # 2. Resolve calibration-boundary initial levels (fail closed)
+    initial_fx = resolve_canonical_initial_fx(calibration_panel, dates[0])
+    initial_borrow = resolve_canonical_initial_borrowing_rate(calibration_panel, dates[0])
+    initial_invest = resolve_canonical_initial_investment_rate(calibration_panel, dates[0])
 
     # 3. Generate paths via sampler
     paths = model.generate_paths(

@@ -148,8 +148,12 @@ def compute_quantiles(arr: np.ndarray) -> DistributionQuantiles:
     """Compute standard percentiles and higher moments for a 1D array."""
     mean_val = float(np.mean(arr))
     std_val = float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0
-    skew_val = float(stats.skew(arr)) if len(arr) > 2 else 0.0
-    kurt_val = float(stats.kurtosis(arr)) if len(arr) > 3 else 0.0
+    if std_val < 1e-12:
+        skew_val = 0.0
+        kurt_val = 0.0
+    else:
+        skew_val = float(stats.skew(arr)) if len(arr) > 2 else 0.0
+        kurt_val = float(stats.kurtosis(arr)) if len(arr) > 3 else 0.0
 
     return DistributionQuantiles(
         p01=float(np.percentile(arr, 1)),
@@ -214,7 +218,8 @@ def calibrate_factor_panel(
     # Compute joint covariance and correlation matrices
     joint_array = np.vstack(matrix_data)  # shape: (n_factors, n_obs)
     cov_mat = np.cov(joint_array, ddof=1)
-    corr_mat = np.corrcoef(joint_array)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        corr_mat = np.nan_to_num(np.corrcoef(joint_array), nan=0.0)
 
     # Handle single factor edge-case
     if len(factor_names) == 1:
