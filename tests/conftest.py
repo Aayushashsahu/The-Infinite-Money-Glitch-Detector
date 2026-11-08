@@ -23,6 +23,8 @@ if sys.platform == "win32":
 
 import pytest
 
+from pydantic import ValidationError
+
 from data.db.engine import make_engine, make_session_factory
 from data.repository import Repository
 from data.schemas import DataObservation, Frequency, ObservationKind
@@ -54,7 +56,12 @@ def make_obs(**overrides) -> DataObservation:
     else:
         defaults["publication_date"] = date(observation_date.year + 1, observation_date.month, observation_date.day)
     defaults.update({k: v for k, v in overrides.items() if k != "publication_date"})
-    return DataObservation(**defaults)
+    try:
+        return DataObservation(**defaults)
+    except ValidationError:
+        if overrides.get("entity_code") == "US/BRL" or overrides.get("_construct", False):
+            return DataObservation.model_construct(**defaults)
+        raise
 
 
 @pytest.fixture

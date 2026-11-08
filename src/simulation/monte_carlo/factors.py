@@ -489,6 +489,10 @@ def build_fx_carry_factor_panel(
     all_invest_candidates: list[DataObservation] = []
     all_sov_candidates: list[DataObservation] = []
 
+    validate_and_normalize_fx_metadata(
+        entity_code=fx_entity,
+        require_currencies=False,
+    )
     fx_target_codes = {fx_entity, fx_entity.replace("/", "_"), fx_entity.replace("_", "/")}
     if "/" in fx_entity:
         p1, p2 = fx_entity.split("/", 1)

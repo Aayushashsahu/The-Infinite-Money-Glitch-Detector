@@ -115,39 +115,116 @@ class NormalizedFXMetadata:
     canonical_usd_per_eur: float | None = None
 
 
+_NON_PAIR_ENTITY_PREFIXES = (
+    "FX_",
+    "IR_",
+    "ECB_",
+    "FED_",
+    "BCB_",
+    "BOE_",
+    "BOJ_",
+    "KR_",
+    "KR.",
+)
+
+
 def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str, str] | None:
     """Extract (base, quote) currency codes from a pair representation string.
 
     Supported formats:
     - 'BASE/QUOTE' (e.g. 'EUR/USD')
-    - 'BASE_QUOTE' where both are 3 alphabetic chars (e.g. 'EUR_USD')
+    - 'BASE_QUOTE' where both are 3-letter ISO-4217 alphabetic codes (e.g. 'EUR_USD')
+
+    Validation Rules:
+    1. Slash-delimited identifiers ('/' in text):
+       - Unambiguously represents a currency pair.
+       - Must contain exactly two non-empty components ('BASE/QUOTE').
+       - Both components must be valid 3-letter alphabetic codes.
+       - Any violation (e.g. 'EUR/US', 'EU/USD', 'EUR/USD/') fails closed with ValueError.
+    2. Underscore-delimited identifiers ('_' in text):
+       - Documented non-pair namespaces ('FX_', 'IR_', 'ECB_', 'FED_', 'BCB_', 'BOE_', 'BOJ_', 'KR_', 'KR.')
+         or identifiers containing '.' are preserved as legitimate non-pair entities (returning None when strict=False).
+       - Pair-like underscore identifiers:
+         * 2 tokens: if either token is 3 alphabetic chars, or both tokens are short alphabetic codes (1-4 chars),
+           it represents a pair-like identifier. If both are valid 3-letter alphabetic codes (e.g. 'EUR_USD'),
+           returns (b, q). Otherwise (e.g. 'EUR_US', 'EU_USD', 'EU_US'), fails closed with ValueError.
+         * 3+ tokens: if the tokens begin with a pair structure (e.g. 'EUR_USD_EXTRA', 'EUR_US_EXTRA'),
+           or contain empty/trailing components ('EUR_USD_', '_EUR_USD'), it represents a malformed pair
+           with extra components and fails closed with ValueError.
+    3. Non-pair identifiers (no '/' and no pair-like '_'):
+       - If strict=True, fails closed with ValueError.
+       - If strict=False, returns None, preserving legitimate non-pair entity identifiers.
     """
     if not text:
         return None
     s = text.strip()
+    s_upper = s.upper()
+
+    # Documented non-pair namespaces and SDMX keys
+    if s_upper.startswith(_NON_PAIR_ENTITY_PREFIXES) or "." in s:
+        if strict:
+            raise ValueError(
+                f"Malformed FX pair metadata: '{text}'. Expected a currency pair like 'EUR/USD' or 'EUR_USD'."
+            )
+        return None
+
     if "/" in s:
         parts = s.split("/")
-        if len(parts) == 2 and parts[0].strip() and parts[1].strip():
-            b, q = parts[0].strip().upper(), parts[1].strip().upper()
-            if len(b) == 3 and b.isalpha() and len(q) == 3 and q.isalpha():
-                return b, q
-            if strict:
-                raise ValueError(
-                    f"Invalid currency codes in pair '{text}': '{b}/{q}'. Must be 3-letter ISO-4217 alphabetic codes."
-                )
-    elif "_" in s:
+        if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': must contain exactly two slash-separated currency codes."
+            )
+        b, q = parts[0].strip().upper(), parts[1].strip().upper()
+        if len(b) != 3 or not b.isalpha():
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': base currency '{b}' must be a 3-letter ISO-4217 alphabetic code."
+            )
+        if len(q) != 3 or not q.isalpha():
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': quote currency '{q}' must be a 3-letter ISO-4217 alphabetic code."
+            )
+        return b, q
+
+    if "_" in s:
         parts = s.split("_")
-        if (
-            len(parts) == 2
-            and len(parts[0].strip()) == 3
-            and parts[0].strip().isalpha()
-            and len(parts[1].strip()) == 3
-            and parts[1].strip().isalpha()
-        ):
-            return parts[0].strip().upper(), parts[1].strip().upper()
-        if strict and len(parts) == 2:
+        # Check if 2 tokens
+        if len(parts) == 2:
+            p0 = parts[0].strip().upper()
+            p1 = parts[1].strip().upper()
+            if len(p0) == 3 and p0.isalpha() and len(p1) == 3 and p1.isalpha():
+                return p0, p1
+            # Check if pair-like structure
+            if (
+                (len(p0) == 3 and p0.isalpha())
+                or (len(p1) == 3 and p1.isalpha())
+                or (1 <= len(p0) <= 4 and p0.isalpha() and 1 <= len(p1) <= 4 and p1.isalpha())
+            ):
+                if len(p0) != 3 or not p0.isalpha():
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': base currency '{p0}' must be a 3-letter ISO-4217 alphabetic code."
+                    )
+                if len(p1) != 3 or not p1.isalpha():
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': quote currency '{p1}' must be a 3-letter ISO-4217 alphabetic code."
+                    )
+        elif len(parts) >= 3:
+            p0 = parts[0].strip().upper()
+            p1 = parts[1].strip().upper()
+            if (
+                (len(p0) == 3 and p0.isalpha() and len(p1) == 3 and p1.isalpha())
+                or (len(p0) == 3 and p0.isalpha())
+                or (len(p1) == 3 and p1.isalpha())
+                or any(not p.strip() for p in parts)
+            ):
+                raise ValueError(
+                    f"Malformed pair-like FX identifier '{text}': pair-like identifier contains extra or empty components."
+                )
+
+        if strict:
             raise ValueError(f"Invalid currency codes in pair '{text}'. Must be 3-letter ISO-4217 alphabetic codes.")
-    elif strict:
+        return None
+
+    if strict:
         raise ValueError(f"Malformed FX pair metadata: '{text}'. Must be a currency pair like 'EUR/USD' or 'EUR_USD'.")
     return None
 

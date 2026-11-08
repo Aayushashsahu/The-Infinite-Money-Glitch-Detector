@@ -111,7 +111,7 @@ def test_resolve_observation_as_of_revision_ordering():
     obs_rev1 = _make_obs(
         kind=ObservationKind.EXCHANGE_RATE,
         source_id="frankfurter",
-        entity_code="EUR_USD_TEST",
+        entity_code="EUR_USD",
         indicator_id="FX_EURUSD",
         obs_date=date(2023, 1, 10),
         val=1.0500,
@@ -121,7 +121,7 @@ def test_resolve_observation_as_of_revision_ordering():
     obs_rev2 = _make_obs(
         kind=ObservationKind.EXCHANGE_RATE,
         source_id="frankfurter",
-        entity_code="EUR_USD_TEST",
+        entity_code="EUR_USD",
         indicator_id="FX_EURUSD",
         obs_date=date(2023, 1, 10),
         val=1.0550,
