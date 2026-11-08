@@ -135,23 +135,34 @@ def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str,
     - 'BASE/QUOTE' (e.g. 'EUR/USD')
     - 'BASE_QUOTE' where both are 3-letter ISO-4217 alphabetic codes (e.g. 'EUR_USD')
 
-    Validation Rules:
+    Precedence and Validation Rules:
     1. Slash-delimited identifiers ('/' in text):
-       - Unambiguously represents a currency pair.
-       - Must contain exactly two non-empty components ('BASE/QUOTE').
-       - Both components must be valid 3-letter alphabetic codes.
-       - Any violation (e.g. 'EUR/US', 'EU/USD', 'EUR/USD/') fails closed with ValueError.
-    2. Underscore-delimited identifiers ('_' in text):
-       - Documented non-pair namespaces ('FX_', 'IR_', 'ECB_', 'FED_', 'BCB_', 'BOE_', 'BOJ_', 'KR_', 'KR.')
-         or identifiers containing '.' are preserved as legitimate non-pair entities (returning None when strict=False).
-       - Pair-like underscore identifiers:
-         * 2 tokens: if either token is 3 alphabetic chars, or both tokens are short alphabetic codes (1-4 chars),
-           it represents a pair-like identifier. If both are valid 3-letter alphabetic codes (e.g. 'EUR_USD'),
-           returns (b, q). Otherwise (e.g. 'EUR_US', 'EU_USD', 'EU_US'), fails closed with ValueError.
-         * 3+ tokens: if the tokens begin with a pair structure (e.g. 'EUR_USD_EXTRA', 'EUR_US_EXTRA'),
-           or contain empty/trailing components ('EUR_USD_', '_EUR_USD'), it represents a malformed pair
-           with extra components and fails closed with ValueError.
-    3. Non-pair identifiers (no '/' and no pair-like '_'):
+       - Strict Precedence Rule: Any identifier containing '/' represents a slash-delimited currency pair.
+       - It is evaluated before any namespace or dotted-identifier exemption is considered.
+       - A period or prefix exception MUST NEVER cause a slash-delimited pair to bypass validation.
+       - Must contain exactly two non-empty components ('BASE/QUOTE'), both of which must be valid 3-letter
+         ISO-4217 alphabetic codes (e.g. 'EUR/USD', 'USD/EUR').
+       - Any violation (e.g. 'EUR/US', 'EU/USD', 'EUR/USD/', 'USD/EUR.', 'EUR/USD.extra', 'FX_EUR/USD/')
+         fails closed with ValueError.
+
+    2. Documented Non-Pair Namespaces:
+       - Identifiers starting with documented non-pair prefixes ('FX_', 'IR_', 'ECB_', 'FED_', 'BCB_',
+         'BOE_', 'BOJ_', 'KR_', 'KR.') without slash syntax are preserved as legitimate non-pair entities
+         (returning None when strict=False, or raising ValueError when strict=True).
+       - Examples: 'KR.MRR_FR.LEV' (SDMX interest rate series), 'ECB_EA' (ECB economic entity),
+         'FX_EUR_USD_LOGRET' (factor log return series), 'IR_USD_1M' (interest rate factor series).
+
+    3. Underscore-delimited identifiers ('_' in text):
+       - Empty or trailing components (e.g. 'EUR_USD_', '_EUR_USD', 'EUR__USD') fail closed with ValueError.
+       - 2 tokens: if both are 3-letter alphabetic codes (e.g. 'EUR_USD', 'USD_EUR'), returns (base, quote).
+       - If either token is pair-like (e.g. 3-letter alphabetic code or contains a dotted suffix like 'USD.extra'
+         paired with a currency code), it represents a pair-like identifier and must strictly satisfy the 3-letter
+         alphabetic code requirement on both base and quote currencies. Violations (e.g. 'EUR_US', 'EU_USD',
+         'EUR_USD.extra') fail closed with ValueError.
+       - 3+ tokens: if the tokens begin with a currency pair structure or contain empty/trailing components
+         (e.g. 'EUR_USD_EXTRA'), it represents a malformed pair with extra components and fails closed with ValueError.
+
+    4. Non-pair identifiers (no '/' and no pair-like '_'):
        - If strict=True, fails closed with ValueError.
        - If strict=False, returns None, preserving legitimate non-pair entity identifiers.
     """
@@ -160,52 +171,61 @@ def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str,
     s = text.strip()
     s_upper = s.upper()
 
-    # Documented non-pair namespaces and SDMX keys
-    if s_upper.startswith(_NON_PAIR_ENTITY_PREFIXES) or "." in s:
+    # Rule 1: Slash-delimited currency pair syntax takes strict precedence over any prefix or dot exemption
+    if "/" in s:
+        parts = s.split("/")
+        if len(parts) != 2:
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': slash-delimited pair must have exactly 2 components."
+            )
+        b, q = parts[0].strip().upper(), parts[1].strip().upper()
+        if len(b) != 3 or not b.isalpha():
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': base currency '{parts[0].strip()}' must be a 3-letter ISO-4217 alphabetic code."
+            )
+        if len(q) != 3 or not q.isalpha():
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': quote currency '{parts[1].strip()}' must be a 3-letter ISO-4217 alphabetic code."
+            )
+        return b, q
+
+    # Rule 2: Documented non-pair namespaces and SDMX keys without '/'
+    if s_upper.startswith(_NON_PAIR_ENTITY_PREFIXES):
         if strict:
             raise ValueError(
                 f"Malformed FX pair metadata: '{text}'. Expected a currency pair like 'EUR/USD' or 'EUR_USD'."
             )
         return None
 
-    if "/" in s:
-        parts = s.split("/")
-        if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
-            raise ValueError(
-                f"Malformed pair-like FX identifier '{text}': must contain exactly two slash-separated currency codes."
-            )
-        b, q = parts[0].strip().upper(), parts[1].strip().upper()
-        if len(b) != 3 or not b.isalpha():
-            raise ValueError(
-                f"Malformed pair-like FX identifier '{text}': base currency '{b}' must be a 3-letter ISO-4217 alphabetic code."
-            )
-        if len(q) != 3 or not q.isalpha():
-            raise ValueError(
-                f"Malformed pair-like FX identifier '{text}': quote currency '{q}' must be a 3-letter ISO-4217 alphabetic code."
-            )
-        return b, q
-
+    # Rule 3: Underscore-delimited pair validation
     if "_" in s:
         parts = s.split("_")
-        # Check if 2 tokens
+        # Reject empty components (leading, trailing, or double underscores)
+        if any(len(p.strip()) == 0 for p in parts):
+            raise ValueError(
+                f"Malformed pair-like FX identifier '{text}': pair-like identifier contains extra or empty components."
+            )
+
         if len(parts) == 2:
             p0 = parts[0].strip().upper()
             p1 = parts[1].strip().upper()
             if len(p0) == 3 and p0.isalpha() and len(p1) == 3 and p1.isalpha():
                 return p0, p1
-            # Check if pair-like structure
+            # Check if pair-like structure (e.g. EUR_US, EU_USD, EUR_USD.extra, EUR.extra_USD)
             if (
                 (len(p0) == 3 and p0.isalpha())
                 or (len(p1) == 3 and p1.isalpha())
+                or (p0.startswith(p0[:3]) and len(p0[:3]) == 3 and p0[:3].isalpha() and "." in p0)
+                or (p1.startswith(p1[:3]) and len(p1[:3]) == 3 and p1[:3].isalpha() and "." in p1)
                 or (1 <= len(p0) <= 4 and p0.isalpha() and 1 <= len(p1) <= 4 and p1.isalpha())
             ):
                 if len(p0) != 3 or not p0.isalpha():
                     raise ValueError(
-                        f"Malformed pair-like FX identifier '{text}': base currency '{p0}' must be a 3-letter ISO-4217 alphabetic code."
+                        f"Malformed pair-like FX identifier '{text}': base currency '{parts[0].strip()}' must be a 3-letter ISO-4217 alphabetic code."
                     )
                 if len(p1) != 3 or not p1.isalpha():
                     raise ValueError(
-                        f"Malformed pair-like FX identifier '{text}': quote currency '{p1}' must be a 3-letter ISO-4217 alphabetic code."
+                        f"Malformed pair-like FX identifier '{text}': quote currency '{parts[1].strip()}' must be a 3-letter ISO-4217 alphabetic code."
                     )
         elif len(parts) >= 3:
             p0 = parts[0].strip().upper()
@@ -224,6 +244,8 @@ def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str,
             raise ValueError(f"Invalid currency codes in pair '{text}'. Must be 3-letter ISO-4217 alphabetic codes.")
         return None
 
+    # Rule 4: Non-pair identifiers (no '/' and no '_')
+    # E.g. dotted non-pair identifiers like SDMX keys or single series codes
     if strict:
         raise ValueError(f"Malformed FX pair metadata: '{text}'. Must be a currency pair like 'EUR/USD' or 'EUR_USD'.")
     return None

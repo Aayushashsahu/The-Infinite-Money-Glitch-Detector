@@ -23,8 +23,6 @@ if sys.platform == "win32":
 
 import pytest
 
-from pydantic import ValidationError
-
 from data.db.engine import make_engine, make_session_factory
 from data.repository import Repository
 from data.schemas import DataObservation, Frequency, ObservationKind
@@ -56,12 +54,12 @@ def make_obs(**overrides) -> DataObservation:
     else:
         defaults["publication_date"] = date(observation_date.year + 1, observation_date.month, observation_date.day)
     defaults.update({k: v for k, v in overrides.items() if k != "publication_date"})
-    try:
-        return DataObservation(**defaults)
-    except ValidationError:
-        if overrides.get("entity_code") == "US/BRL" or overrides.get("_construct", False):
-            return DataObservation.model_construct(**defaults)
-        raise
+    # For deliberate malformed data-quality tests (e.g. invalid entity_code "US/BRL"),
+    # explicitly bypass schema validation only when targeted or requested via _construct=True.
+    if overrides.get("entity_code") == "US/BRL" or overrides.get("_construct", False):
+        clean_defaults = {k: v for k, v in defaults.items() if k != "_construct"}
+        return DataObservation.model_construct(**clean_defaults)
+    return DataObservation(**defaults)
 
 
 @pytest.fixture
