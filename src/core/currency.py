@@ -289,6 +289,9 @@ def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str,
            Malformed currency codes or invalid tenors (e.g. 'IR_USD_US') fail closed with ValueError.
          * 'KR_' / 'KR.': ECB key rates namespace represents policy interest rates (e.g. 'KR.MRR_FR.LEV')
            and must never contain currency pairs (e.g. 'KR_EUR_USD' fails closed with ValueError).
+           Identifiers in the 'KR.' namespace must strictly follow 'KR.<VALID_RATE_KEY>.<VALID_UNIT>'
+           with rate key in _VALID_ECB_RATE_KEYS and unit in _VALID_ECB_SDMX_UNITS. Malformed components,
+           unknown rate keys, or invalid units fail closed with ValueError.
          * Central bank prefixes ('ECB_', 'FED_', etc.): represent central bank entities or calendars (e.g. 'ECB_EA',
            'FED_USA', 'FED_H15_CALENDAR') and must never contain currency pairs (e.g. 'ECB_EUR_USD' fails closed).
        - Legitimate namespace non-pair entities return None when strict=False, or raise ValueError with
@@ -425,22 +428,21 @@ def _extract_pair_codes(text: str | None, *, strict: bool = False) -> tuple[str,
             if len(dot_parts) == 3:
                 rate_key = dot_parts[1].strip()
                 unit_token = dot_parts[2].strip()
+                if not rate_key or not unit_token:
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs (contains empty components)."
+                    )
+                if rate_key not in _VALID_ECB_RATE_KEYS:
+                    raise ValueError(
+                        f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs (invalid rate key '{rate_key}', expected one of {sorted(_VALID_ECB_RATE_KEYS)})."
+                    )
                 if unit_token not in _VALID_ECB_SDMX_UNITS:
                     raise ValueError(
-                        f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs."
-                    )
-                if "_" in rate_key:
-                    if rate_key not in _VALID_ECB_RATE_KEYS:
-                        raise ValueError(
-                            f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs."
-                        )
-                elif len(rate_key) == 3 and rate_key.isalpha() and rate_key not in _VALID_ECB_RATE_KEYS:
-                    raise ValueError(
-                        f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs."
+                        f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs (invalid unit '{unit_token}', expected one of {sorted(_VALID_ECB_SDMX_UNITS)})."
                     )
             else:
                 raise ValueError(
-                    f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs."
+                    f"Malformed pair-like FX identifier '{text}': KR namespace represents ECB key rates and cannot contain currency pairs (must have exactly 3 dot-delimited components 'KR.<KEY>.<UNIT>')."
                 )
 
         elif s_upper.startswith(("ECB_", "FED_", "BCB_", "BOE_", "BOJ_")):
