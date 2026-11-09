@@ -1,239 +1,385 @@
 # The Infinite Money Glitch Detector
 
-AI-powered macro-financial research and quantitative strategy analysis
-platform. It investigates whether apparent cross-country arbitrage
-opportunities (inflation gaps, interest-rate differentials, exchange-rate
-moves) survive financing costs, currency fluctuations, transaction fees
-and risk adjustments — and is explicitly designed to **reject false
-opportunities**, not to assume profit.
+[![CI](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector/actions/workflows/ci.yml/badge.svg)](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector/releases/tag/v1.0.0)
+[![Python Versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-1%2C094%20passed-success.svg)](tests/)
+[![Status](https://img.shields.io/badge/status-production--ready-green.svg)](docs/PHASE_5_4_FINAL_AUDIT_REPORT.md)
 
-**Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
+An institutional quantitative research and macro-financial analytics platform designed to rigorously evaluate cross-currency arbitrage opportunities, carry-trade mechanics, and multi-factor risk distributions.
 
-## Status: Phase 5.2 — Research Overview & Historical Backtest Dashboard ✅ (1,071 passed tests)
+**Repository:** [Aayushashsahu/The-Infinite-Money-Glitch-Detector](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector)<br>
+**Latest Release:** [v1.0.0](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector/releases/tag/v1.0.0)<br>
+**System Milestone:** Phase 5 — Interactive Research Dashboard (Complete & Audited)
 
-- **Phase 1 (Mathematical Foundation):** Complete (46 tests).
-- **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
-- **Phase 3 (Historical Backtesting Engine):** Complete (127 tests).
-- **Phase 3.1 (Methodology & Benchmark Audit):** Complete (141 tests).
-- **Phase 3.2 (Real Market Data Validation 2020-2024):** Complete (149 tests).
-- **Phase 3.2.1 (Quantitative Integrity & PIT Audit):** Complete (158 passed tests).
-- **Phase 3.2.2 (Integration Integrity & Reproducibility Closure):** Complete (170 passed tests).
-- **Phase 3.2.2.1 (Database Round-Trip, Strict PIT & Execution Patch):** Complete (182 passed tests).
-- **Phase 3.2.2.2 (Execution Quote Integrity, Settlement Calendars & Benchmark Validation):** Complete (198 passed tests).
-- **Phase 3.2.2.3 (Canonical FX Convention & Execution Mathematics Audit):** Complete (213 passed tests).
-- **Phase 3.2.2.3.1 (Directional Quote, Evidence & Risk-Metric Integrity):** Complete (233 passed tests).
-- **Phase 3.2.2.3.2 (End-to-End FX Quote Pipeline Validation):** Complete (256 passed tests).
-- **Phase 3.2.2.3.3 (FX Symmetry, Execution & Research Artifact Integrity):** Complete (273 passed tests).
-- **Phase 4 (Monte Carlo & Market Scenario Laboratory):** Complete (292 passed tests).
-- **Phase 4.1 (Simulation Integrity & Quantitative Validation Closure):** Complete (316 passed tests).
-- **Phase 4.1.1 (Predictive Validation & Evidence Reconciliation):** Complete (331 passed tests).
-- **Phase 4.1.2 (Final Research Integrity & Reproducibility Closure):** Complete (344 passed tests).
-- **Phase 4.1.2.1 (Execution Integrity Closure):** Complete (344 passed tests).
-- **Phase 4.1.2.2 (Residual Consistency Closure):** Complete (344 passed tests).
-- **Phase 4.1.2.2.1 (Multi-Metric Asymptotic Convergence Closure):** Complete (344 passed tests).
-- **Phase 4.1.2.2.2 (Level & Transition Date Alignment Closure):** Complete (344 passed tests).
-- **Phase 4.1.2.2.3 (Holdout Correlation Shift Parity Closure):** Complete (344 passed tests).
-- **Phase 4.1.2.2.3.1 (Quote Normalization Precedence & Parity Hardening):** Complete (364 passed tests).
-- **Phase 4.1.2.2.3.2 (Pairwise Factor Holdout Parity Hardening):** Complete (384 passed tests).
-- **Phase 4.1.2.2.3.3 (Quote Normalization Contract & Artifact Integrity):** Complete (409 passed tests).
-- **Phase 4.1.2.2.3.4 (Strict FX Quote Inversion & Fail-Closed Validation):** Complete (454 passed tests).
-- **Phase 4.1.2.2.3.5 (FX Entity-Code Integrity & Research Evidence Sign-Off):** Complete (534 passed tests).
-- **Phase 4.1.2.2.3.6 (Malformed FX Identifier Rejection & Final Closure Reconciliation):** Complete (594 passed tests).
-- **Phase 4.1.2.2.3.7 (FX Identifier Exception Precedence & Final Repository Sign-Off):** Complete (649 passed tests).
-- **Phase 4.1.2.2.3.8 (Namespace Grammar & Final Repository Lineage Sign-Off):** Complete (734 passed tests).
-- **Phase 4.1.2.2.3.9 (Namespace Edge-Case Closure & Final Grammar Sign-Off):** Complete (884 passed tests).
-- **Phase 4.1.2.2.3.10 (KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off):** Complete (1,020 passed tests).
-- **Phase 5 (Interactive Quantitative Research Dashboard — Streamlit & Plotly):** In Progress (Phase 5.0 Foundation & Architecture Specification complete; Phase 5.1 Foundation, Dependencies & Read-Only Artifact Engine complete; Phase 5.2 Research Overview & Historical Backtest Dashboard complete — 1,071 passed tests).
-- **Phase 6 (AI Quantitative Research Assistant):** Planned (Explains outputs; never computes numbers itself).
+---
 
-See [`docs/PHASE_5_2_IMPLEMENTATION_REPORT.md`](docs/PHASE_5_2_IMPLEMENTATION_REPORT.md) for the complete Phase 5.2 implementation report: Page 1 (Research Overview with executive synthesis, dynamic KPI cards, terminal historical backtest vs. forward stochastic distributions, and explicit out-of-sample portfolio holdout `UNAVAILABLE` state), Page 2 (Carry Trade Performance with Config 2 deep dive, mathematically exact double-entry P&L attribution waterfall chart, strategy vs. EUR Fixed Deposit benchmark comparison, intermediate daily time-series limitation disclosure, and alternative configurations 1-6 audit), zero calculation engine imports (AST verified), and 16 dedicated page verification tests covering all 12 evaluation dimensions.
+## 1. Overview
 
-See [`docs/PHASE_5_1_CLOSURE_REPORT.md`](docs/PHASE_5_1_CLOSURE_REPORT.md) for the complete Phase 5.1 closure report: dependencies installation (`streamlit>=1.32`, `plotly>=5.20`), cryptographic artifact integrity engine and registry (all 23 authoritative JSON research artifacts verified with SHA-256 digests), content-fingerprinted `@st.cache_data` loader, strongly typed Pydantic models, strictly read-only SQLite database connection (`mode=ro`), reusable UI components, and 35 dedicated architectural verification tests.
+The platform investigates a classic macroeconomic question in international finance: **Does an apparent cross-currency arbitrage opportunity survive real-world market frictions?**
 
-See [`docs/PHASE_5_DASHBOARD_ARCHITECTURE.md`](docs/PHASE_5_DASHBOARD_ARCHITECTURE.md) for the complete Phase 5.0 architecture specification: comprehensive committed artifact inventory (Phase 4.1.2.2.3 and 3.2.2.3.3 baselines with SHA-256 digests), Streamlit multi-page structure, Plotly institutional visualization design system, read-only cached artifact loading layer with cryptographic verification, Pydantic data contracts, explicit unavailable state handling for 2024 portfolio holdout, metric-to-artifact mapping matrix, and 4-stage implementation roadmap.
+Specifically, the core research investigates borrowing in a low-yielding currency (EUR), converting at spot rates to a higher-yielding currency (USD), investing in short-term sovereign paper or money-market deposits, and converting back at maturity:
 
-See [`PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md`](PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md) for the complete Phase 4.1.2.2.3.10 closure report: unconditional `KR.` SDMX allowlist enforcement (`KR.<VALID_KEY>.<VALID_UNIT>`), multi-layer fail-closed regression architecture (136 tests passed), dual-stage engineering lineage sign-off, full repository verification (1,020 passed on Python 3.11 and 3.12), and zero Phase 5 contamination.
+$$\text{Profit}_{\text{EUR}} = L \cdot \left[ (1 + r_{\text{USD}}) \cdot \frac{S_{t_1}}{S_{t_0}} - (1 + r_{\text{EUR}}) \right] - C_{\text{transaction}}$$
 
-See [`PHASE_4_1_2_2_3_9_CLOSURE_REPORT.md`](PHASE_4_1_2_2_3_9_CLOSURE_REPORT.md) for the complete Phase 4.1.2.2.3.9 closure report: central-bank dotted suffix normalization, interaction factor grammar (`__vs__`), generalized KR rate-key validation, and 884 passed tests.
+Where:
+- $L$ is the borrowed principal in EUR.
+- $r_{\text{USD}}$ is the US investment interest rate over the tenor.
+- $r_{\text{EUR}}$ is the Euro borrowing rate over the tenor.
+- $S_{t_0}, S_{t_1}$ are the spot EUR/USD exchange rates at entry and exit.
+- $C_{\text{transaction}}$ accounts for bid/ask spreads, borrowing spreads, and transaction costs.
 
-See [`PHASE_4_1_2_FINAL_RESEARCH_CLOSURE.md`](PHASE_4_1_2_FINAL_RESEARCH_CLOSURE.md) for the complete Phase 4.1.2 closure report: LF line ending and SHA-256 manifest integrity closure (zero skips), explicit point-in-time (PIT) decision timestamps and publication cutoffs (same-day FX at 16:00 UTC, next-day US Treasury at 15:00 UTC, effective policy rate dates, late revision blocking, retrospective exclusion), genuinely measured calendar evidence ($t=0$ zero accrual, 3-day weekend, 5-day holiday, 30-day tenor maturity exit, compound financing matching engine within $10^{-5}$), holdout drawdown starting wealth consistency (initial wealth 1.0 prepended), EUR/USD quote-direction translation loss economics (EUR appreciation creates loan repayment loss), and paired Common Random Numbers correlation stress testing with Monte Carlo uncertainty estimation ($SE(\Delta \text{ProbLoss})$).
+### Research Engine vs. Trading System
+The platform is an **empirical validation and falsification engine**, not an execution algorithm or trade broker:
+- It is explicitly designed to **reject false arbitrage**, not assume profit.
+- It incorporates strict point-in-time publication timestamps to eliminate look-ahead bias.
+- It models contractual financing accrual over weekends, holidays, and settlement conventions.
+- When market data is incomplete (such as institutional forward FX bid/ask quotes in public tiers), it marks strategies as **`UNEXECUTABLE`** rather than fabricating synthetic quotes.
 
-See [`PHASE_4_1_1_PREDICTIVE_VALIDATION_AND_EVIDENCE_CLOSURE.md`](PHASE_4_1_1_PREDICTIVE_VALIDATION_AND_EVIDENCE_CLOSURE.md) for the complete Phase 4.1.1 closure report: factor-level predictive validation vs. explicit `UNAVAILABLE` strategy holdout, paired Common Random Numbers correlation-breakdown distribution experiment ($N=1,000$), complete 5-bucket point-in-time database availability reconciliation ($8,724 + 176 = 8,900$ genuine records), four documented release lag policies, verified `JointCurrencySettlementCalendar` and `WeekdayTradingCalendarProxy` mechanics (3-day weekend, holiday accrual, $t=0$ zero interest, contractual 30-day tenor exit, independent formula check $\sum D_t \cdot r_t \cdot \frac{\Delta \tau_t}{360}$), fixed-rate term funding vs. floating-rate daily reset funding sensitivity (+0 to +500 bps), dynamic model comparison reporting, and complete reproducibility manifest with SHA-256 digests.
+---
 
-See [`PHASE_4_1_SIMULATION_INTEGRITY_VALIDATION_REPORT.md`](PHASE_4_1_SIMULATION_INTEGRITY_VALIDATION_REPORT.md) for the complete Phase 4.1 closure report: corrected FX stress shock semantics with timing contracts, calendar day tenor maturity, weekend 3-day financing accrual, zero cross-series factor substitution (Option A 4-factor panel, 991 calibration days), explicit calibration availability breakdown (`SIMULATED_RESEARCH_PROXY`), 20th/80th volatility regime modeling with warm-up exclusion, Student-$t$ profile MLE degrees of freedom ($\hat{
-u} = 7.74$), Multivariate Gaussian baseline comparison (6 models total), real 2024 out-of-sample holdout diagnostics (6.18% realized volatility, KS test $p=0.0577$), multi-metric asymptotic convergence tracking, correlation breakdown decoupling ($\mathbf{R}_{	ext{stressed}} = \mathbf{I}$), and 100% exact double-entry cash ledger reconciliation ($|r| \le 10^{-10}$).
-See [`PHASE_4_MONTE_CARLO_SIMULATION_REPORT.md`](PHASE_4_MONTE_CARLO_SIMULATION_REPORT.md) for the preserved Phase 4 baseline report.
-See [`PHASE_3_2_2_3_3_FINAL_FX_FOUNDATION_CLOSURE.md`](PHASE_3_2_2_3_3_FINAL_FX_FOUNDATION_CLOSURE.md) for the authoritative historical report and JSON reconciliation (29 trades, +2.89% return, €2,890.22 profit), raw provider quote preservation contract (`provider_bid`, `provider_ask`, `canonical_bid`, `canonical_ask`), elimination of reciprocal double-inversion in PointInTimeDataStore, exact direct vs. reciprocal symmetry with Jensen's inequality proof, test fixture provenance isolation (`MOCK` vs `REAL_VERIFIED`), and zero-trade alpha suppression (`alpha = None` / `"N/A"`).
-See [`PHASE_3_2_2_3_2_END_TO_END_FX_PIPELINE_VALIDATION.md`](PHASE_3_2_2_3_2_END_TO_END_FX_PIPELINE_VALIDATION.md) for the complete end-to-end quote pipeline integration audit, explicit quote-side provenance (`provider_price_type`, `provider_side`, `canonical_side`, `canonical_price`), direct & reciprocal pair symmetry proofs, quoting convention invariants, 14 adversarial integration tests, independent 10-decimal cash flow ledger reconciliation ($\text{residual} \le 10^{-10}$), and periodic risk-free date alignment.
-See [`PHASE_3_2_2_3_1_DIRECTIONAL_QUOTE_AND_EVIDENCE_CLOSURE.md`](PHASE_3_2_2_3_1_DIRECTIONAL_QUOTE_AND_EVIDENCE_CLOSURE.md) for directional one-sided quote inversion mathematics, standalone quote execution restrictions, PIT credibility and availability classification, non-fallback benchmark Sharpe/Sortino ratios, and full 2020-2024 reproduction results.
-See [`PHASE_3_2_2_3_FX_CONVENTION_EXECUTION_MATHEMATICS_AUDIT.md`](PHASE_3_2_2_3_FX_CONVENTION_EXECUTION_MATHEMATICS_AUDIT.md) for the complete mathematical FX audit, canonical quote normalization, reciprocal quote proofs, Mode A/B spread isolation, double-entry P&L reconciliation, and 2020-2024 historical return correction (+2.91%).
-See [`PHASE_3_2_2_2_EXECUTION_BENCHMARK_INTEGRITY_REPORT.md`](PHASE_3_2_2_2_EXECUTION_BENCHMARK_INTEGRITY_REPORT.md) for the execution quote separation, TARGET2/US Fed settlement calendars, and benchmark currency validation.
-See [`PHASE_3_2_2_1_DATABASE_PIT_CLOSURE_REPORT.md`](PHASE_3_2_2_1_DATABASE_PIT_CLOSURE_REPORT.md) for the previous database round-trip audit and strict PIT datetime verification.
-See [`PHASE_3_2_2_INTEGRATION_INTEGRITY_REPORT.md`](PHASE_3_2_2_INTEGRATION_INTEGRITY_REPORT.md) for the previous integration report and byte-stable archive manifest.
-See [`PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md`](PHASE_3_2_1_QUANTITATIVE_INTEGRITY_AUDIT.md) for the quantitative audit and exact cash flow ledger proofs.
-See [`PHASE_3_2_REAL_DATA_VALIDATION.md`](PHASE_3_2_REAL_DATA_VALIDATION.md) for the preserved historical baseline.
+## 2. Research Philosophy
 
-### What Phase 2 guarantees
+> **"Mathematics first. Data second. Prediction third. AI last."**
 
-- Every observation keeps its **observation date** and its **publication
-  date** (stored `NULL` when a provider does not publish one — never
-  invented), plus its revision number.
-- Re-ingestion is idempotent: identical replays are counted as
-  duplicates, changed values become new revisions, history is preserved.
-- Provider payloads are archived verbatim with a content hash in
-  `raw_record`, so any stored number can be traced back to its source
-  response.
-- Synthetic rows are permanently marked (`is_synthetic`) and excluded
-  from analytical reads by default.
-- `point_in_time(as_of=...)` drops rows not yet published, defending
-  backtests from look-ahead bias.
+1. **Mathematics First:** Every financial metric, cash flow transition, and risk statistic is defined with closed-form mathematical rigor and reconciled via double-entry accounting down to floating-point machine precision ($|r| \le 3.09 \times 10^{-11}$).
+2. **Data Second:** Strict Point-in-Time (PIT) isolation. Observations are indexed by both their historical observation date and their actual public release timestamp. Revisions are versioned; future data is permanently blocked.
+3. **Prediction Third:** Multi-factor stochastic models (Student-$t$ with MLE degrees of freedom, GJR-GARCH asymmetric volatility, Block Bootstrap) and deterministic stress scenarios are evaluated only after the historical baseline is established and verified.
+4. **AI Last:** AI and Large Language Models are reserved strictly as an interpretive explanation layer. The analytical and calculation engines are deterministic Python and C-extensions; AI never calculates numbers or invents data.
 
-## The core formula
+---
 
-Cross-currency carry trade. Borrow `L` in currency A, invest it in
-currency B at expected return `rB`, repay at rate `rA`, A per B:
+## 3. Key Capabilities
+
+- **Point-in-Time Economic Ingestion:** Multi-source ETL pipelines covering the European Central Bank (ECB SDMX), Federal Reserve (FRED H.15), World Bank, and market FX providers, preserving raw payloads with SHA-256 content hashes.
+- **Contractual Settlement Calendars:** Full modeling of TARGET2 and US Federal Reserve holiday calendars, 3-day weekend funding accruals, holiday carry, and discrete 30-day tenor maturities.
+- **Double-Entry Cash Flow Accounting:** Exhaustive trade-by-trade cash flow ledger reconciling loan principal, spot FX conversions, interest accrual, bid/ask friction, and repayment.
+- **Multi-Factor Stochastic Laboratory:** 6 Monte Carlo simulation models calibrated over empirical 4-factor panels (EUR/USD, US 3M Treasury, EUR Deposit Rate, US Inflation).
+- **Non-Linear Stress Testing:** 19 deterministic macro shock scenarios (e.g., Global Financial Crisis replay, 2022 Fed hiking cycle, stagflation, dollar collapse) with exact cash flow reconciliation.
+- **Correlation Decoupling Analysis:** Paired Common Random Numbers experiment testing portfolio resilience under total factor correlation breakdown ($\mathbf{R}_{\text{stressed}} = \mathbf{I}$).
+- **Out-of-Sample Holdout Diagnostics:** Evaluation of 2024 empirical factor distributions against the 2020–2023 calibration sample, featuring Kolmogorov-Smirnov test diagnostics.
+- **Cryptographic Artifact Registry:** 23 authoritative JSON research artifacts cryptographically locked with SHA-256 digests and verified on load.
+- **Strictly Read-Only Presentation Layer:** Six-page interactive Streamlit and Plotly dashboard with AST import guards and read-only SQLite enforcement (`?mode=ro` with `PRAGMA query_only = ON`).
+
+---
+
+## 4. Research Dashboard Preview
+
+The interactive dashboard provides researchers and risk officers with full visibility into the precomputed, cryptographically verified research outputs.
+
+### Landing Page & Architecture Overview
+Central navigation hub displaying system topology, environmental invariants, data pipeline states, and verification summaries.
+
+![Main Landing](docs/screenshots/main_landing_desktop.png)
+
+---
+
+### Page 1: Research Overview
+Executive synthesis contrasting historical backtest performance against forward stochastic distributions, complete with dynamic KPI cards and explicit disclosures.
+
+![Research Overview](docs/screenshots/page_1_research_overview_desktop.png)
+
+---
+
+### Page 2: Carry Trade Performance
+Comprehensive deep dive into the historical backtest (Config 2 Estimated Schedule), featuring a mathematically exact double-entry P&L attribution waterfall chart and strategy vs. benchmark performance comparisons.
+
+![Carry Trade Performance](docs/screenshots/page_2_carry_trade_performance_desktop.png)
+
+---
+
+### Page 3: Market Data & Provenance
+Complete transparency into all 8,908 historical observations, point-in-time release lag policies, interactive SQLite series explorer, and settlement calendar anomaly validation.
+
+![Market Data & Provenance](docs/screenshots/page_3_market_data_provenance_desktop.png)
+
+---
+
+### Page 4: Monte Carlo Laboratory
+Stochastic simulation engine comparing 6 distribution models (Gaussian, Student-$t$, GJR-GARCH, AR(1)-GJR-GARCH, Historical Bootstrap, Block Bootstrap) with representative path trajectories and sample-size convergence diagnostics.
+
+![Monte Carlo Laboratory](docs/screenshots/page_4_monte_carlo_laboratory_desktop.png)
+
+---
+
+### Page 5: Risk & Stress Testing
+Interactive stress testing suite evaluating 19 macro scenarios, tornado sensitivity ranking, funding reset shock analysis (+0 to +500 bps), and correlation decoupling diagnostics.
+
+![Risk & Stress Testing](docs/screenshots/page_5_risk_stress_testing_desktop.png)
+
+---
+
+### Page 6: Holdout Diagnostics
+Out-of-sample factor validation for calendar year 2024, Kolmogorov-Smirnov distribution tests, factor correlation shift tracking, and institutional disclosure of the unavailable portfolio holdout state.
+
+![Holdout Diagnostics](docs/screenshots/page_6_holdout_diagnostics_desktop.png)
+
+---
+
+## 5. Summary of Research Results
+
+All figures below are extracted directly from authoritative, cryptographically verified research artifacts and match dashboard displays within $\le 10^{-9}$ precision.
+
+### Historical Carry Trade Backtest (Config 2 — Estimated Schedule Baseline)
+- **Evaluation Period:** 2020-01-01 to 2024-12-31 (1,236 daily market transitions).
+- **Initial Capital:** €100,000.00
+- **Cumulative Net Profit:** +€2,890.22 (+2.89% total return)
+- **Annualized Return:** +0.57% p.a.
+- **Benchmark (EUR Fixed Deposit):** +1.50% p.a. (+7.73% cumulative)
+- **Annualized Alpha:** -0.93% (-92.9 basis points vs. matched benchmark)
+- **Sharpe Ratio:** -0.039 (negative risk-adjusted excess return)
+- **Maximum Drawdown:** -3.52%
+- **Trade Execution Audit:** 29 executed trades (13 winning, 16 losing), 31 rejected trades (due to negative interest differential or excessive spread).
+- **P&L Attribution Breakdown:**
+  - Gross Interest Differential: +€14,812.45
+  - Currency Spot Translation Loss: -€10,985.30
+  - Bid/Ask Spread Friction: -€936.93
+  - Net Residual Accounting Error: $\le 3.09 \times 10^{-11}$
+
+### Alternative Configurations Matrix (Phase 3 Audit)
+
+| Config | Configuration Name | Executed Trades | Total Return | Sharpe Ratio | Strategy Status & Audit Outcome |
+| :---: | :--- | :---: | :---: | :---: | :--- |
+| **1** | Strict PIT Baseline | 0 | 0.00% | N/A | Strict intraday quotes unavailable; zero trades executed. |
+| **2** | **Estimated Schedule (Baseline)** | **29** | **+2.89%** | **-0.039** | **Authoritative baseline; underperforms risk-free benchmark.** |
+| **3** | Strict Quotes Isolation | 0 | 0.00% | N/A | Forward bid/ask quotes missing in public tier; zero execution. |
+| **4** | Matched Benchmark | 29 | +2.89% | -0.039 | Alpha: -0.93% vs. Matched EUR Fixed Deposit Benchmark. |
+| **5** | Mismatched Benchmark | 29 | +2.89% | -0.039 | Alpha: -1.13% vs. Unhedged USD Treasury Benchmark (+8.44%). |
+| **6** | Covered Rejection | 0 | 0.00% | N/A | **`UNEXECUTABLE`**: Forward quotes missing; covered arbitrage rejected. |
+
+### Monte Carlo Stochastic Simulation Outcomes ($N=1,000$ paths, 252 days)
+
+| Distribution Model | Median Return | 95% CVaR (Expected Shortfall) | Loss Probability | Model Characterization |
+| :--- | :---: | :---: | :---: | :--- |
+| **Multivariate Gaussian** | +1.75% | -5.97% | 27.8% | Thin-tailed benchmark; underestimates tail risk. |
+| **Student-$t$ ($\nu = 7.74$)** | +1.74% | -6.18% | 28.1% | Heavy-tailed; profile MLE degrees of freedom. |
+| **GJR-GARCH(1,1)** | +1.73% | -6.21% | 27.9% | Asymmetric leverage volatility clustering. |
+| **AR(1)-GJR-GARCH** | +1.72% | -6.25% | 28.0% | Conditional mean autocorrelation + volatility clustering. |
+| **Historical Bootstrap** | +1.71% | -5.94% | 27.7% | Non-parametric empirical return resampling. |
+| **Block Bootstrap (Block=5)** | +1.72% | -5.96% | 27.8% | Preserves short-horizon serial correlation. |
+
+---
+
+## 6. Data Integrity and Security Architecture
 
 ```
-Profit_A = L * [ (1 + rB) * (X1 / X0) - (1 + rA) ] - C
-
-L   principal borrowed in A
-rA  borrowing rate (annual)
-rB  investment return in B (annual, an assumption — never a forecast)
-X0  initial exchange rate, units of A per unit of B
-X1  final exchange rate,  units of A per unit of B
-C   transaction and other costs, in A
+                    ┌──────────────────────────────────────────┐
+                    │       Authoritative Data Sources         │
+                    │   ECB SDMX  •  FRED H.15  •  World Bank  │
+                    └─────────────────────┬────────────────────┘
+                                          │ Raw Payloads + SHA-256
+                                          ▼
+                    ┌──────────────────────────────────────────┐
+                    │    Strict Point-in-Time Data Store       │
+                    │       SQLite Database (gmdb.db)          │
+                    │   SHA-256: 7913ae5ced269d476a07...       │
+                    └─────────────────────┬────────────────────┘
+                                          │ Immutable Read-Only Connection
+                                          ▼ (?mode=ro & PRAGMA query_only=ON)
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        Presentation & UI Layer (Streamlit & Plotly)                     │
+│                                                                                        │
+│   ┌───────────────────────────────┐          ┌──────────────────────────────────────┐  │
+│   │   23-Artifact Registry        │          │   Cryptographic Integrity Engine     │  │
+│   │   Expected SHA-256 Hashes     │◄─────────┤   Byte-level SHA-256 Verification    │  │
+│   └──────────────┬────────────────┘          └──────────────────┬───────────────────┘  │
+│                  │                                              │                      │
+│                  ▼                                              ▼                      │
+│   ┌─────────────────────────────────────────────────────────────────────────────────┐  │
+│   │               AST Import Guard (Enforces Read-Only Boundary)                    │  │
+│   │     PROHIBITED: src/core, src/simulation, src/backtest, Database Writes         │  │
+│   └─────────────────────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Break-even exchange rate: `X1* = X0 * ( fA + C/L ) / fB`, where `fA`/`fB`
-are the effective growth factors of `rA`/`rB` over the holding period.
-Net profit is monotone increasing in `X1`, so the strategy loses money
-whenever `X1 < X1*`.
+1. **Cryptographic SHA-256 Verification:** Every research artifact loaded by the dashboard is verified against its registered digest in [`src/dashboard/artifacts/registry.py`](src/dashboard/artifacts/registry.py). Tampered or truncated files trigger an immediate `ArtifactIntegrityError`.
+2. **Read-Only SQLite Database (`?mode=ro`):** The processed research database `data/processed/gmdb.db` is opened strictly read-only with SQLite `PRAGMA query_only = ON;`. Write queries (`INSERT`, `UPDATE`, `DELETE`, `CREATE`) raise operational errors.
+3. **AST Architecture Guards:** Dedicated test suites inspect the Abstract Syntax Tree of the dashboard modules to ensure zero imports from calculation engines (`src/core`, `src/simulation`, `src/backtest`) or write layers.
+4. **Data Classification Accounting:**
+   - Total database observations: **8,908**
+   - Genuine PIT records included: **8,900**
+   - Retrospective series observations: **176** (annual World Bank CPI `FP.CPI.TOTL.ZG`)
+   - Synthetic rows permanently excluded: **8**
+   - Missing evidence count: **0**
 
-### Milestone scenario (verified by hand and by test)
+---
 
-| Step | Value |
-|---|---|
-| Borrow 100,000 A at 12 % | repayment 112,000 A |
-| Convert at X0 = 1 A/B | 100,000 B |
-| Grow at 5 % | **105,000 B** |
-| Convert back at X1 = 1.15 A/B | **120,750 A** |
-| Transaction costs | **2,000 A** |
-| **Net profit** | **+6,750 A** (ROI 6.75 %) |
+## 7. Known Research Limitations
 
-`tests/test_carry_trade.py::test_milestone_scenario_end_to_end` is the
-gate: it fails, we do not move forward.
+To maintain institutional integrity, the following limitations are explicitly documented:
 
-## Conventions (fixed, documented, never implicit)
+1. **Covered Carry Trade is `UNEXECUTABLE`:** A truly risk-free covered interest parity arbitrage requires institutional forward exchange contracts ($F_{t_0, t_1}$). Because genuine forward quotes are unavailable in public historical feeds, the covered strategy is classified as `UNEXECUTABLE` (Config 6).
+2. **2024 Portfolio Holdout is `UNAVAILABLE`:** The 2024 out-of-sample period has factor observations available, but out-of-sample portfolio execution is classified as **`UNAVAILABLE`** (`is_available: false`). No artificial equity curve has been simulated or backfilled.
+3. **Discrete Execution Approximation:** Backtest results reflect discrete trade settlements over 30-day tenors. Continuous intermediate daily equity curves are deliberately not interpolated to prevent misleading volatility metrics.
+4. **Simulations Are Not Realized Performance:** Monte Carlo trajectories represent stochastic forward model distributions calibrated to 2020–2023 empirical variance, not realized historical performance.
+5. **No Guarantee of Profitability:** The historical strategy underperformed the risk-free EUR deposit benchmark (annualized alpha -92.9 bps, Sharpe -0.039) and incurred a max drawdown of -3.52%.
 
-- **Exchange rate**: always *units of A per unit of B*. Converting A→B
-  divides by X; converting B→A multiplies by X. See
-  `src/core/currency.py`. Never invert a rate by hand — use
-  `inverse_rate`.
-- **Rates**: annual, as fractions (`0.12` = 12 %). Period rates are
-  derived explicitly, with a selectable convention:
-  - *simple*: `r_period = r_annual * t` (linear growth `1 + r t`)
-  - *compound*: `(1 + r)**t` (geometric growth)
-  Conversion happens in `src/core/interest.py`.
-- **Interest convention**: an explicit field on every calculation input
-  (`schemas.strategy.InterestConvention`). It is never guessed.
-- **Missing data**: raising errors, never fabricating values
-  (`src/models/risk.py` refuses NaN/inf input).
-- **Forecasts vs baselines**: PPP output is labeled a theoretical
-  long-run *baseline*, not a forecast. Simulations-like outputs (the
-  sensitivity grid) are *hypothetical scenarios*, not forecasts.
+---
 
-## Project structure
+## 8. Technology Stack
+
+- **Runtime & Language:** Python 3.11 and Python 3.12
+- **Dashboard Framework:** Streamlit (>= 1.32.0)
+- **Data Visualization:** Plotly (>= 5.20.0)
+- **Numerical Computing:** NumPy (>= 1.26.0), SciPy (>= 1.11.0), Pandas (>= 2.1.0)
+- **Data Contracts & Schemas:** Pydantic (>= 2.6.0)
+- **Storage & Ingestion:** SQLite3, SQLAlchemy (>= 2.0.0), Alembic (>= 1.13.0), HTTPX (>= 0.27.0)
+- **Quality Assurance & Testing:** Pytest (>= 8.0.0), Ruff (>= 0.8.0), Playwright
+- **Package Management:** `uv` by Astral (recommended)
+
+---
+
+## 9. Repository Structure
 
 ```
-src/
-├── core/            # primitive math: currency conversion, interest, unit conversions
-│   ├── currency.py
-│   ├── interest.py
-│   └── conversions.py
-├── models/          # strategy & metric engines (Pydantic in/out)
-│   ├── carry_trade.py
-│   ├── ppp.py
-│   └── risk.py
-├── simulation/
-│   └── sensitivity.py   # deterministic scenario grids
-├── schemas/
-│   └── strategy.py      # shared input/output contracts + vocabulary
-├── data/                # Phase 2: economic data infrastructure
-│   ├── adapters/        # world_bank, frankfurter, imf, policy_rates (ECB, FRED)
-│   ├── db/              # engine + ORM models (9 tables)
-│   ├── schemas.py       # observation / fetch contracts
-│   ├── quality.py       # batch validation (flags, never deletes)
-│   ├── coverage.py      # series coverage + sufficiency
-│   ├── ingest.py        # orchestration + run accounting
-│   └── repository.py    # idempotent persistence, point-in-time reads
-└── main.py              # demo runner for the milestone scenario
-alembic/                 # schema migration (d87fb89eff94)
-tests/                   # pytest suite, hand-verified expected values
-data/raw/, data/processed/   # raw payload archive / SQLite demo store
-scripts/example_ingestion.py # offline-first demo, real fetches optional
-notebooks/, docs/
-.env.example             # DATABASE_URL, FRED_API_KEY (optional)
+The-Infinite-Money-Glitch-Detector/
+├── src/
+│   ├── core/                    # Mathematical foundations, FX quote logic, currency codes
+│   ├── data/                    # Ingestion adapters, database models, Point-in-Time store
+│   ├── backtesting/             # Cash flow accounting, settlement calendars, execution engines
+│   ├── simulation/              # Monte Carlo models, GARCH calibrations, stress testing
+│   ├── schemas/                 # Pydantic data contracts for artifacts and observations
+│   └── dashboard/               # Streamlit research dashboard presentation layer
+│       ├── app.py               # Main landing page & navigation
+│       ├── artifacts/           # 23-artifact registry, SHA-256 verifier, typed loaders, DB helper
+│       ├── components/          # Reusable UI cards, tables, filters, Plotly chart builders
+│       └── pages/               # Six specialized research dashboard pages
+├── data/
+│   ├── processed/               # Authoritative SQLite database (gmdb.db)
+│   └── results/                 # Authoritative research artifacts
+│       ├── phase_3_2_2_3_3/     # 6 Backtest configuration artifacts
+│       └── phase_4_1_2_2_3/     # 17 Monte Carlo, stress & holdout artifacts
+├── tests/                       # 1,094 automated tests covering math, data, simulation, UI
+├── docs/                        # Architecture specs, audit reports, deployment guide, screenshots
+│   ├── PHASE_5_4_FINAL_AUDIT_REPORT.md   # Final 15-dimension independent audit report
+│   ├── DEPLOYMENT_GUIDE.md               # Production operations and deployment manual
+│   └── screenshots/                      # 14 verified browser QA screenshots and report
+├── pyproject.toml               # Build configuration, dependencies, tool settings
+└── uv.lock                      # Deterministic dependency lockfile
 ```
 
-### Architecture decision (enforced)
+---
 
-The mathematical engine is **independent of presentation and AI**.
-`calculate_carry_trade` has zero knowledge of dashboards, databases,
-HTTP or LLMs. A backtester, an API endpoint, a Streamlit page and the
-future AI assistant must all call the exact same function — so flashy
-visuals can never drift from audited arithmetic.
+## 10. Installation & Setup
 
-## Setup and usage
+### Prerequisites
+- Python 3.11 or 3.12
+- Git
+- `uv` (recommended) or `pip`
 
+### Step 1: Clone Repository
+```bash
+git clone https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector.git
+cd The-Infinite-Money-Glitch-Detector
+```
+
+### Step 2: Environment Setup & Dependencies
+
+#### Using `uv` (Recommended)
+```bash
+uv venv
+source .venv/bin/activate       # On Windows: .venv\Scripts\activate
+uv sync
+```
+
+#### Using Standard `pip`
 ```bash
 python -m venv .venv
-source .venv/Scripts/activate    # Windows Git Bash; `. .venv/bin/activate` on POSIX
+source .venv/bin/activate       # On Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-pytest                            # run the full suite
-python src/main.py                # milestone scenario + sensitivity grid
-python scripts/example_ingestion.py   # Phase 2 demo: synthetic + real keyless ingests
-python examples/run_monte_carlo_research.py --paths 1000 --horizon 252  # Phase 4 Monte Carlo research
-
-alembic upgrade head              # apply the Phase 2 schema to DATABASE_URL
 ```
 
-## What each module does
+---
 
-| Module | Contents |
-|---|---|
-| `core.currency` | ISO 4217-style validation, conversions under the fixed rate convention, `inverse_rate` |
-| `core.interest` | `growth_factor`, `period_rate_from_annual`, `loan_repayment`, `interest_paid`, simple/compound |
-| `core.conversions` | percent/fraction, `annualized_return` (simple & compound), `rate_change` |
-| `models.carry_trade` | `CarryTradeInput/Output`, `calculate_carry_trade`, `TransactionCosts` (fixed + per-leg bps spread) |
-| `models.ppp` | relative-PPP baseline: expected depreciation of A ≈ πA − πB |
-| `models.risk` | historical volatility, max drawdown, VaR (empirical, lower method), CVaR, Sharpe, break-even probability |
-| `simulation.sensitivity` | exchange-rate scenario grid through the real engine |
-| `simulation.monte_carlo` | Multi-factor Monte Carlo simulation, bootstrap (IID/Block/Stationary), Student-$t$, volatility regimes, stress testing |
+## 11. Running the Research Dashboard
 
-## Known limitations (Phase 1)
+### Local Development Execution
+```bash
+uv run streamlit run src/dashboard/app.py
+```
+Open your browser and navigate to:
+```
+http://localhost:8501
+```
 
-1. `rB` is an assumed *expected* return supplied by the caller; nothing
-   here forecasts returns.
-2. PPP is a long-run baseline; it demonstrably fails as a short-term
-   exchange-rate forecast.
-3. Risk metrics are sample statistics of the supplied series: VaR/CVaR
-   know nothing beyond the observed tail, and short samples are unstable.
-4. Sharpe requires a defensible risk-free benchmark — the caller must
-   supply one; no default benchmark is invented.
-5. Transaction costs are a simple flat + bps model; realistic costs
-   (banned liquidity, capital controls) come with real data.
-6. Phase 1 code is exercised only on synthetic, hand-verified inputs;
-   real-data backtesting arrives in Phase 3.
+### Headless Production Service
+To run as a system daemon or containerized service:
+```bash
+uv run streamlit run src/dashboard/app.py \
+    --server.port 8501 \
+    --server.address 0.0.0.0 \
+    --server.headless true \
+    --browser.gatherUsageStats false
+```
 
-## Roadmap (do not skip ahead)
+### Healthcheck Endpoint
+The service provides a built-in healthcheck:
+```bash
+curl -f http://localhost:8501/_stcore/health
+```
+Returns HTTP 200 `OK` when the Streamlit process is healthy and serving pages.
 
-- **Phase 1** ✅ — deterministic math + tests (46 tests)
-- **Phase 2** ✅ — data engineering (World Bank / IMF / central banks / FX adapters, raw vs processed stores, no silent forward-fills, look-ahead-bias prevention) (98 tests)
-- **Phase 3** ✅ — backtesting engine (walk-forward, out-of-sample, benchmarks) (127 tests)
-- **Phase 3.1** ✅ — quantitative validation audit (comparable benchmarks, provenance reports, risk metric audit) (141 tests)
-- **Phase 3.2** ✅ — real market data validation (2020-2024 genuine data, 2 macro regimes, NIRP vs tightening) (149 tests)
-- **Phase 3.2.1** ✅ — quantitative integrity, point-in-time & executability audit (timestamp firewall, double-entry ledger, weekend rollover) (158 tests)
-- **Phase 3.2.2** ✅ — integration integrity, quote conventions & execution mathematics (Phases 3.2.2 to 3.2.2.3.3: 273 tests)
-- **Phase 4** ✅ — Monte Carlo simulation (historical bootstrap, stress scenarios, fat tails, volatility regimes) (292 tests)
-- **Phase 5** ✅ — interactive quantitative research dashboard (Streamlit & Plotly; read-only exploration of committed artifacts, never recomputes engine; Phases 5.0 to 5.4 Complete: 6 production pages, visual QA verified, 1,094 tests)
-- **Phase 6** ⏳ — AI research assistant (explains outputs; never computes numbers itself)
+---
+
+## 12. Testing and Quality Assurance
+
+The repository maintains an extensive test suite with **1,094 passing tests** across 53 test modules:
+
+```bash
+# Run the complete test suite
+uv run pytest -p no:cacheprovider
+
+# Run dashboard-specific architectural and page tests
+uv run pytest tests/test_dashboard*.py
+
+# Run static analysis and linting
+uv run ruff check .
+
+# Check formatting across dashboard and tests
+uv run ruff format --check src/dashboard tests/test_dashboard*.py
+```
+
+### Continuous Integration (CI) Matrix
+Every push and pull request is validated on GitHub Actions across:
+- **Ubuntu Latest / Python 3.11**
+- **Ubuntu Latest / Python 3.12**
+- Checks include dependency synchronization, Ruff linting, and full Pytest execution.
+
+---
+
+## 13. Production Deployment & Operations
+
+For deployment checklists, system requirements, Nginx reverse-proxy configuration, systemd service units, and monitoring guidelines, consult the authoritative guide:
+
+📖 **[Production Deployment & Operations Guide](docs/DEPLOYMENT_GUIDE.md)**
+
+*Note: The platform is a research dashboard. Creating a release does not perform an automated public cloud deployment.*
+
+---
+
+## 14. Documentation and Audit History
+
+- **Final Independent Audit Report:** [`docs/PHASE_5_4_FINAL_AUDIT_REPORT.md`](docs/PHASE_5_4_FINAL_AUDIT_REPORT.md)
+- **Deployment & Operations Guide:** [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md)
+- **Dashboard Architecture Specification:** [`docs/PHASE_5_DASHBOARD_ARCHITECTURE.md`](docs/PHASE_5_DASHBOARD_ARCHITECTURE.md)
+- **Visual QA Report & Screenshots:** [`docs/screenshots/`](docs/screenshots/)
+- **GitHub Actions Workflows:** [Actions Runs](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector/actions)
+- **Release v1.0.0:** [GitHub Release v1.0.0](https://github.com/Aayushashsahu/The-Infinite-Money-Glitch-Detector/releases/tag/v1.0.0)
+
+---
+
+## 15. Disclaimer
+
+This software and its documentation are developed strictly for **academic research, educational analysis, and risk modeling purposes**.
+
+Nothing contained in this repository, its models, its simulated paths, or its dashboard constitutes financial advice, investment advice, an endorsement of any trading strategy, or a solicitation to buy or sell securities, currencies, or derivatives. The authors and maintainers assume no liability for financial losses incurred from using these models or code.
+
+---
+
+## 16. License and Contributions
+
+**Copyright © 2026 Aayush Sahu. All rights reserved.**
+
+This codebase and associated research artifacts are proprietary research. No open-source license is granted at this time. Unauthorized copying, distribution, modification, or commercial exploitation is strictly prohibited without prior written permission.
+
+Contributions are currently limited to internal project collaborators and invited research partners.
