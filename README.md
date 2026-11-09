@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 4.1.2 — Final Research Integrity & Reproducibility Closure ✅ (344 passed tests)
+## Status: Phase 4.1.2.2.3.10 — KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off ✅ (1,020 passed tests)
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -28,6 +28,29 @@ opportunities**, not to assume profit.
 - **Phase 4.1 (Simulation Integrity & Quantitative Validation Closure):** Complete (316 passed tests).
 - **Phase 4.1.1 (Predictive Validation & Evidence Reconciliation):** Complete (331 passed tests).
 - **Phase 4.1.2 (Final Research Integrity & Reproducibility Closure):** Complete (344 passed tests).
+- **Phase 4.1.2.1 (Execution Integrity Closure):** Complete (344 passed tests).
+- **Phase 4.1.2.2 (Residual Consistency Closure):** Complete (344 passed tests).
+- **Phase 4.1.2.2.1 (Multi-Metric Asymptotic Convergence Closure):** Complete (344 passed tests).
+- **Phase 4.1.2.2.2 (Level & Transition Date Alignment Closure):** Complete (344 passed tests).
+- **Phase 4.1.2.2.3 (Holdout Correlation Shift Parity Closure):** Complete (344 passed tests).
+- **Phase 4.1.2.2.3.1 (Quote Normalization Precedence & Parity Hardening):** Complete (364 passed tests).
+- **Phase 4.1.2.2.3.2 (Pairwise Factor Holdout Parity Hardening):** Complete (384 passed tests).
+- **Phase 4.1.2.2.3.3 (Quote Normalization Contract & Artifact Integrity):** Complete (409 passed tests).
+- **Phase 4.1.2.2.3.4 (Strict FX Quote Inversion & Fail-Closed Validation):** Complete (454 passed tests).
+- **Phase 4.1.2.2.3.5 (FX Entity-Code Integrity & Research Evidence Sign-Off):** Complete (534 passed tests).
+- **Phase 4.1.2.2.3.6 (Malformed FX Identifier Rejection & Final Closure Reconciliation):** Complete (594 passed tests).
+- **Phase 4.1.2.2.3.7 (FX Identifier Exception Precedence & Final Repository Sign-Off):** Complete (649 passed tests).
+- **Phase 4.1.2.2.3.8 (Namespace Grammar & Final Repository Lineage Sign-Off):** Complete (734 passed tests).
+- **Phase 4.1.2.2.3.9 (Namespace Edge-Case Closure & Final Grammar Sign-Off):** Complete (884 passed tests).
+- **Phase 4.1.2.2.3.10 (KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off):** Complete (1,020 passed tests in full CI test suite; 136 in dedicated regression suite).
+- **Phase 5 (Interactive Quantitative Research Dashboard — Streamlit & Plotly):** In Progress (Phase 5.0 Foundation & Architecture Specification complete).
+- **Phase 6 (AI Quantitative Research Assistant):** Planned (Explains outputs; never computes numbers itself).
+
+See [`docs/PHASE_5_DASHBOARD_ARCHITECTURE.md`](docs/PHASE_5_DASHBOARD_ARCHITECTURE.md) for the complete Phase 5.0 architecture specification: comprehensive committed artifact inventory (Phase 4.1.2.2.3 and 3.2.2.3.3 baselines with SHA-256 digests), Streamlit multi-page structure, Plotly institutional visualization design system, read-only cached artifact loading layer with cryptographic verification, Pydantic data contracts, explicit unavailable state handling for 2024 portfolio holdout, metric-to-artifact mapping matrix, and 4-stage implementation roadmap.
+
+See [`PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md`](PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md) for the complete Phase 4.1.2.2.3.10 closure report: unconditional `KR.` SDMX allowlist enforcement (`KR.<VALID_KEY>.<VALID_UNIT>`), multi-layer fail-closed regression architecture (136 tests passed), dual-stage engineering lineage sign-off, full repository verification (1,020 passed on Python 3.11 and 3.12), and zero Phase 5 contamination.
+
+See [`PHASE_4_1_2_2_3_9_CLOSURE_REPORT.md`](PHASE_4_1_2_2_3_9_CLOSURE_REPORT.md) for the complete Phase 4.1.2.2.3.9 closure report: central-bank dotted suffix normalization, interaction factor grammar (`__vs__`), generalized KR rate-key validation, and 884 passed tests.
 
 See [`PHASE_4_1_2_FINAL_RESEARCH_CLOSURE.md`](PHASE_4_1_2_FINAL_RESEARCH_CLOSURE.md) for the complete Phase 4.1.2 closure report: LF line ending and SHA-256 manifest integrity closure (zero skips), explicit point-in-time (PIT) decision timestamps and publication cutoffs (same-day FX at 16:00 UTC, next-day US Treasury at 15:00 UTC, effective policy rate dates, late revision blocking, retrospective exclusion), genuinely measured calendar evidence ($t=0$ zero accrual, 3-day weekend, 5-day holiday, 30-day tenor maturity exit, compound financing matching engine within $10^{-5}$), holdout drawdown starting wealth consistency (initial wealth 1.0 prepended), EUR/USD quote-direction translation loss economics (EUR appreciation creates loan repayment loss), and paired Common Random Numbers correlation stress testing with Monte Carlo uncertainty estimation ($SE(\Delta \text{ProbLoss})$).
 
@@ -200,12 +223,14 @@ alembic upgrade head              # apply the Phase 2 schema to DATABASE_URL
 
 ## Roadmap (do not skip ahead)
 
-- **Phase 1** ✅ — deterministic math + tests
-- **Phase 2** ✅ — data engineering (World Bank / IMF / central banks / FX adapters, raw vs processed stores, no silent forward-fills, look-ahead-bias prevention)
-- **Phase 3** ✅ — backtesting engine (walk-forward, out-of-sample, benchmarks)
-- **Phase 3.1** ✅ — quantitative validation audit (comparable benchmarks, provenance reports, risk metric audit)
-- **Phase 3.2** ✅ — real market data validation (2020-2024 genuine data, 2 macro regimes, NIRP vs tightening)
-- **Phase 3.2.1** ✅ — quantitative integrity, point-in-time & executability audit (timestamp firewall, double-entry ledger, weekend rollover)
-- **Phase 4** ✅ — Monte Carlo simulation (historical bootstrap, stress scenarios, fat tails, volatility regimes)
-- **Phase 5** — Streamlit/Plotly dashboard (reads, never recomputes, the engine)
-- **Phase 6** — AI assistant (explains outputs; never computes numbers itself)
+- **Phase 1** ✅ — deterministic math + tests (46 tests)
+- **Phase 2** ✅ — data engineering (World Bank / IMF / central banks / FX adapters, raw vs processed stores, no silent forward-fills, look-ahead-bias prevention) (98 tests)
+- **Phase 3** ✅ — backtesting engine (walk-forward, out-of-sample, benchmarks) (127 tests)
+- **Phase 3.1** ✅ — quantitative validation audit (comparable benchmarks, provenance reports, risk metric audit) (141 tests)
+- **Phase 3.2** ✅ — real market data validation (2020-2024 genuine data, 2 macro regimes, NIRP vs tightening) (149 tests)
+- **Phase 3.2.1** ✅ — quantitative integrity, point-in-time & executability audit (timestamp firewall, double-entry ledger, weekend rollover) (158 tests)
+- **Phase 3.2.2** ✅ — integration integrity, quote conventions & execution mathematics (Phases 3.2.2 to 3.2.2.3.3: 273 tests)
+- **Phase 4** ✅ — Monte Carlo simulation (historical bootstrap, stress scenarios, fat tails, volatility regimes) (292 tests)
+- **Phase 4.1** ✅ — simulation integrity, predictive validation, residual consistency & FX namespace grammar (Phases 4.1 to 4.1.2.2.3.10: 1,020 tests)
+- **Phase 5** 🔄 — interactive quantitative research dashboard (Streamlit & Plotly; read-only exploration of committed artifacts, never recomputes engine; Phase 5.0 architecture complete)
+- **Phase 6** ⏳ — AI research assistant (explains outputs; never computes numbers itself)
