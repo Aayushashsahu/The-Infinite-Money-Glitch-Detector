@@ -52,9 +52,9 @@ Phase 4.1.2.2.3.10 resolves the remaining fail-open condition in the ECB key-rat
 | Attribute | Phase 4.1.2.2.3.9 Verified | Phase 4.1.2.2.3.10 Current Closure |
 |---|---|---|
 | **Stage A Source Commit** | `1e2ca9dff2f1e6e835c2ea3c20077297d1b7129a` | `6b8256086eb38080d4b00e5357ac8f1d5220edda` |
-| **Stage B Documentation Commit** | `376398f60b5cb71e8afba478a92d0be0ca252288` | Planned Stage B Commit |
+| **Stage B Documentation Commit** | `376398f60b5cb71e8afba478a92d0be0ca252288` | `bddbd2d78f4aeeddb558321bae30e5b2b030ec7c` |
 | **Stage A CI Run ID** | `42517996555` | **`42570807986`** (Both 3.11 & 3.12 passed) |
-| **Stage B CI Run ID** | `42518275430` | Pending Stage B Push |
+| **Stage B CI Run ID** | `42518275430` | **`42571481335`** (Both 3.11 & 3.12 passed) |
 | **Test Suite Passed** | 884 passed | **136 passed** in dedicated 3_10 suite; 100% CI pass across all suites |
 | **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
 | **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** (4m48s) |
@@ -228,10 +228,17 @@ Execution follows strict dual-stage delivery:
   * Commit message: `feat(simulation): Phase 4.1.2.2.3.10 enforce KR rate-key allowlist (Stage A)`
 
 - **Stage B (Closure Documentation Publication)**:
-  * Commit SHA: Pending publication
-  * CI Run ID: Pending execution
+  * Commit SHA: `bddbd2d78f4aeeddb558321bae30e5b2b030ec7c`
+  * CI Run ID: `42571481335` (Both Python 3.11 and 3.12 passed)
   * Added: `PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md`
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.10 closure report (Stage B)`
+
+- **Stage B+ (Documentation Lineage Final Sign-Off Commit)**:
+  * Commit SHA: Pending final sign-off commit
+  * CI Run ID: Pending execution
+  * Modified: `PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md`
+  * Commit message: `docs(results): record verified CI run ID 42571481335 in Phase 4.1.2.2.3.10 closure report`
+  * Purpose: Recorded verified Stage B CI Run ID `42571481335`, completing formal dual-stage lineage sign-off.
 
 ---
 
