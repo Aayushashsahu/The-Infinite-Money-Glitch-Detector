@@ -16,6 +16,8 @@ dependencies = [
     "httpx>=0.27",
     "psycopg2-binary>=2.9",
     "alembic>=1.13",
+    "streamlit>=1.32",
+    "plotly>=5.20",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +28,7 @@ dev = [
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-packages = ["core", "models", "simulation", "simulation.monte_carlo", "schemas", "data", "data.adapters", "data.db", "backtesting"]
+packages = ["core", "models", "simulation", "simulation.monte_carlo", "schemas", "data", "data.adapters", "data.db", "backtesting", "dashboard", "dashboard.artifacts", "dashboard.components", "dashboard.components.plots"]
 py-modules = ["main"]
 
 [tool.pytest.ini_options]

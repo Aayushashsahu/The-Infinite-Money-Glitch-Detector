@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 4.1.2.2.3.10 — KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off ✅ (1,020 passed tests)
+## Status: Phase 5.1 — Foundation, Dependencies & Read-Only Artifact Engine ✅ (1,055 passed tests)
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -42,9 +42,11 @@ opportunities**, not to assume profit.
 - **Phase 4.1.2.2.3.7 (FX Identifier Exception Precedence & Final Repository Sign-Off):** Complete (649 passed tests).
 - **Phase 4.1.2.2.3.8 (Namespace Grammar & Final Repository Lineage Sign-Off):** Complete (734 passed tests).
 - **Phase 4.1.2.2.3.9 (Namespace Edge-Case Closure & Final Grammar Sign-Off):** Complete (884 passed tests).
-- **Phase 4.1.2.2.3.10 (KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off):** Complete (1,020 passed tests in full CI test suite; 136 in dedicated regression suite).
-- **Phase 5 (Interactive Quantitative Research Dashboard — Streamlit & Plotly):** In Progress (Phase 5.0 Foundation & Architecture Specification complete).
+- **Phase 4.1.2.2.3.10 (KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off):** Complete (1,020 passed tests).
+- **Phase 5 (Interactive Quantitative Research Dashboard — Streamlit & Plotly):** In Progress (Phase 5.0 Foundation & Architecture Specification complete; Phase 5.1 Foundation, Dependencies & Read-Only Artifact Engine complete — 1,055 passed tests).
 - **Phase 6 (AI Quantitative Research Assistant):** Planned (Explains outputs; never computes numbers itself).
+
+See [`docs/PHASE_5_1_CLOSURE_REPORT.md`](docs/PHASE_5_1_CLOSURE_REPORT.md) for the complete Phase 5.1 closure report: dependencies installation (`streamlit>=1.32`, `plotly>=5.20`), cryptographic artifact integrity engine and registry (all 23 authoritative JSON research artifacts verified with SHA-256 digests), content-fingerprinted `@st.cache_data` loader, strongly typed Pydantic models, strictly read-only SQLite database connection (`mode=ro`), reusable UI components, and 35 dedicated architectural verification tests.
 
 See [`docs/PHASE_5_DASHBOARD_ARCHITECTURE.md`](docs/PHASE_5_DASHBOARD_ARCHITECTURE.md) for the complete Phase 5.0 architecture specification: comprehensive committed artifact inventory (Phase 4.1.2.2.3 and 3.2.2.3.3 baselines with SHA-256 digests), Streamlit multi-page structure, Plotly institutional visualization design system, read-only cached artifact loading layer with cryptographic verification, Pydantic data contracts, explicit unavailable state handling for 2024 portfolio holdout, metric-to-artifact mapping matrix, and 4-stage implementation roadmap.
 

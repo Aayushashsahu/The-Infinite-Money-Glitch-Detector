@@ -1,5 +1,6 @@
 backtesting
 core
+dashboard
 data
 main
 models

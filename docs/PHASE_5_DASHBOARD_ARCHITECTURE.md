@@ -57,7 +57,7 @@ Directory: `data/results/phase_4_1_2_2_3/`
 | `holdout_diagnostics.json` | 1,856 | `822c9f4c772eec411cdd4a513f81228324e2f388a9f0a20513fdd11d4a9c5ef5` | Dict: 2024 Out-of-sample FX realized volatility (6.18%), ratio (0.773), KS test ($p=0.0559$), correlation shifts | Page 6 (Holdout Diagnostics) | Available |
 | `factor_holdout_diagnostics.json` | 2,786 | `0e2b5fa1e7ddd3de28ebe997e4d9dcfc138356fc077a5d461770fbd96a9d143e` | Dict: 2024 Factor predictive quantiles, realized FX cumulative return (-5.98%, 22.9th percentile), drawdown | Page 6 (Holdout Diagnostics) | Available |
 | `portfolio_holdout_diagnostics.json` | 758 | `0082f477222570c9ab5402f94e5d3f8c6d11bd04502106350e82d5378060be2d` | Dict: `status: UNAVAILABLE`, `is_available: false`, explicit reason string, zero simulated portfolio holdout metrics | Page 1 (Overview), Page 6 (Holdout Diagnostics) | **UNAVAILABLE** (Explicit State) |
-| `availability_audit.json` | 3,366 | `d9c40f48fc47fb3346719491281d8eecb88a1647e14904fd75498f262ecbe065` | Dict: 8,908 total source rows, 8,900 genuine included, 8 synthetic excluded, 8,724 estimated availability, 176 retrospective | Page 2 (Market Data & Provenance) | Available |
+| `availability_audit.json` | 3,366 | `d9c40f48fc47fb3346719491281d8eecb88a1647e14904fd75498f262ecbe065` | Dict: 8,908 total source rows, 8,900 genuine included, 8 synthetic excluded, 8,724 estimated availability, 176 retrospective (`FP.CPI.TOTL.ZG`), 0 missing classification evidence | Page 2 (Market Data & Provenance) | Available |
 | `calendar_validation.json` | 957 | `bf3c68d8f64c98aa6363ba7b176d891f99e18d21cab8e58af3067b982a8b4ff0` | Dict: `JointTarget2FedCalendar`, 3-day weekend verification, holiday accrual verification, 30-day tenor exit | Page 2 (Market Data & Provenance) | Available |
 | `simulation_manifest.json` | 7,339 | `74c951a3c43d20860433dba0b584cfa796f4b8620cc66ffa71ba70adaefe25ca` | Dict: Git commits, source digest, database SHA-256 (`7913ae5ced...`), RNG seed (42), platform metadata | Page 2 (Market Data & Provenance) | Available |
 | `phase_4_1_2_2_3_research_report.md` | 15,967 | `c3081f21b13951a0e087bbcf5756453159f3fd221a4f4ad94fb7cf001f2a7c96` | Markdown: Authoritative synthesis of mathematical methodology, empirical findings, and limitations | Documentation & Reference Modal | Available |
@@ -99,6 +99,12 @@ The dashboard must explicitly handle the following missing or unexecutable items
    - Status: `exact_timestamp_verified_count = 0`.
    - Reason: Central bank policy rates and Treasury constant maturity yields are daily closing/fixing reference rates, not streaming tick-level order books.
    - UI Rule: Display `ESTIMATED_LAG` badge (ECB T at 16:00 UTC, US Treasury T+1 at 15:00 UTC).
+4. **Availability Classification vs Market Data Completeness**:
+   - Status: `missing_evidence_count = 0`.
+   - Accurate Definition: `missing_evidence_count = 0` establishes that 100% of stored observations possess verifiable point-in-time availability classification evidence (either estimated publication lag or retrospective release). It does **not** assert that the historical time series contains zero missing market observations (e.g., non-trading days, exchange holidays, and calendar closures are handled separately via calendar alignment).
+5. **Retrospective Observation Scope**:
+   - Status: `retrospective_count = 176`.
+   - Accurate Provenance: The 176 retrospective records belong exclusively to `FP.CPI.TOTL.ZG`, the annual World Bank CPI series (historical annual series). They are **not** central bank policy rate dates or daily FX quotes.
 
 ---
 
@@ -185,18 +191,25 @@ src/
 The loading engine adheres to strict isolation rules:
 
 1. **Zero Execution Rights**: The loader never imports `engine.py`, `monte_carlo.engine`, or `backtesting.engine`. It only parses static JSON, SQLite tables, and Markdown.
-2. **Deterministic Caching**: Streamlit's `@st.cache_data(show_spinner=True)` decorator caches deserialized artifact dictionaries in memory. Re-reads occur only if file timestamps or paths change.
-3. **SHA-256 Verification Guard**: Prior to parsing, the loader checks the file's SHA-256 digest against `src/dashboard/artifacts/registry.py`. If a mismatch is detected, it raises `ArtifactIntegrityError` and warns the researcher.
+2. **Deterministic Caching with Verified Content Digest**:
+   - Streamlit's `@st.cache_data` caches results based on function name, code body, and input argument values; it does **not** automatically monitor external files on disk for modifications when function arguments remain unchanged.
+   - To guarantee that external artifact modifications immediately invalidate stale cache entries, the loader function requires a verified content digest or explicit file fingerprint (e.g. verified SHA-256 digest or composite file path + size + mtime) as an explicit cache key argument: `(artifact_id, version, content_hash)`.
+   - If an artifact file on disk changes, its computed digest changes, deterministically triggering a cache miss and clean reload.
+3. **SHA-256 Verification Guard**: Prior to parsing or returning any cached artifact, the loader computes the file's actual SHA-256 digest and verifies it against `src/dashboard/artifacts/registry.py`. If a mismatch is detected, it raises `ArtifactIntegrityError` and prevents corrupted data from entering the application.
 4. **Pydantic Validation**: All loaded JSON structures pass through Pydantic models defined in `src/dashboard/artifacts/schemas.py`.
 
 ```python
-# Conceptual implementation in src/dashboard/artifacts/loader.py
+# Implementation in src/dashboard/artifacts/loader.py
 @st.cache_data(show_spinner=False)
-def load_calibration_report(version: str = "phase_4_1_2_2_3") -> CalibrationReportSchema:
-    path = get_artifact_path(version, "calibration_report.json")
-    verify_artifact_sha256(path, EXPECTED_DIGESTS[version]["calibration_report.json"])
+def _load_json_cached(path: str, expected_sha256: str, content_hash: str) -> dict:
+    # content_hash in signature guarantees deterministic cache invalidation upon file change
     with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        return json.load(f)
+
+def load_calibration_report(version: str = "phase_4_1_2_2_3") -> CalibrationReportSchema:
+    path, expected_digest = resolve_artifact("calibration_report.json", version=version)
+    actual_digest = verify_file_sha256(path, expected_digest)
+    data = _load_json_cached(path, expected_digest, actual_digest)
     return CalibrationReportSchema.model_validate(data)
 ```
 
@@ -264,7 +277,7 @@ Every dashboard page renders a persistent header banner:
   - `data/processed/gmdb.db`
 - **Displayed Metrics & KPI Cards**:
   - Total Source Observations: **8,908** (8,900 genuine included, 8 synthetic excluded).
-  - PIT Availability Breakdown: **8,724 estimated availability**, **176 retrospective policy rate dates**, 0 missing.
+  - PIT Availability Breakdown: **8,724 estimated availability** (daily market feeds), **176 retrospective observations** (annual World Bank CPI series `FP.CPI.TOTL.ZG`, not policy rates), and **0 missing availability classification evidence** (`missing_evidence_count = 0`, confirming 100% of observations have verifiable PIT classification evidence).
   - Aligned Level Dates: **1,237 dates** (Calibration: 990 levels, 2020-01-06 to 2023-12-29; Holdout: 248 levels, 2023-12-29 to 2024-12-31).
   - Total Transitions: **1,236 daily transitions** (Calibration: 989; Holdout: 247).
   - Settlement Calendar: `JointTarget2FedCalendar` (3-day weekend, holiday accrual, $t=0$ zero interest verified).
