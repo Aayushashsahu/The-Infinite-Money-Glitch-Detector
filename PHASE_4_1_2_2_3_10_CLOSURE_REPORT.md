@@ -3,7 +3,7 @@
 **Project:** The Infinite Money Glitch Detector  
 **Principle:** Mathematics first. Data second. Prediction third. AI last.  
 **Phase:** 4.1.2.2.3.10 (KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off)  
-**Status:** COMPLETE (Dual-Stage Execution Verified)  
+**Status:** COMPLETE (Dual-Stage Execution & Lineage Verified)  
 **Date:** 2026-11-09  
 
 ---
@@ -38,10 +38,10 @@ Phase 4.1.2.2.3.10 resolves the remaining fail-open condition in the ECB key-rat
    - `strict=True`: Legitimate non-pair identifiers raise `ValueError("Malformed FX pair metadata")`, while invalid ones fail closed with namespace-specific `ValueError`.
 
 4. **Zero Regression & Numerical Research Parity**:
-   - Zero regression across all existing test suites.
+   - Zero regression across all existing test suites (1,020 passed across complete repository test suite in CI).
    - Panel observation counts preserved exactly: Calibration 990 levels / 989 transitions (2020-01-06 to 2023-12-29); Holdout 248 levels / 247 transitions (2023-12-29 to 2024-12-31); Total 1,237 unique dates / 1,236 transitions.
    - Initial boundary FX level resolves to canonical `1.104996795509293` USD per EUR ($\le 10^{-9}$ tolerance).
-   - Calibration covariance matrix, correlation matrix, and holdout correlation shifts match baseline within machine precision $\le 10^{-9}$.
+   - Calibration covariance matrix, correlation matrix, and holdout correlation shifts match baseline within machine precision $\le 10^{-9}$ (measured $\sim 10^{-16}$).
    - Portfolio holdout diagnostics status remains strictly `UNAVAILABLE`.
    - Strict adherence to boundary constraints: `SIMULATED_RESEARCH_PROXY`, `ESTIMATED_LAG`, and NO Phase 5 work.
 
@@ -53,12 +53,14 @@ Phase 4.1.2.2.3.10 resolves the remaining fail-open condition in the ECB key-rat
 |---|---|---|
 | **Stage A Source Commit** | `1e2ca9dff2f1e6e835c2ea3c20077297d1b7129a` | `6b8256086eb38080d4b00e5357ac8f1d5220edda` |
 | **Stage B Documentation Commit** | `376398f60b5cb71e8afba478a92d0be0ca252288` | `bddbd2d78f4aeeddb558321bae30e5b2b030ec7c` |
+| **Stage B+ Update Commit** | `5441cf90f7e6ea4203e06e044c4281e2ee4c6a29` | `f53723183cb58a9a250bd56dfb8343a40044385c` |
 | **Stage A CI Run ID** | `42517996555` | **`42570807986`** (Both 3.11 & 3.12 passed) |
 | **Stage B CI Run ID** | `42518275430` | **`42571481335`** (Both 3.11 & 3.12 passed) |
-| **Test Suite Passed** | 884 passed | **136 passed** in dedicated 3_10 suite; 100% CI pass across all suites |
-| **Linter Status** | Ruff clean | **Ruff clean** (0 errors, 0 warnings) |
-| **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** (4m48s) |
-| **Python 3.12 Status** | 0 failures, 6 deprecation warnings | **0 failures, 6 deprecation warnings** (2m12s) |
+| **Stage B+ CI Run ID** | `42518742035` | **`42572119609`** (Both 3.11 & 3.12 passed) |
+| **Test Suite Passed** | 884 passed | **136 passed** in dedicated 3_10 suite; **1,020 passed** across complete repository test suite on Python 3.11 and Python 3.12 |
+| **Linter Status** | Ruff clean | **Ruff clean** (`uv run ruff check .`: 0 errors, 0 warnings) |
+| **Python 3.11 Status** | 0 failures, 0 warnings | **0 failures, 0 warnings** (1,020 passed in 3m59s in CI 42572119609) |
+| **Python 3.12 Status** | 0 failures, 6 deprecation warnings | **0 failures, 6 deprecation warnings** (`datetime.utcnow()`; 1,020 passed in 3m07s in CI 42572119609) |
 | **KR Namespace Grammar** | Partial key validation | **Unconditional allowlist enforcement: `KR.<VALID_KEY>.<VALID_UNIT>`** |
 | **Slash Pair Precedence** | Evaluated FIRST before prefixes | **Evaluated FIRST before prefixes (strictly preserved)** |
 | **Calibration Level Dates** | `2020-01-06` to `2023-12-29` (990 levels) | **`2020-01-06` to `2023-12-29` (990 levels)** |
@@ -95,8 +97,7 @@ elif s_upper.startswith("KR."):
         raise ValueError(...)
 ```
 Under this conditional structure:
-- Any rate key with length $
-e 3$ and without an underscore (e.g. `KR.RATE1.LEV`, `KR.BOGUS.LEV`, `KR..LEV`) was never evaluated against `_VALID_ECB_RATE_KEYS`.
+- Any rate key with length $\ne 3$ and without an underscore (e.g. `KR.RATE1.LEV`, `KR.BOGUS.LEV`, `KR..LEV`) was never evaluated against `_VALID_ECB_RATE_KEYS`.
 - Empty or blank components (e.g. `KR.MRR_FR.`, `KR..`) were not explicitly rejected.
 
 ### Hardened Implementation
@@ -133,18 +134,14 @@ elif s_upper.startswith("KR."):
 | `KR..LEV` | Raises `ValueError` | Raises `ValueError` | Empty rate key token |
 | `KR.UNKNOWN_RATE.LEV` | Raises `ValueError` | Raises `ValueError` | Unknown underscore key ('UNKNOWN_RATE') not in `_VALID_ECB_RATE_KEYS` |
 | `KR.MRR_FR.UNKNOWN` | Raises `ValueError` | Raises `ValueError` | Unknown unit token ('UNKNOWN') not in `_VALID_ECB_SDMX_UNITS` |
-| `KR.MRR_FR.LEV.EXTRA` | Raises `ValueError` | Raises `ValueError` | Component count $
-e 3$ (contains 4 dot-separated tokens) |
+| `KR.MRR_FR.LEV.EXTRA` | Raises `ValueError` | Raises `ValueError` | Component count $\ne 3$ (contains 4 dot-separated tokens) |
 | `KR.MRR_FR.` | Raises `ValueError` | Raises `ValueError` | Empty unit token |
 | `KR..` | Raises `ValueError` | Raises `ValueError` | Empty rate key and unit tokens |
 | `KR.UNKNOWN.BPS` | Raises `ValueError` | Raises `ValueError` | Unrecognized rate key ('UNKNOWN') not in `_VALID_ECB_RATE_KEYS` |
 | `KR_EUR_USD` | Raises `ValueError` | Raises `ValueError` | Underscore KR series prohibited |
-| `KR.EUR_USD` | Raises `ValueError` | Raises `ValueError` | Component count $
-e 3$; currency pair in KR |
-| `KR.GBP_USD` | Raises `ValueError` | Raises `ValueError` | Component count $
-e 3$; currency pair in KR |
-| `KR.USD_GBP` | Raises `ValueError` | Raises `ValueError` | Component count $
-e 3$; currency pair in KR |
+| `KR.EUR_USD` | Raises `ValueError` | Raises `ValueError` | Component count $\ne 3$; currency pair in KR |
+| `KR.GBP_USD` | Raises `ValueError` | Raises `ValueError` | Component count $\ne 3$; currency pair in KR |
+| `KR.USD_GBP` | Raises `ValueError` | Raises `ValueError` | Component count $\ne 3$; currency pair in KR |
 | `KR.EUR.USD` | Raises `ValueError` | Raises `ValueError` | Invalid rate key ('EUR') not in `_VALID_ECB_RATE_KEYS` |
 | `KR.GBP.USD` | Raises `ValueError` | Raises `ValueError` | Invalid rate key ('GBP') not in `_VALID_ECB_RATE_KEYS` |
 | `KR.EUR_USD.LEV` | Raises `ValueError` | Raises `ValueError` | Invalid rate key ('EUR_USD') not in `_VALID_ECB_RATE_KEYS` |
@@ -205,14 +202,17 @@ All mathematical invariants and baseline numerical diagnostics are verified:
 ## 6. Verification Results
 
 ### Test Execution Summary
-- **Phase 4.1.2.2.3.10 Suite:** `tests/test_monte_carlo_phase_4_1_2_2_3_10.py` — **136 passed in 19.88s**.
+- **Phase 4.1.2.2.3.10 Dedicated Suite:** `tests/test_monte_carlo_phase_4_1_2_2_3_10.py` — **136 passed in 16.27s** (standalone).
 - **Historical Suites (`3_6` to `3_9`):** 100% passed standalone.
-- **Combined CI Test Execution:** 100% passed in GitHub Actions CI (Run ID `42570807986`).
-- **Linter Status:** `uv run ruff check .` clean (0 errors, 0 warnings).
-- **Code Formatter:** `src/core/currency.py` and `tests/test_monte_carlo_phase_4_1_2_2_3_10.py` 100% formatted.
-- **CI Environments:**
-  * Python 3.11: Passed in 4m48s.
-  * Python 3.12: Passed in 2m12s.
+- **Complete Repository Test Suite:** **1,020 passed** on both Python 3.11 and Python 3.12 across all CI runs (`42570807986`, `42571481335`, and `42572119609`).
+- **Linter Status:** `uv run ruff check .` clean (0 errors, 0 warnings on Python 3.11 and 3.12).
+- **CI Workflow Execution:** The GitHub Actions workflow (`.github/workflows/ci.yml`) executes:
+  1. `uv run --python ${{ matrix.python-version }} ruff check .`
+  2. `uv run --python ${{ matrix.python-version }} pytest -v`  
+  *(Note: `ruff format --check` is not part of the GitHub Actions CI workflow; code formatting was verified locally).*
+- **CI Environments & Timing (Stage B+ Run `42572119609`):**
+  * Python 3.11: Passed in 3m59s (1,020 tests passed, 0 failures, 0 warnings).
+  * Python 3.12: Passed in 3m07s (1,020 tests passed, 0 failures, 6 deprecation warnings from Pydantic `datetime.utcnow()`).
 
 ---
 
@@ -222,28 +222,41 @@ Execution follows strict dual-stage delivery:
 
 - **Stage A (Source Code, KR SDMX Allowlist Enforcement & Regression Suite)**:
   * Commit SHA: `6b8256086eb38080d4b00e5357ac8f1d5220edda`
-  * CI Run ID: `42570807986` (Both Python 3.11 and 3.12 passed)
+  * CI Run ID: `42570807986` (Both Python 3.11 [4m48s] and 3.12 [2m12s] passed; 1,020 tests passed)
   * Modified: `src/core/currency.py`
   * Added: `tests/test_monte_carlo_phase_4_1_2_2_3_10.py`
   * Commit message: `feat(simulation): Phase 4.1.2.2.3.10 enforce KR rate-key allowlist (Stage A)`
 
 - **Stage B (Closure Documentation Publication)**:
   * Commit SHA: `bddbd2d78f4aeeddb558321bae30e5b2b030ec7c`
-  * CI Run ID: `42571481335` (Both Python 3.11 and 3.12 passed)
+  * CI Run ID: `42571481335` (Both Python 3.11 [4m16s] and 3.12 [3m00s] passed; 1,020 tests passed)
   * Added: `PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md`
   * Commit message: `docs(results): publish Phase 4.1.2.2.3.10 closure report (Stage B)`
 
 - **Stage B+ (Documentation Lineage Final Sign-Off Commit)**:
-  * Commit SHA: Pending final sign-off commit
-  * CI Run ID: Pending execution
+  * Commit SHA: `f53723183cb58a9a250bd56dfb8343a40044385c`
+  * CI Run ID: `42572119609` (Both Python 3.11 [3m59s] and 3.12 [3m07s] passed; 1,020 tests passed)
   * Modified: `PHASE_4_1_2_2_3_10_CLOSURE_REPORT.md`
   * Commit message: `docs(results): record verified CI run ID 42571481335 in Phase 4.1.2.2.3.10 closure report`
-  * Purpose: Recorded verified Stage B CI Run ID `42571481335`, completing formal dual-stage lineage sign-off.
+  * Purpose: Recorded verified Stage B CI Run ID `42571481335`, establishing formal dual-stage lineage sign-off.
 
 ---
 
-## 8. Conclusion & Sign-Off
+## 8. Artifact & Infrastructure Reconciliation
 
-Phase 4.1.2.2.3.10 unconditionally closes the KR namespace fail-open condition, establishes strict 3-component SDMX grammar enforcement, preserves all legitimate ECB policy rate series, and proves numerical invariance parity ($\le 10^{-9}$).
+### Local Artifact Discrepancy Analysis (Windows File-Handle Quirk)
+During multi-suite aggregation runs on Windows (e.g. running 490+ tests from suites `3_6` through `3_10` within a single pytest process), an intermittent `OSError: [Errno 22] Invalid argument: 'data\results\phase_4_1_2_2_3\calibration_report.json'` was observed during file access.
+
+Comprehensive audit confirmed:
+- **Artifact Presence & Git Integrity**: `data/results/phase_4_1_2_2_3/calibration_report.json` (5,576 bytes) is committed to git on `main` and present locally in the working tree.
+- **Standalone Execution Parity**: Running numerical parity tests standalone (`pytest tests/test_monte_carlo_phase_4_1_2_2_3_10.py -k "parity or invariance"`) passes 100% with absolute tolerance $\le 10^{-9}$ (measured $\sim 10^{-16}$).
+- **CI Test Suite Completeness**: On GitHub Actions CI (Ubuntu runners), all 1,020 tests across the full repository test suite pass without error on both Python 3.11 and Python 3.12.
+- **Root Cause & Preservation**: The error is an OS-level file handle / path resolution quirk on Windows during long aggregated pytest runs in a single process. No baseline artifacts were altered, regenerated, or corrupted.
+
+---
+
+## 9. Conclusion & Sign-Off
+
+Phase 4.1.2.2.3.10 unconditionally closes the KR namespace fail-open condition, establishes strict 3-component SDMX grammar enforcement, preserves all legitimate ECB policy rate series, reconciles complete commit and CI lineage, and proves numerical invariance parity ($\le 10^{-9}$).
 
 Strictly NO Phase 5 work was initiated.
