@@ -155,7 +155,7 @@ tests/test_dashboard_pages.py ................ [16 passed in 5.64s]
 | **Phase 4.1.2.2.3.10** | `f53723183cb58a9a250bd56dfb8343a40044385c` | `42572119609` | 1,020 passed | Green (3.11 & 3.12) |
 | **Phase 5.0** | `c0b43f1db64a389b05ccca53f41666e2b1179055` | `42578964344` | 1,020 passed | Green (3.11 & 3.12) |
 | **Phase 5.1** | `1d2b47313a36ea2e0618035b84234cff7f22591e` | `42590968207` | 1,055 passed | Green (3.11 & 3.12) |
-| **Phase 5.2** | *Pending final commit* | *Pending execution* | 1,071 passed | Pending CI |
+| **Phase 5.2** | `4b568a04df0a99676da3ecdfd953930bfa7c588a` | `42600660499` | 1,071 passed | Green (3.11 & 3.12) |
 
 ---
 
