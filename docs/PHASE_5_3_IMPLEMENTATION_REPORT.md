@@ -182,7 +182,7 @@ A dedicated test suite `tests/test_dashboard_advanced_pages.py` was implemented 
 | Stage | Commit SHA | CI Run ID | CI Status | Environment | Details |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline** | `d1e5e75d5f2be5c1f543dc52f8538740c5f2b844` | `42578500000` | Successful | Python 3.11 / 3.12 | Phase 5.2 sign-off baseline |
-| **Phase 5.3 Implementation** | `[Pending commit]` | `[Pending run]` | `[Pending]` | Python 3.11 / 3.12 | 4 advanced dashboard pages, 4 plot builders, 23 tests |
+| **Phase 5.3 Implementation** | `3f17d1767881026c8983ae43bb12f3dccb6f6bff` | `42611809269` | Successful (3.11: 4m45s, 3.12: 2m18s) | Python 3.11 / 3.12 | 4 advanced dashboard pages, 4 plot builders, 23 new tests, 74 dashboard tests |
 
 ---
 
