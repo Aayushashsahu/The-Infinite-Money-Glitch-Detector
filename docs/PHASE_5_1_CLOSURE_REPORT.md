@@ -119,12 +119,12 @@ All 4 errata items identified during repository review were incorporated into `d
 | `availability_audit` | `phase_4_1_2_2_3` | `data/results/phase_4_1_2_2_3/availability_audit.json` | `d9c40f48fc47fb3346719491281d8eecb88a1647e14904fd75498f262ecbe065` | Verified ✅ |
 | `calendar_validation` | `phase_4_1_2_2_3` | `data/results/phase_4_1_2_2_3/calendar_validation.json` | `bf3c68d8f64c98aa6363ba7b176d891f99e18d21cab8e58af3067b982a8b4ff0` | Verified ✅ |
 | `simulation_manifest` | `phase_4_1_2_2_3` | `data/results/phase_4_1_2_2_3/simulation_manifest.json` | `74c951a3c43d20860433dba0b584cfa796f4b8620cc66ffa71ba70adaefe25ca` | Verified ✅ |
-| `config_1_strict_pit` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_1_strict_pit.json` | `cab3f22da466a65ed649558cd0ba658c28e6d120d26cf0574f4e92899783f61b` | Verified ✅ |
-| `config_2_estimated_schedule` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_2_estimated_schedule.json` | `42ae54600fa8ae5acc855e6395700a1c25bbfb48d43dc3fe44326e0885c4875f` | Verified ✅ |
-| `config_3_strict_quotes` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_3_strict_quotes.json` | `a6a53169fc87e3d0d8c5643fdd554fcf3ab70d5379ad2313ab2ad573e5b1f54c` | Verified ✅ |
-| `config_4_matched_benchmark` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_4_matched_benchmark.json` | `a4a96c98c06120a8d1544b560450eaf174c9fb9195ca7cc2f08abf00a4e29189` | Verified ✅ |
-| `config_5_mismatched_benchmark` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_5_mismatched_benchmark.json` | `5ce250e8be8af537abbcb03296840843609bed6f7fb96aae45cef724c158e35c` | Verified ✅ |
-| `config_6_covered_rejection` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_6_covered_rejection.json` | `563429fb2d38d55053fef32c799540819ffb3fe2851955c37f1fb0e1c055391b` | Verified ✅ |
+| `config_1_strict_pit` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_1_strict_pit.json` | `fcb2fbca23986c6aecd2c64003f75daa1d2daca1a6ca7f48cb3dc056d475eb6c` | Verified ✅ |
+| `config_2_estimated_schedule` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_2_estimated_schedule.json` | `37d99768fb67994b513306284e8824953a1fbd183b21e218cf43bf91ff95fc1d` | Verified ✅ |
+| `config_3_strict_quotes` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_3_strict_quotes.json` | `35d9f2ea27f184571fefc44a3d93ea11c334fd631b6d760b7f6ed895c924c9de` | Verified ✅ |
+| `config_4_matched_benchmark` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_4_matched_benchmark.json` | `d3652446b6a4e865c500c1871874c8526d6e4e63996ff5cff12878fd40f0c4b0` | Verified ✅ |
+| `config_5_mismatched_benchmark` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_5_mismatched_benchmark.json` | `72fb010366bd1dae077c3a3337c58ebd6557505020b248646a035b938c13ea32` | Verified ✅ |
+| `config_6_covered_rejection` | `phase_3_2_2_3_3` | `data/results/phase_3_2_2_3_3/config_6_covered_rejection.json` | `d119408a559edff9c7cf02d91f7130204beb845a3453675bbee1ac61b70a34cb` | Verified ✅ |
 | `gmdb.db` | Research DB | `data/processed/gmdb.db` | `7913ae5ced269d476a07cec3e477bfe4799743ee779203a93a4b9ef008e87ffa` | Verified ✅ |
 
 ---

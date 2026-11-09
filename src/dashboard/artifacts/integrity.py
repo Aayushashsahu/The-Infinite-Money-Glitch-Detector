@@ -24,12 +24,23 @@ class ArtifactNotFoundError(FileNotFoundError):
     """Raised when an artifact file does not exist on disk."""
 
 
-def compute_file_sha256(file_path: Union[str, Path], chunk_size: int = 65536) -> str:
-    """Compute the SHA-256 hex digest of a file by streaming its bytes.
+def compute_file_sha256(
+    file_path: Union[str, Path],
+    chunk_size: int = 65536,
+    normalize_line_endings: Optional[bool] = None,
+) -> str:
+    """Compute the SHA-256 hex digest of a file.
+
+    For text and JSON artifacts, line endings are normalized to canonical LF (\n)
+    so that cryptographic digests remain perfectly deterministic and platform-invariant
+    across Windows (which may check out CRLF) and Linux/macOS. Binary files (e.g. SQLite databases)
+    are always read raw without modification.
 
     Args:
         file_path: Path to the target file.
         chunk_size: Streaming chunk size in bytes (default: 64KB).
+        normalize_line_endings: Whether to normalize CRLF to LF. If None, automatically
+            normalizes for text extensions (.json, .md, .txt, .csv, .yaml, .yml).
 
     Returns:
         64-character lowercase hexadecimal SHA-256 digest.
@@ -40,6 +51,13 @@ def compute_file_sha256(file_path: Union[str, Path], chunk_size: int = 65536) ->
     path = Path(file_path).resolve()
     if not path.is_file():
         raise ArtifactNotFoundError(f"Artifact file not found: '{path}'")
+
+    if normalize_line_endings is None:
+        normalize_line_endings = path.suffix.lower() in {".json", ".md", ".txt", ".csv", ".yaml", ".yml"}
+
+    if normalize_line_endings:
+        raw_bytes = path.read_bytes().replace(b"\r\n", b"\n")
+        return hashlib.sha256(raw_bytes).hexdigest().lower()
 
     hasher = hashlib.sha256()
     with open(path, "rb") as f:
