@@ -9,7 +9,7 @@ opportunities**, not to assume profit.
 
 **Guiding principle: Mathematics first. Data second. Prediction third. AI last.**
 
-## Status: Phase 5.1 — Foundation, Dependencies & Read-Only Artifact Engine ✅ (1,055 passed tests)
+## Status: Phase 5.2 — Research Overview & Historical Backtest Dashboard ✅ (1,071 passed tests)
 
 - **Phase 1 (Mathematical Foundation):** Complete (46 tests).
 - **Phase 2 (Economic Data Infrastructure):** Complete (98 tests).
@@ -43,8 +43,10 @@ opportunities**, not to assume profit.
 - **Phase 4.1.2.2.3.8 (Namespace Grammar & Final Repository Lineage Sign-Off):** Complete (734 passed tests).
 - **Phase 4.1.2.2.3.9 (Namespace Edge-Case Closure & Final Grammar Sign-Off):** Complete (884 passed tests).
 - **Phase 4.1.2.2.3.10 (KR SDMX Allowlist Enforcement & Final Namespace Contract Sign-Off):** Complete (1,020 passed tests).
-- **Phase 5 (Interactive Quantitative Research Dashboard — Streamlit & Plotly):** In Progress (Phase 5.0 Foundation & Architecture Specification complete; Phase 5.1 Foundation, Dependencies & Read-Only Artifact Engine complete — 1,055 passed tests).
+- **Phase 5 (Interactive Quantitative Research Dashboard — Streamlit & Plotly):** In Progress (Phase 5.0 Foundation & Architecture Specification complete; Phase 5.1 Foundation, Dependencies & Read-Only Artifact Engine complete; Phase 5.2 Research Overview & Historical Backtest Dashboard complete — 1,071 passed tests).
 - **Phase 6 (AI Quantitative Research Assistant):** Planned (Explains outputs; never computes numbers itself).
+
+See [`docs/PHASE_5_2_IMPLEMENTATION_REPORT.md`](docs/PHASE_5_2_IMPLEMENTATION_REPORT.md) for the complete Phase 5.2 implementation report: Page 1 (Research Overview with executive synthesis, dynamic KPI cards, terminal historical backtest vs. forward stochastic distributions, and explicit out-of-sample portfolio holdout `UNAVAILABLE` state), Page 2 (Carry Trade Performance with Config 2 deep dive, mathematically exact double-entry P&L attribution waterfall chart, strategy vs. EUR Fixed Deposit benchmark comparison, intermediate daily time-series limitation disclosure, and alternative configurations 1-6 audit), zero calculation engine imports (AST verified), and 16 dedicated page verification tests covering all 12 evaluation dimensions.
 
 See [`docs/PHASE_5_1_CLOSURE_REPORT.md`](docs/PHASE_5_1_CLOSURE_REPORT.md) for the complete Phase 5.1 closure report: dependencies installation (`streamlit>=1.32`, `plotly>=5.20`), cryptographic artifact integrity engine and registry (all 23 authoritative JSON research artifacts verified with SHA-256 digests), content-fingerprinted `@st.cache_data` loader, strongly typed Pydantic models, strictly read-only SQLite database connection (`mode=ro`), reusable UI components, and 35 dedicated architectural verification tests.
 

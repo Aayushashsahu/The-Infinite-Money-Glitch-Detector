@@ -28,7 +28,7 @@ dev = [
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-packages = ["core", "models", "simulation", "simulation.monte_carlo", "schemas", "data", "data.adapters", "data.db", "backtesting", "dashboard", "dashboard.artifacts", "dashboard.components", "dashboard.components.plots"]
+packages = ["core", "models", "simulation", "simulation.monte_carlo", "schemas", "data", "data.adapters", "data.db", "backtesting", "dashboard", "dashboard.artifacts", "dashboard.components", "dashboard.components.plots", "dashboard.pages"]
 py-modules = ["main"]
 
 [tool.pytest.ini_options]
