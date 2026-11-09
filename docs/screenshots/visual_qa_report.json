@@ -1,0 +1,135 @@
+[
+  {
+    "page_id": "main_landing",
+    "url": "http://localhost:8501/",
+    "viewport": "1280x800",
+    "has_exception": false,
+    "exceptions": [],
+    "charts_count": 0,
+    "tables_count": 0,
+    "metrics_count": 4,
+    "screenshot": "docs/screenshots/main_landing_desktop.png"
+  },
+  {
+    "page_id": "page_1_research_overview",
+    "url": "http://localhost:8501/Research_Overview",
+    "viewport": "1280x800",
+    "has_exception": false,
+    "exceptions": [],
+    "charts_count": 0,
+    "tables_count": 0,
+    "metrics_count": 0,
+    "screenshot": "docs/screenshots/page_1_research_overview_desktop.png"
+  },
+  {
+    "page_id": "page_2_carry_trade_performance",
+    "url": "http://localhost:8501/Carry_Trade_Performance",
+    "viewport": "1280x800",
+    "has_exception": false,
+    "exceptions": [],
+    "charts_count": 2,
+    "tables_count": 4,
+    "metrics_count": 12,
+    "screenshot": "docs/screenshots/page_2_carry_trade_performance_desktop.png"
+  },
+  {
+    "page_id": "page_3_market_data_provenance",
+    "url": "http://localhost:8501/Market_Data_Provenance",
+    "viewport": "1280x800",
+    "has_exception": false,
+    "exceptions": [],
+    "charts_count": 1,
+    "tables_count": 10,
+    "metrics_count": 9,
+    "screenshot": "docs/screenshots/page_3_market_data_provenance_desktop.png"
+  },
+  {
+    "page_id": "page_4_monte_carlo_laboratory",
+    "url": "http://localhost:8501/Monte_Carlo_Laboratory",
+    "viewport": "1280x800",
+    "has_exception": false,
+    "exceptions": [],
+    "charts_count": 5,
+    "tables_count": 4,
+    "metrics_count": 5,
+    "screenshot": "docs/screenshots/page_4_monte_carlo_laboratory_desktop.png"
+  },
+  {
+    "page_id": "page_5_risk_stress_testing",
+    "url": "http://localhost:8501/Risk_Stress_Testing",
+    "viewport": "1280x800",
+    "has_exception": false,
+    "exceptions": [],
+    "charts_count": 3,
+    "tables_count": 4,
+    "metrics_count": 4,
+    "screenshot": "docs/screenshots/page_5_risk_stress_testing_desktop.png"
+  },
+  {
+    "page_id": "page_6_holdout_diagnostics",
+    "url": "http://localhost:8501/Holdout_Diagnostics",
+    "viewport": "1280x800",
+    "has_exception": false,
+    "exceptions": [],
+    "charts_count": 2,
+    "tables_count": 2,
+    "metrics_count": 5,
+    "screenshot": "docs/screenshots/page_6_holdout_diagnostics_desktop.png"
+  },
+  {
+    "page_id": "main_landing",
+    "url": "http://localhost:8501/",
+    "viewport": "375x667",
+    "has_exception": false,
+    "exceptions": [],
+    "screenshot": "docs/screenshots/main_landing_mobile.png"
+  },
+  {
+    "page_id": "page_1_research_overview",
+    "url": "http://localhost:8501/Research_Overview",
+    "viewport": "375x667",
+    "has_exception": false,
+    "exceptions": [],
+    "screenshot": "docs/screenshots/page_1_research_overview_mobile.png"
+  },
+  {
+    "page_id": "page_2_carry_trade_performance",
+    "url": "http://localhost:8501/Carry_Trade_Performance",
+    "viewport": "375x667",
+    "has_exception": false,
+    "exceptions": [],
+    "screenshot": "docs/screenshots/page_2_carry_trade_performance_mobile.png"
+  },
+  {
+    "page_id": "page_3_market_data_provenance",
+    "url": "http://localhost:8501/Market_Data_Provenance",
+    "viewport": "375x667",
+    "has_exception": false,
+    "exceptions": [],
+    "screenshot": "docs/screenshots/page_3_market_data_provenance_mobile.png"
+  },
+  {
+    "page_id": "page_4_monte_carlo_laboratory",
+    "url": "http://localhost:8501/Monte_Carlo_Laboratory",
+    "viewport": "375x667",
+    "has_exception": false,
+    "exceptions": [],
+    "screenshot": "docs/screenshots/page_4_monte_carlo_laboratory_mobile.png"
+  },
+  {
+    "page_id": "page_5_risk_stress_testing",
+    "url": "http://localhost:8501/Risk_Stress_Testing",
+    "viewport": "375x667",
+    "has_exception": false,
+    "exceptions": [],
+    "screenshot": "docs/screenshots/page_5_risk_stress_testing_mobile.png"
+  },
+  {
+    "page_id": "page_6_holdout_diagnostics",
+    "url": "http://localhost:8501/Holdout_Diagnostics",
+    "viewport": "375x667",
+    "has_exception": false,
+    "exceptions": [],
+    "screenshot": "docs/screenshots/page_6_holdout_diagnostics_mobile.png"
+  }
+]

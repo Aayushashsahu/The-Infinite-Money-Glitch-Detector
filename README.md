@@ -235,6 +235,5 @@ alembic upgrade head              # apply the Phase 2 schema to DATABASE_URL
 - **Phase 3.2.1** ✅ — quantitative integrity, point-in-time & executability audit (timestamp firewall, double-entry ledger, weekend rollover) (158 tests)
 - **Phase 3.2.2** ✅ — integration integrity, quote conventions & execution mathematics (Phases 3.2.2 to 3.2.2.3.3: 273 tests)
 - **Phase 4** ✅ — Monte Carlo simulation (historical bootstrap, stress scenarios, fat tails, volatility regimes) (292 tests)
-- **Phase 5** 🔄 — interactive quantitative research dashboard (Streamlit & Plotly; read-only exploration of committed artifacts, never recomputes engine; Phase 5.0 Foundation, Phase 5.1 Artifact Engine, Phase 5.2 Overview & Backtest, Phase 5.3 Advanced Dashboard Complete; 1,094 tests)
-- **Phase 5.4** ⏳ — final polish, documentation, and production deployment preparation
+- **Phase 5** ✅ — interactive quantitative research dashboard (Streamlit & Plotly; read-only exploration of committed artifacts, never recomputes engine; Phases 5.0 to 5.4 Complete: 6 production pages, visual QA verified, 1,094 tests)
 - **Phase 6** ⏳ — AI research assistant (explains outputs; never computes numbers itself)

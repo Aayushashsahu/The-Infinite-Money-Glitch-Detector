@@ -4,7 +4,7 @@
 **Project:** The Infinite Money Glitch Detector  
 **Repository:** `Aayushashsahu/The-Infinite-Money-Glitch-Detector`  
 **Milestone:** Phase 5.3 — Complete  
-**Baseline HEAD Commit:** `d1e5e75d5f2be5c1f543dc52f8538740c5f2b844`  
+**Baseline HEAD Commit:** `d1e5e75cfe2b2c4dc87becd04814c7e5796a10ab`  
 **Guiding Principle:** Mathematics first. Data second. Prediction third. AI last.
 
 ---
@@ -181,8 +181,9 @@ A dedicated test suite `tests/test_dashboard_advanced_pages.py` was implemented 
 
 | Stage | Commit SHA | CI Run ID | CI Status | Environment | Details |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline** | `d1e5e75d5f2be5c1f543dc52f8538740c5f2b844` | `42578500000` | Successful | Python 3.11 / 3.12 | Phase 5.2 sign-off baseline |
+| **Baseline (Phase 5.2 Closure)** | `d1e5e75cfe2b2c4dc87becd04814c7e5796a10ab` | `42601317767` | Successful | Python 3.11 / 3.12 | Phase 5.2 sign-off baseline |
 | **Phase 5.3 Implementation** | `3f17d1767881026c8983ae43bb12f3dccb6f6bff` | `42611809269` | Successful (3.11: 4m45s, 3.12: 2m18s) | Python 3.11 / 3.12 | 4 advanced dashboard pages, 4 plot builders, 23 new tests, 74 dashboard tests |
+| **Phase 5.3 Documentation Closure** | `9205bf8b1d1cd407347f739ffd846fd71c607735` | `42612631888` | Successful (3.11: 3m56s, 3.12: 2m12s) | Python 3.11 / 3.12 | Reconciled Phase 5.3 commit lineage & CI run |
 
 ---
 

@@ -29,10 +29,11 @@ def render_data_table(
     """
     if title:
         st.subheader(title)
-    st.dataframe(
-        df,
-        column_config=column_config,
-        height=height,
-        use_container_width=use_container_width,
-        hide_index=True,
-    )
+    kwargs: Dict[str, Any] = {
+        "column_config": column_config,
+        "use_container_width": use_container_width,
+        "hide_index": True,
+    }
+    if height is not None:
+        kwargs["height"] = height
+    st.dataframe(df, **kwargs)
