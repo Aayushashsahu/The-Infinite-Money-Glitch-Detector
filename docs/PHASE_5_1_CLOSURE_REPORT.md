@@ -134,7 +134,8 @@ All 4 errata items identified during repository review were incorporated into `d
 | Stage | Commit SHA | CI Workflow Run | Test Count | Result | Scope / Notes |
 |:---:|:---:|:---:|:---:|:---:|:---|
 | **Phase 5.0** | `c0b43f1db64a389b05ccca53f41666e2b1179055` | `42580817584` | 1,020 passed | SUCCESS | Architecture specification, artifact inventory, and UI contracts |
-| **Phase 5.1** | Pending Stage B Commit | Pending execution | 1,055 passed | SUCCESS | Dependencies, artifact integrity engine, read-only loaders, visual components, read-only DB |
+| **Phase 5.1 (Stage A/B)** | `dc6cc77b31ee9f0f971b333ca1237eb274e30472` | `42590021977` | 1,051 passed | FAILURE | Initial implementation; line-ending divergence on Linux CI for Phase 3 JSON |
+| **Phase 5.1 (Stage B+)** | `dd7a5323bb9cf719702ea891099ec1fe3076ff1a` | `42590968207` | 1,055 passed | SUCCESS | Normalized line endings for platform-invariant SHA-256 digests; all 1,055 tests green on Py 3.11 & 3.12 |
 
 ---
 
