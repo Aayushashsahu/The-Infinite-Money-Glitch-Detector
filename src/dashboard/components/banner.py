@@ -38,10 +38,14 @@ def render_research_banner(
 
 def render_holdout_unavailable_banner(
     reason: str = "Holdout strategy execution data unavailable for out-of-sample year 2024.",
+    notes: Optional[str] = None,
 ) -> None:
     """Render an explicit warning banner when portfolio holdout data is unavailable."""
-    st.warning(
+    msg = (
         f"**OUT-OF-SAMPLE HOLDOUT STATUS: UNAVAILABLE**\n\n"
         f"{reason}\n\n"
         "No simulated portfolio metrics are available for the 2024 holdout period."
     )
+    if notes:
+        msg += f"\n\n*Governance Note:* {notes}"
+    st.warning(msg)

@@ -180,6 +180,20 @@ class CorrelationStressComparisonSchema(StrictArtifactBase):
     baseline_median_return: float
     stressed_median_return: float
     median_return_difference: float
+    baseline_prob_loss: Optional[float] = None
+    stressed_prob_loss: Optional[float] = None
+    prob_loss_difference: Optional[float] = None
+    prob_loss_difference_se: Optional[float] = None
+    baseline_var_95: Optional[float] = None
+    stressed_var_95: Optional[float] = None
+    var_95_difference: Optional[float] = None
+    baseline_cvar_95: Optional[float] = None
+    stressed_cvar_95: Optional[float] = None
+    cvar_95_difference: Optional[float] = None
+    baseline_median_drawdown: Optional[float] = None
+    stressed_median_drawdown: Optional[float] = None
+    median_drawdown_difference: Optional[float] = None
+    empirical_correlation_matrix: Optional[List[List[float]]] = None
 
 
 class FundingScenarioItemSchema(StrictArtifactBase):
@@ -259,6 +273,9 @@ class FactorHoldoutDiagnosticsSchema(StrictArtifactBase):
     predictive_percentile_fx_drawdown: float
     volatility_regime_classification: str
     correlation_shifts: Dict[str, float]
+    fx_log_return_ks_caveat: Optional[str] = None
+    model_assumptions: Optional[List[str]] = None
+    limitations_notes: Optional[List[str]] = None
 
 
 class PortfolioHoldoutDiagnosticsSchema(StrictArtifactBase):
@@ -322,6 +339,8 @@ class SimulationManifestSchema(StrictArtifactBase):
     git_working_tree_clean: bool
     rng_bit_generator: str
     random_seed: int
+    h15_exceptional_closures: Optional[Dict[str, str]] = None
+    environment: Optional[Dict[str, Any]] = None
 
 
 # ==============================================================================

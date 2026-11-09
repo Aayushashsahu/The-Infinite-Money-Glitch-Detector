@@ -113,12 +113,12 @@ def main() -> None:
     st.markdown(
         """
         Use the sidebar to explore the six specialized research modules:
-        1. **Research Overview**: Executive summary and the central empirical conclusion.
-        2. **Historical Backtest**: Phase 3 configurations, execution constraints, and cost attribution.
-        3. **Simulation Models**: Comparative analysis of Gaussian, Student-t, Bootstrap, and Regime models.
-        4. **Stress Testing**: Extreme FX shocks, interest rate squeezes, and funding convention sensitivities.
-        5. **Holdout Validation**: 2024 out-of-sample factor diagnostics and unavailable strategy state.
-        6. **Data Infrastructure**: Point-in-time publication lag audit and calendar settlement validation.
+        1. **Research Overview**: Executive synthesis, core KPI grid, and empirical findings.
+        2. **Carry Trade Performance**: Historical Config 2 backtest, double-entry P&L attribution waterfall, and alternative configurations audit.
+        3. **Market Data & Provenance**: Point-in-time publication lag audit, settlement calendars, and raw series inspection.
+        4. **Monte Carlo Laboratory**: Six-model stochastic comparison, representative paths, and convergence diagnostics.
+        5. **Risk & Stress Testing**: Deterministic stress scenarios, correlation decoupling (R = I), and funding sensitivities.
+        6. **Holdout Diagnostics**: 2024 out-of-sample predictive factor diagnostics and explicit portfolio holdout UNAVAILABLE state.
         """
     )
 
