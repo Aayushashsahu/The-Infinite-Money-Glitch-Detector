@@ -38,7 +38,7 @@ The table below reconciles the complete engineering lineage across Phase 5, esta
 | **Phase 5.2 Closure** | `d1e5e75cfe2b2c4dc87becd04814c7e5796a10ab` | `42601317767` | Successful | Python 3.11 / 3.12 | Reconciled Phase 5.2 lineage and sign-off |
 | **Phase 5.3 Implementation** | `3f17d1767881026c8983ae43bb12f3dccb6f6bff` | `42611809269` | Successful | Python 3.11 / 3.12 | Pages 3, 4, 5, 6 (Provenance, MC, Stress, Holdout) |
 | **Phase 5.3 Closure** | `9205bf8b1d1cd407347f739ffd846fd71c607735` | `42612631888` | Successful | Python 3.11 / 3.12 | Reconciled Phase 5.3 lineage and sign-off |
-| **Phase 5.4 Final Integration**| `[Current Release Commit]`| `[Current CI Run]` | `[Pending]` | Python 3.11 / 3.12 | Visual QA, table height fix, deployment guide |
+| **Phase 5.4 Final Integration**| `0436a33af760ecc7ce6b7fd89c5c9e9adc608c3a` | `42617427869` | Successful (3.11: 4m56s, 3.12: 3m51s) | Python 3.11 / 3.12 | Visual QA, table height fix, deployment guide, 1,094 tests passing |
 
 ---
 
